@@ -8,3 +8,4 @@ __pycache__/
 *.pyc
 *.ext
 .DS_Store
+VSCode.md
