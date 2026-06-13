@@ -1,0 +1,12 @@
+# runtime
+PySide6>=6.6
+scikit-rf>=1.0
+numpy>=1.24
+scipy>=1.10
+matplotlib>=3.7
+schemdraw>=0.18
+
+# dev / build only (optional):
+#   pytest          run the test suite
+#   pyinstaller     build the standalone executable (snp2le.spec)
+#   cairosvg pillow regenerate logo PNGs / the .ico (tools/)

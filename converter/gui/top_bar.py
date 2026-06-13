@@ -1,0 +1,136 @@
+"""top_bar.py - control strip.
+
+Dark title bar: snp2le logo + title, then (right) View selector + Help.
+Light controls row: Load .sNp, Mode (Universal / Structure), Structure, Max
+order, Enforce passivity.  Structures that do not match the loaded port count are
+greyed out so an invalid choice can never be made.
+"""
+from __future__ import annotations
+from PySide6 import QtCore, QtWidgets
+
+from core.structures import structure_items
+
+
+def _set_item_enabled(combo, index, enabled):
+    item = combo.model().item(index)
+    if item is not None:
+        item.setEnabled(enabled)
+
+
+class TopBar(QtWidgets.QWidget):
+    changed = QtCore.Signal()
+    view_changed = QtCore.Signal(str)
+    help_clicked = QtCore.Signal()
+    load_clicked = QtCore.Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._n_ports = 0
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0); outer.setSpacing(0)
+        outer.addWidget(self._build_titlebar())
+        outer.addWidget(self._build_controls())
+
+    # ---- title bar -------------------------------------------------------
+    def _build_titlebar(self):
+        from .logo import logo_pixmap
+        bar = QtWidgets.QWidget(); bar.setObjectName("titlebar"); bar.setFixedHeight(38)
+        lay = QtWidgets.QHBoxLayout(bar); lay.setContentsMargins(12, 0, 12, 0)
+        logo = QtWidgets.QLabel(); logo.setPixmap(logo_pixmap(26))
+        logo.setFixedWidth(32); logo.setAlignment(QtCore.Qt.AlignVCenter)
+        title = QtWidgets.QLabel("S-Parameter To Lumped Element Netlist Converter")
+        title.setObjectName("title")
+        lay.addWidget(logo); lay.addWidget(title); lay.addStretch(1)
+        vlab = QtWidgets.QLabel("View"); vlab.setObjectName("viewLabel")
+        self.view = QtWidgets.QComboBox()
+        self.view.addItems(["Design & Schematic", "Plot"]); self.view.setFixedWidth(180)
+        self.view.currentIndexChanged.connect(
+            lambda _: self.view_changed.emit("design" if self.view.currentIndex() == 0 else "plot"))
+        self.help = QtWidgets.QPushButton("?  Help"); self.help.setObjectName("chip")
+        self.help.clicked.connect(self.help_clicked.emit)
+        lay.addWidget(vlab); lay.addWidget(self.view); lay.addSpacing(8); lay.addWidget(self.help)
+        return bar
+
+    def _labeled(self, text, widget):
+        box = QtWidgets.QVBoxLayout(); box.setSpacing(2)
+        lab = QtWidgets.QLabel(text); lab.setProperty("class", "fieldLabel")
+        box.addWidget(lab); box.addWidget(widget)
+        return box
+
+    # ---- controls --------------------------------------------------------
+    def _build_controls(self):
+        bar = QtWidgets.QWidget(); bar.setObjectName("topbar")
+        lay = QtWidgets.QHBoxLayout(bar); lay.setContentsMargins(16, 8, 16, 10); lay.setSpacing(14)
+
+        self.load = QtWidgets.QPushButton("\U0001F4C2  Load .sNp \u2026")
+        self.load.setObjectName("primary"); self.load.setFixedHeight(30)
+        self.load.clicked.connect(self.load_clicked.emit)
+
+        self.mode = QtWidgets.QComboBox()
+        self.mode.addItem("Universal  (any N-port)", "universal")
+        self.mode.addItem("Structure-specific", "structure")
+        self.mode.setFixedWidth(180)
+
+        self.structure = QtWidgets.QComboBox()
+        self._struct_ports = {}
+        for key, name, nports in structure_items():
+            self.structure.addItem(name, key); self._struct_ports[key] = nports
+        self.structure.setFixedWidth(180)
+
+        self.order = QtWidgets.QSpinBox(); self.order.setRange(2, 40); self.order.setValue(12)
+        self.order.setFixedWidth(70)
+
+        self.passive = QtWidgets.QCheckBox("Enforce passivity"); self.passive.setChecked(True)
+
+        lay.addLayout(self._labeled("", self.load))
+        lay.addSpacing(6)
+        lay.addLayout(self._labeled("Mode", self.mode))
+        lay.addLayout(self._labeled("Structure", self.structure))
+        lay.addLayout(self._labeled("Max order", self.order))
+        lay.addLayout(self._labeled("", self.passive))
+        lay.addStretch(1)
+
+        self.mode.currentIndexChanged.connect(self._on_change)
+        self.structure.currentIndexChanged.connect(self._on_change)
+        self.order.valueChanged.connect(lambda _=None: self.changed.emit())
+        self.passive.toggled.connect(lambda _=None: self.changed.emit())
+        self._apply_constraints()
+        return bar
+
+    # ---- constraints -----------------------------------------------------
+    def set_ports(self, n_ports):
+        self._n_ports = n_ports
+        self._apply_constraints()
+
+    def _apply_constraints(self):
+        is_struct = self.mode.currentData() == "structure"
+        self.structure.setEnabled(is_struct)
+        self.order.setEnabled(not is_struct)
+        self.passive.setEnabled(not is_struct)
+        # grey structures that don't match the loaded port count
+        first_ok = None
+        for i in range(self.structure.count()):
+            key = self.structure.itemData(i)
+            ok = (self._n_ports == 0) or (self._struct_ports.get(key) == self._n_ports)
+            _set_item_enabled(self.structure, i, ok)
+            if ok and first_ok is None:
+                first_ok = i
+        if is_struct and first_ok is not None:
+            cur = self.structure.currentIndex()
+            key = self.structure.itemData(cur)
+            if self._struct_ports.get(key) != self._n_ports and self._n_ports:
+                self.structure.blockSignals(True)
+                self.structure.setCurrentIndex(first_ok)
+                self.structure.blockSignals(False)
+
+    def _on_change(self, *_):
+        self._apply_constraints()
+        self.changed.emit()
+
+    def values(self) -> dict:
+        return {
+            "mode": self.mode.currentData(),
+            "structure_key": self.structure.currentData(),
+            "max_order": int(self.order.value()),
+            "enforce_passivity": bool(self.passive.isChecked()),
+        }
