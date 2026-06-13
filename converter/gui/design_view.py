@@ -122,9 +122,14 @@ class DesignView(QtWidgets.QWidget):
             self.order_out.label.setText("order")
             self.order_out.set_value(f"{res.n_poles} poles")
         else:
-            self.order_out.label.setText("Q (lf)")
-            q = res.metrics.get("Q_lf")
-            self.order_out.set_value(f"{q:.2f}" if q is not None and q == q else "\u2014")
+            q = res.metrics.get("Q_peak")
+            if q is not None and q == q:                  # inductor model stores Q
+                self.order_out.label.setText("Q (peak)")
+                self.order_out.set_value(f"{q:.2f}")
+            else:                                         # MIM / tline: show extraction freq
+                f_ext = res.metrics.get("f_extract")
+                self.order_out.label.setText("f extract")
+                self.order_out.set_value(format_eng(f_ext, "Hz") if f_ext else "\u2014")
 
         self._clear_values()
         if not res.ok:
