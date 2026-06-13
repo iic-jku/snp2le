@@ -1,0 +1,10 @@
+runs/
+backups/
+sim_build/
+__pycache__/
+*.vcd
+*.raw
+*.log
+*.pyc
+*.ext
+.DS_Store
