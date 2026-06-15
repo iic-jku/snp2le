@@ -1,57 +1,287 @@
 """plot_view.py - the "Plot" page.
 
-Four S-parameters are shown side by side.  Each column shows Magnitude (dB, top)
-and Phase (deg, bottom) of one selected S_ij; the four selectors default to the
+Four S-parameters are shown side by side.  Each column shows magnitude (dB, top)
+and phase (deg, bottom) of one selected S_ij; the four selectors default to the
 2-port set S11/S21/S12/S22.  Each curve overlays the loaded data (dashed grey)
-against the fitted/extracted model (blue).  Plots pop out and export to CSV.
+against the fitted/extracted model (blue).
+
+Each panel has a live mouse read-out and a "marker mode": with it on, clicking a
+curve drops a labelled data-point marker (up to three per panel), clicking a
+marker removes it, and right-clicking clears them all.  Plots pop out and export
+to CSV.
 """
 from __future__ import annotations
 import csv
 import numpy as np
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
+from matplotlib.backend_bases import _Mode
 
-from .style import JKU_BLUE, JKU_GRAY
+from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN, JKU_RED
 
-DATA, MODEL = JKU_GRAY, JKU_BLUE
+# Curve styling — JKU colours paired with distinct line styles, so the traces
+# stay readable in black-and-white and for colour-blind viewers.  Only `data`
+# and `model` are drawn today; the dash-dot / dotted entries (JKU green / red)
+# are the next styles in the cycle, ready for any future extra series.
+# Each entry is (label, colour, matplotlib line style).
+CURVE_STYLES = [
+    ("data",  JKU_GRAY,  "--"),    # dashed
+    ("model", JKU_BLUE,  "-"),     # solid
+    ("aux-1", JKU_GREEN, "-."),    # dash-dot
+    ("aux-2", JKU_RED,   ":"),     # dotted
+]
+DATA, MODEL = CURVE_STYLES[0], CURVE_STYLES[1]
 SIDES = ["A", "B", "C", "D"]
 DEFAULTS = ["S11", "S21", "S12", "S22"]
+
+# matplotlib line style -> Qt pen style, for drawing matching legend swatches.
+_QT_DASH = {
+    "-": QtCore.Qt.SolidLine, "--": QtCore.Qt.DashLine,
+    "-.": QtCore.Qt.DashDotLine, ":": QtCore.Qt.DotLine,
+}
 
 _TB_QSS = """
 QToolBar { background:transparent; border:none; spacing:1px; }
 QToolButton { background:transparent; border:none; padding:2px; border-radius:4px;
     color:#000000; font-size:13px; font-weight:700; min-width:16px; }
 QToolButton:hover { background:#e7ecf3; }
+QToolButton:checked { background:#d3e6f1; }
 """
 
 
 class _MiniToolbar(NavigationToolbar2QT):
+    """Matplotlib's home/pan/zoom/save toolbar, trimmed and tinted JKU blue.
+
+    Matplotlib recolors its toolbar icons to white when it detects a dark widget
+    palette (our app uses a dark stylesheet), which makes them invisible on the
+    light plot panels.  We override icon creation to render the shipped SVGs in
+    JKU blue instead, for visibility and colour consistency.  Any failure falls
+    back to matplotlib's own icon so the toolbar still works.
+    """
     toolitems = [t for t in NavigationToolbar2QT.toolitems
                  if t[0] in ("Home", "Pan", "Zoom", "Save")]
 
+    def _icon(self, name):
+        try:
+            from matplotlib import cbook
+            from PySide6.QtSvg import QSvgRenderer
+            svg = cbook._get_data_path("images", name).with_suffix(".svg")
+            data = (svg.read_bytes()
+                    .replace(b"fill:black;", b"fill:" + JKU_BLUE.encode() + b";")
+                    .replace(b"stroke:black;", b"stroke:" + JKU_BLUE.encode() + b";"))
+            renderer = QSvgRenderer(QtCore.QByteArray(data))
+            if not renderer.isValid():
+                return super()._icon(name)
+            pm = QtGui.QPixmap(32, 32)
+            pm.fill(QtCore.Qt.transparent)
+            p = QtGui.QPainter(pm)
+            renderer.render(p)
+            p.end()
+            return QtGui.QIcon(pm)
+        except Exception:                                 # noqa: BLE001
+            return super()._icon(name)
 
-def _panel(title):
-    frame = QtWidgets.QFrame(); frame.setProperty("class", "panel")
-    lay = QtWidgets.QVBoxLayout(frame); lay.setContentsMargins(8, 5, 8, 6); lay.setSpacing(1)
-    header = QtWidgets.QHBoxLayout()
-    head = QtWidgets.QLabel(title); head.setProperty("class", "panelTitle")
-    header.addWidget(head); header.addStretch(1)
-    fig = Figure(figsize=(2.7, 2.4)); fig.patch.set_facecolor("white")
-    canvas = FigureCanvas(fig); ax = fig.add_subplot(111)
-    tb = _MiniToolbar(canvas, frame, coordinates=False)
-    tb.setIconSize(QtCore.QSize(15, 15)); tb.setStyleSheet(_TB_QSS)
-    header.addWidget(tb)
-    lay.addLayout(header); lay.addWidget(canvas, 1)
-    return frame, fig, ax, canvas, head
+
+def _marker_icon():
+    """A crosshair/target QIcon (JKU blue) for the marker-mode toolbar button."""
+    pm = QtGui.QPixmap(32, 32); pm.fill(QtCore.Qt.transparent)
+    p = QtGui.QPainter(pm); p.setRenderHint(QtGui.QPainter.Antialiasing, True)
+    col = QtGui.QColor(JKU_BLUE)
+    p.setPen(QtGui.QPen(col, 2.2))
+    p.drawEllipse(9, 9, 14, 14)                  # ring
+    p.setBrush(col)
+    p.drawEllipse(14, 14, 4, 4)                  # centre dot
+    for a, b, c, d in ((16, 2, 16, 7), (16, 25, 16, 30),
+                       (2, 16, 7, 16), (25, 16, 30, 16)):
+        p.drawLine(a, b, c, d)                   # crosshair ticks
+    p.end()
+    return QtGui.QIcon(pm)
+
+
+def _legend_swatch(color, linestyle):
+    """A small QLabel drawing a line in `color` with `linestyle`, so the legend
+    shows the same dash pattern as the plotted curve."""
+    pm = QtGui.QPixmap(30, 12)
+    pm.fill(QtCore.Qt.transparent)
+    p = QtGui.QPainter(pm)
+    pen = QtGui.QPen(QtGui.QColor(color), 2.0)
+    pen.setStyle(_QT_DASH.get(linestyle, QtCore.Qt.SolidLine))
+    p.setPen(pen)
+    p.drawLine(1, 6, 29, 6)
+    p.end()
+    lab = QtWidgets.QLabel()
+    lab.setPixmap(pm)
+    return lab
+
+
+class _PlotPanel:
+    """One plot cell: figure + toolbar + live read-out + click-to-drop markers."""
+    MAX_MARKERS = 3
+    HIT_PX = 9                       # click-within radius (px) to grab a marker
+
+    def __init__(self, header_title):
+        self.frame = QtWidgets.QFrame(); self.frame.setProperty("class", "panel")
+        lay = QtWidgets.QVBoxLayout(self.frame)
+        lay.setContentsMargins(8, 5, 8, 6); lay.setSpacing(1)
+
+        self.fig = Figure(figsize=(2.7, 2.4)); self.fig.patch.set_facecolor("white")
+        self.canvas = FigureCanvas(self.fig)
+        self.ax = self.fig.add_subplot(111)
+
+        self.tb = _MiniToolbar(self.canvas, self.frame, coordinates=False)
+        self.tb.setIconSize(QtCore.QSize(15, 15)); self.tb.setStyleSheet(_TB_QSS)
+        self.tb.setSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed,
+                              QtWidgets.QSizePolicy.Policy.Preferred)
+        self._add_marker_tool()
+
+        self.head = QtWidgets.QLabel(header_title)
+        self.head.setProperty("class", "panelTitle")
+        self.coords = QtWidgets.QLabel(""); self.coords.setProperty("class", "hint")
+        self.coords.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        # the read-out may shrink to nothing so the toolbar always fits in one row
+        self.coords.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored,
+                                  QtWidgets.QSizePolicy.Policy.Preferred)
+
+        header = QtWidgets.QHBoxLayout()
+        header.addWidget(self.head); header.addStretch(1)
+        header.addWidget(self.coords); header.addSpacing(6); header.addWidget(self.tb)
+        lay.addLayout(header); lay.addWidget(self.canvas, 1)
+
+        self.series = []             # [{label, color, x, y}]
+        self.markers = []            # [{x, y, point, annot}]
+        self.marker_mode = False
+
+        self.canvas.mpl_connect("motion_notify_event", self._on_move)
+        self.canvas.mpl_connect("axes_leave_event", lambda _ev: self.coords.setText(""))
+        self.canvas.mpl_connect("button_press_event", self._on_click)
+
+    # ---- marker-mode toolbar button --------------------------------------
+    def _add_marker_tool(self):
+        self.tb.addSeparator()
+        self.marker_action = self.tb.addAction(_marker_icon(), "Marker")
+        self.marker_action.setCheckable(True)
+        self.marker_action.setToolTip(
+            "Marker mode: click a curve to drop a marker (up to 3). "
+            "Click a marker to remove it, right-click to clear all.")
+        self.marker_action.toggled.connect(self._on_marker_toggled)
+        # pressing pan or zoom leaves marker mode (mutually exclusive tools)
+        for key in ("pan", "zoom"):
+            act = self.tb._actions.get(key)
+            if act is not None:
+                act.toggled.connect(self._tool_toggled)
+
+    def _tool_toggled(self, checked):
+        if checked and self.marker_action.isChecked():
+            self.marker_action.setChecked(False)
+
+    def _on_marker_toggled(self, checked):
+        self.marker_mode = bool(checked)
+        if checked:                                   # turn off any active pan/zoom
+            if self.tb.mode == _Mode.PAN:
+                self.tb.pan()
+            elif self.tb.mode == _Mode.ZOOM:
+                self.tb.zoom()
+
+    # ---- live coordinate read-out ----------------------------------------
+    def _on_move(self, ev):
+        if ev.inaxes is self.ax and ev.xdata is not None and ev.ydata is not None:
+            self.coords.setText(f"x = {ev.xdata:.3g}   y = {ev.ydata:.4g}")
+        else:
+            self.coords.setText("")
+
+    # ---- plotting --------------------------------------------------------
+    def plot_series(self, x, series, xlabel, ylabel):
+        self.ax.clear()
+        self.markers = []                    # artists were wiped by clear()
+        self.series = []
+        x = np.asarray(x, float)
+        for s in series:
+            y = np.asarray(s["y"], float)
+            self.ax.plot(x, y, color=s["color"], ls=s["ls"], lw=s["lw"], label=s["label"])
+            self.series.append({"label": s["label"], "color": s["color"], "x": x, "y": y})
+        self.ax.set_xlabel(xlabel, fontsize=8)
+        self.ax.set_ylabel(ylabel, fontsize=9)
+        self.ax.grid(True, alpha=0.3)
+
+    def clear_axes(self):
+        self.ax.clear(); self.series = []; self.markers = []
+
+    def draw(self):
+        self.fig.tight_layout(pad=0.4); self.canvas.draw_idle()
+
+    # ---- markers ---------------------------------------------------------
+    def _on_click(self, ev):
+        if ev.inaxes is not self.ax:
+            return
+        if ev.button == 3:                            # right-click clears all
+            self._clear_markers(); return
+        if ev.button != 1:
+            return
+        hit = self._marker_at(ev)
+        if hit is not None:                           # click a marker to remove it
+            self._remove_marker(hit); return
+        if not self.marker_mode or self.tb.mode != _Mode.NONE:
+            return                                    # placing needs marker mode, no pan/zoom
+        if len(self.markers) >= self.MAX_MARKERS or not self.series:
+            return
+        self._place_marker(ev)
+
+    def _marker_at(self, ev):
+        for mk in self.markers:
+            px, py = self.ax.transData.transform((mk["x"], mk["y"]))
+            if abs(px - ev.x) <= self.HIT_PX and abs(py - ev.y) <= self.HIT_PX:
+                return mk
+        return None
+
+    def _place_marker(self, ev):
+        # snap to the nearest sample of the nearest curve, in pixel space
+        best = None
+        for s in self.series:
+            pts = self.ax.transData.transform(np.column_stack([s["x"], s["y"]]))
+            d2 = (pts[:, 0] - ev.x) ** 2 + (pts[:, 1] - ev.y) ** 2
+            k = int(np.argmin(d2))
+            if best is None or d2[k] < best[0]:
+                best = (d2[k], s, k)
+        _, s, k = best
+        x = float(s["x"][k]); y = float(s["y"][k]); color = s["color"]
+        point, = self.ax.plot([x], [y], marker="o", ms=6, mfc=color,
+                              mec="white", mew=1.0, ls="none", zorder=6)
+        annot = self.ax.annotate(
+            f"{s['label']}\nx = {x:.4g}\ny = {y:.4g}",
+            xy=(x, y), xytext=(9, 9), textcoords="offset points",
+            fontsize=7, ha="left", va="bottom", zorder=7, color="#1a1d21",
+            bbox=dict(boxstyle="round,pad=0.35", fc="white", ec=color, lw=1.3, alpha=0.96))
+        self.markers.append({"x": x, "y": y, "point": point, "annot": annot})
+        self.canvas.draw_idle()
+
+    def _remove_marker(self, mk):
+        mk["point"].remove(); mk["annot"].remove()
+        self.markers.remove(mk); self.canvas.draw_idle()
+
+    def _clear_markers(self):
+        for mk in self.markers:
+            mk["point"].remove(); mk["annot"].remove()
+        self.markers = []; self.canvas.draw_idle()
 
 
 class PlotView(QtWidgets.QWidget):
+    popped_out = QtCore.Signal()      # plots moved to their own window
+    docked = QtCore.Signal()          # plots returned to the main window
+
     def __init__(self, parent=None):
         super().__init__(parent)
         root = QtWidgets.QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 0); root.setSpacing(8)
+        root.setContentsMargins(0, 0, 0, 0); root.setSpacing(0)
+
+        # The controls row and the plot grid live together in one container, so
+        # popping out moves the whole panel (selectors + legend + buttons), not
+        # just the plots.  objectName "root" gives it the greyish app background
+        # so the margins around the plots read as background, not white.
+        self._content = QtWidgets.QWidget(); self._content.setObjectName("root")
+        content = QtWidgets.QVBoxLayout(self._content)
+        content.setContentsMargins(16, 12, 16, 16); content.setSpacing(8)
 
         bar = QtWidgets.QHBoxLayout()
         title = QtWidgets.QLabel("Results"); title.setProperty("class", "panelTitle")
@@ -63,16 +293,16 @@ class PlotView(QtWidgets.QWidget):
             cb.currentIndexChanged.connect(self._render)
             self.selectors.append(cb); bar.addWidget(cb)
         bar.addSpacing(14)
-        for name, color in [("data", DATA), ("model", MODEL)]:
-            sw = QtWidgets.QLabel("\u2014\u2014"); sw.setStyleSheet(f"color:{color};font-weight:700;")
-            bar.addWidget(sw); bar.addWidget(self._hint(name)); bar.addSpacing(8)
+        for name, color, ls in (DATA, MODEL):
+            bar.addWidget(_legend_swatch(color, ls))
+            bar.addWidget(self._hint(name)); bar.addSpacing(8)
         bar.addStretch(1)
         self.export_btn = QtWidgets.QPushButton("Export CSV")
         self.popout_btn = QtWidgets.QPushButton("Pop out plots"); self.popout_btn.setObjectName("primary")
         self.export_btn.clicked.connect(self.export_csv)
         self.popout_btn.clicked.connect(self.toggle_popout)
         bar.addWidget(self.export_btn); bar.addWidget(self.popout_btn)
-        root.addLayout(bar)
+        content.addLayout(bar)
 
         self.grid_host = QtWidgets.QWidget()
         grid = QtWidgets.QGridLayout(self.grid_host)
@@ -80,14 +310,16 @@ class PlotView(QtWidgets.QWidget):
         self._panels = {}
         for col, side in enumerate(SIDES):
             for row, (kind, t) in enumerate((("mag", "Magnitude  (dB)"),
-                                             ("ph", "Phase  (deg)"))):
-                frame, fig, ax, canvas, head = _panel(t)
-                self._panels[kind + side] = (fig, ax, canvas, head)
-                grid.addWidget(frame, row, col)
+                                             ("ph", "Phase  (°)"))):
+                panel = _PlotPanel(t)
+                self._panels[kind + side] = panel
+                grid.addWidget(panel.frame, row, col)
         for c in range(len(SIDES)):
             grid.setColumnStretch(c, 1)
         grid.setRowStretch(0, 1); grid.setRowStretch(1, 1)
-        root.addWidget(self.grid_host, 1)
+        content.addWidget(self.grid_host, 1)
+
+        root.addWidget(self._content)
 
         self._popout = None
         self._res = None
@@ -118,13 +350,14 @@ class PlotView(QtWidgets.QWidget):
 
     def _render(self, *_):
         res = self._res
-        for _, (_, ax, _, _) in self._panels.items():
-            ax.clear()
+        for panel in self._panels.values():
+            panel.clear_axes()
         if res is None or res.data_s is None or res.model_s is None:
-            for _, (fig, _, canvas, _) in self._panels.items():
-                canvas.draw_idle()
+            for panel in self._panels.values():
+                panel.draw()
             return
         f = np.asarray(res.freq, dtype=float); fg = f / 1e9
+        xlabel = r"$f\ \mathrm{(GHz)}$"
         self._last = {"f_Hz": f}
         for side, combo in zip(SIDES, self.selectors):
             ij = combo.currentData()
@@ -132,6 +365,7 @@ class PlotView(QtWidgets.QWidget):
                 continue
             i, j = ij
             sij = combo.currentText()
+            sub = sij[1:]                               # "11" from "S11"
             d = np.asarray(res.data_s)[:, i, j]
             m = np.asarray(res.model_s)[:, i, j]
             mag_d = 20 * np.log10(np.maximum(np.abs(d), 1e-12))
@@ -139,27 +373,25 @@ class PlotView(QtWidgets.QWidget):
             ph_d = np.unwrap(np.angle(d)) * 180 / np.pi
             ph_m = np.unwrap(np.angle(m)) * 180 / np.pi
 
-            _, axm, _, headm = self._panels["mag" + side]
-            axm.plot(fg, mag_d, color=DATA, ls="--", lw=1.3)
-            axm.plot(fg, mag_m, color=MODEL, ls="-", lw=1.6)
-            axm.set_xlabel("f (GHz)", fontsize=8); axm.set_ylabel("|S| (dB)", fontsize=8)
-            axm.grid(True, alpha=0.3)
-            headm.setText(f"Magnitude (dB) \u00b7 {sij}")
+            self._panels["mag" + side].plot_series(
+                fg,
+                [{"label": DATA[0], "color": DATA[1], "ls": DATA[2], "lw": 1.4, "y": mag_d},
+                 {"label": MODEL[0], "color": MODEL[1], "ls": MODEL[2], "lw": 1.6, "y": mag_m}],
+                xlabel, rf"$|S_{{{sub}}}|\ \mathrm{{(dB)}}$")
 
-            _, axp, _, headp = self._panels["ph" + side]
-            axp.plot(fg, ph_d, color=DATA, ls="--", lw=1.3)
-            axp.plot(fg, ph_m, color=MODEL, ls="-", lw=1.6)
-            axp.set_xlabel("f (GHz)", fontsize=8); axp.set_ylabel("phase (deg)", fontsize=8)
-            axp.grid(True, alpha=0.3)
-            headp.setText(f"Phase (deg) \u00b7 {sij}")
+            self._panels["ph" + side].plot_series(
+                fg,
+                [{"label": DATA[0], "color": DATA[1], "ls": DATA[2], "lw": 1.4, "y": ph_d},
+                 {"label": MODEL[0], "color": MODEL[1], "ls": MODEL[2], "lw": 1.6, "y": ph_m}],
+                xlabel, rf"$\angle S_{{{sub}}}\ (^\circ)$")
 
             self._last[f"{sij}|data_dB"] = mag_d
             self._last[f"{sij}|model_dB"] = mag_m
             self._last[f"{sij}|data_deg"] = ph_d
             self._last[f"{sij}|model_deg"] = ph_m
 
-        for _, (fig, _, canvas, _) in self._panels.items():
-            fig.tight_layout(pad=0.4); canvas.draw_idle()
+        for panel in self._panels.values():
+            panel.draw()
 
     # ---- CSV / pop-out ---------------------------------------------------
     def export_csv(self):
@@ -176,19 +408,24 @@ class PlotView(QtWidgets.QWidget):
 
     def toggle_popout(self):
         if self._popout is None:
+            size = self._content.size()                    # keep the mounted size
             self._popout = QtWidgets.QMainWindow(self)
-            self._popout.setWindowTitle("snp2le \u2014 Plots")
-            self._popout.setCentralWidget(self.grid_host)
-            self._popout.resize(1320, 720)
+            self._popout.setWindowTitle("Plots")
+            from .logo import logo_icon
+            self._popout.setWindowIcon(logo_icon())
+            self._popout.setCentralWidget(self._content)   # whole panel, incl. controls
+            self._popout.resize(size)
             self._popout.closeEvent = self._dock_back
             self._popout.show()
             self.popout_btn.setText("Dock plots")
+            self.popped_out.emit()
         else:
             self._dock_back(None)
 
     def _dock_back(self, _event):
         if self._popout is not None:
-            self.layout().addWidget(self.grid_host, 1)
+            self.layout().addWidget(self._content)
             popout, self._popout = self._popout, None
             popout.deleteLater()
             self.popout_btn.setText("Pop out plots")
+            self.docked.emit()

@@ -11,7 +11,7 @@ import numpy as np
 
 from .base import Structure
 from ..ir import CircuitIR, Element
-from ..units import format_eng
+from ..units import comp_label, port_label
 
 N_SEGMENTS = 4          # number of pi-cells in the ladder
 
@@ -71,15 +71,15 @@ class TransmissionLine(Structure):
         show = min(len(segs), 3)
         d = sd.Drawing(show=False); d.config(unit=1.6, fontsize=11)
         with d:
-            elm.Dot(open=True).label("P1", loc="left")
+            elm.Dot(open=True).label(port_label(1), loc="left")
             for i in range(show):
-                d.push(); elm.Capacitor().down().label("C_sh"); elm.Ground(); d.pop()
-                elm.Inductor2().right().label("L_s")
-                elm.Resistor().right().label("R_s")
+                d.push(); elm.Capacitor().down().label(comp_label("C_sh")); elm.Ground(); d.pop()
+                elm.Inductor2().right().label(comp_label("L_s"))
+                elm.Resistor().right().label(comp_label("R_s"))
                 elm.Dot()
             if len(segs) > show:
-                elm.Line().right().length(0.6).label("\u2026")
-            d.push(); elm.Capacitor().down().label("C_sh"); elm.Ground(); d.pop()
+                elm.Line().right().length(0.6).label(r"$\cdots$")
+            d.push(); elm.Capacitor().down().label(comp_label("C_sh")); elm.Ground(); d.pop()
             elm.Line().right().length(0.8)
-            elm.Dot(open=True).label("P2", loc="right")
+            elm.Dot(open=True).label(port_label(2), loc="right")
         return d

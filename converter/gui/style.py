@@ -20,6 +20,12 @@ LIGHT_BG = "#eef1f5"
 
 
 def build_stylesheet() -> str:
+    import os
+    _assets = os.path.join(os.path.dirname(__file__), "assets")
+    # QSS url() wants forward slashes, even on Windows
+    spin_up = os.path.join(_assets, "spin_up.svg").replace("\\", "/")
+    spin_down = os.path.join(_assets, "spin_down.svg").replace("\\", "/")
+    from .combobox_style import combobox_qss
     return f"""
 * {{ font-family: "DejaVu Sans", "Segoe UI", sans-serif; font-size: 12px;
      color: #1a1d21; }}
@@ -53,11 +59,26 @@ QLineEdit {{ background: #ffffff; border: 1px solid {FIELD_BORDER};
     border-radius: 5px; padding: 3px 6px; }}
 QLineEdit:read-only {{ color: {JKU_BLUE}; font-weight: 600; background: #fbfcfe; }}
 QLineEdit[error="true"] {{ border: 1px solid {JKU_RED}; background: #fdeeec; }}
-QComboBox, QSpinBox {{ background: #ffffff; border: 1px solid {FIELD_BORDER};
+QSpinBox {{ background: #ffffff; border: 1px solid {FIELD_BORDER};
     border-radius: 5px; padding: 3px 6px; }}
-QComboBox::drop-down {{ border: none; width: 18px; }}
-QComboBox QAbstractItemView {{ background: #ffffff; selection-background-color: {JKU_BLUE};
-    selection-color: #ffffff; }}
+/* greyed-out look for controls that do not apply to the current mode
+   (QComboBox styling lives in combobox_style.combobox_qss, appended below) */
+QSpinBox:disabled {{ background: #eef1f5; color: #aab2bd; }}
+QCheckBox:disabled {{ color: #aab2bd; }}
+/* spin box up/down buttons: give them real geometry + visible arrows so both
+   are clickable (a bare QSpinBox stylesheet collapses them otherwise). */
+QSpinBox {{ padding-right: 20px; }}
+QSpinBox::up-button, QSpinBox::down-button {{
+    subcontrol-origin: border; width: 18px; background: #f1f4f8;
+    border-left: 1px solid {FIELD_BORDER}; }}
+QSpinBox::up-button {{ subcontrol-position: top right;
+    border-top-right-radius: 5px; border-bottom: 1px solid {FIELD_BORDER}; }}
+QSpinBox::down-button {{ subcontrol-position: bottom right;
+    border-bottom-right-radius: 5px; }}
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {{ background: #e7ecf3; }}
+QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {{ background: #dbe2ec; }}
+QSpinBox::up-arrow {{ image: url("{spin_up}"); width: 9px; height: 9px; }}
+QSpinBox::down-arrow {{ image: url("{spin_down}"); width: 9px; height: 9px; }}
 
 /* ---- buttons ---- */
 QPushButton {{ background: #ffffff; border: 1px solid {FIELD_BORDER};
@@ -86,4 +107,4 @@ QPlainTextEdit {{ background: #ffffff; border: 1px solid {PANEL_BORDER};
 QTableWidget {{ border: none; gridline-color: #ececf0; }}
 QHeaderView::section {{ background: {LIGHT_BG}; border: none; padding: 5px;
     color: {JKU_GRAY}; font-size: 10px; }}
-"""
+""" + combobox_qss()

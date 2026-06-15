@@ -17,6 +17,10 @@ def apply_style():
         "grid.linewidth": 0.6,
         "axes.labelcolor": "#000000",
         "text.color": "#000000",
+        # LaTeX-style maths for the axis labels (|S_{11}|, arg S_{11}, ...)
+        # rendered with matplotlib's built-in Computer Modern, so no external
+        # LaTeX install is needed.
+        "mathtext.fontset": "cm",
         "xtick.color": "#7d828c",
         "ytick.color": "#7d828c",
         "figure.facecolor": "white",

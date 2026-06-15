@@ -52,3 +52,43 @@ def format_eng(value, unit: str = "", sig: int = 3) -> str:
         if a >= scale:
             return f"{sign}{a / scale:.{sig}g} {prefix}{unit}".strip()
     return f"{v:.{sig}g} {unit}".strip()
+
+
+# --------------------------------------------------------------------------- #
+#  matplotlib mathtext (LaTeX-look) helpers, used by the schematic labels
+# --------------------------------------------------------------------------- #
+import re as _re
+
+
+def sym_mathtext(sym: str) -> str:
+    """A component symbol as a mathtext fragment: 'C_p1' -> r'C_\\mathrm{p1}'."""
+    if "_" in sym:
+        base, sub = sym.split("_", 1)
+        return rf"{base}_{{\mathrm{{{sub}}}}}"
+    return sym
+
+
+def eng_mathtext(value, unit: str = "") -> str:
+    """format_eng as a mathtext fragment, e.g. r'0.82\\,\\mathrm{nH}', r'1.4\\,\\Omega'."""
+    s = format_eng(value, unit)
+    num, _, rest = s.partition(" ")
+    if not rest:
+        return num
+    # use non-letter sentinels so the \mathrm wrap below does not touch them
+    rest = rest.replace("Ω", "\x01").replace("µ", "\x02")
+    rest = _re.sub(r"[A-Za-z]+", lambda m: r"\mathrm{%s}" % m.group(0), rest)
+    rest = rest.replace("\x01", r"\Omega").replace("\x02", r"\mu ")
+    return rf"{num}\,{rest}"
+
+
+def comp_label(sym: str, value=None, unit: str = "", sep: str = "\n") -> str:
+    """A full schematic label in mathtext, e.g. '$C_{\\mathrm{p1}}$\\n$40\\,\\mathrm{fF}$'."""
+    label = f"${sym_mathtext(sym)}$"
+    if value is not None:
+        label += sep + f"${eng_mathtext(value, unit)}$"
+    return label
+
+
+def port_label(n) -> str:
+    """A port label in mathtext, e.g. r'$\\mathrm{P}_1$'."""
+    return rf"$\mathrm{{P}}_{{{n}}}$"

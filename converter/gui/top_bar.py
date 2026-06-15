@@ -1,20 +1,59 @@
 """top_bar.py - control strip.
 
 Dark title bar: snp2le logo + title, then (right) View selector + Help.
-Light controls row: Load .sNp, Mode (Universal / Structure), Structure, Max
-order, Enforce passivity.  Structures that do not match the loaded port count are
-greyed out so an invalid choice can never be made.
+Light controls row: Load .sNp, Mode (Universal / Structure), Structure, PDK, Max
+order, Enforce passivity.  Structures that do not match the loaded port count, and
+PDKs that are not supported yet, are greyed out so an invalid choice can never be
+made.
 """
 from __future__ import annotations
-from PySide6 import QtCore, QtWidgets
+import math
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from core.structures import structure_items
+from core.pdk import pdk_items, DEFAULT_PDK
+from .style import JKU_BLUE
+
+_DISABLED_GREY = QtGui.QColor("#9aa0aa")
+
+
+def _reset_icon(color=JKU_BLUE):
+    """A circular-arrow 'reset' QIcon: a near-closed ring with a clear arrowhead."""
+    pm = QtGui.QPixmap(32, 32); pm.fill(QtCore.Qt.transparent)
+    p = QtGui.QPainter(pm); p.setRenderHint(QtGui.QPainter.Antialiasing, True)
+    col = QtGui.QColor(color)
+    cx, cy, r = 16, 16, 9.0
+    pen = QtGui.QPen(col, 2.6); pen.setCapStyle(QtCore.Qt.RoundCap)
+    p.setPen(pen)
+    start_deg, span_deg = 120, 305       # near-closed ring, small gap at the top
+    p.drawArc(QtCore.QRectF(cx - r, cy - r, 2 * r, 2 * r),
+              int(start_deg * 16), int(span_deg * 16))
+    # arrowhead at the arc end, oriented along the (counter-clockwise) tangent
+    end = math.radians(start_deg + span_deg)
+    ex, ey = cx + r * math.cos(end), cy - r * math.sin(end)
+    tx, ty = -math.sin(end), -math.cos(end)     # unit tangent (direction of travel)
+    nx, ny = math.cos(end), -math.sin(end)      # unit radial (arrow half-width)
+    half_len, half_w = 3.25, 4.2
+    tip = (ex + tx * half_len, ey + ty * half_len)
+    base = (ex - tx * half_len, ey - ty * half_len)
+    p.setPen(QtCore.Qt.NoPen); p.setBrush(col)
+    path = QtGui.QPainterPath()
+    path.moveTo(*tip)
+    path.lineTo(base[0] + nx * half_w, base[1] + ny * half_w)
+    path.lineTo(base[0] - nx * half_w, base[1] - ny * half_w)
+    path.closeSubpath()
+    p.drawPath(path)
+    p.end()
+    return QtGui.QIcon(pm)
 
 
 def _set_item_enabled(combo, index, enabled):
     item = combo.model().item(index)
     if item is not None:
         item.setEnabled(enabled)
+        # also grey the text so an unavailable entry reads as disabled
+        item.setForeground(QtGui.QBrush() if enabled
+                           else QtGui.QBrush(_DISABLED_GREY))
 
 
 class TopBar(QtWidgets.QWidget):
@@ -62,13 +101,13 @@ class TopBar(QtWidgets.QWidget):
         bar = QtWidgets.QWidget(); bar.setObjectName("topbar")
         lay = QtWidgets.QHBoxLayout(bar); lay.setContentsMargins(16, 8, 16, 10); lay.setSpacing(14)
 
-        self.load = QtWidgets.QPushButton("\U0001F4C2  Load .sNp \u2026")
+        self.load = QtWidgets.QPushButton("\U0001F4C2  Load .sNp")
         self.load.setObjectName("primary"); self.load.setFixedHeight(30)
         self.load.clicked.connect(self.load_clicked.emit)
 
         self.mode = QtWidgets.QComboBox()
-        self.mode.addItem("Universal  (any N-port)", "universal")
         self.mode.addItem("Structure-specific", "structure")
+        self.mode.addItem("Universal  (any N-port)", "universal")
         self.mode.setFixedWidth(180)
 
         self.structure = QtWidgets.QComboBox()
@@ -77,25 +116,81 @@ class TopBar(QtWidgets.QWidget):
             self.structure.addItem(name, key); self._struct_ports[key] = nports
         self.structure.setFixedWidth(180)
 
+        self.pdk = QtWidgets.QComboBox()
+        self._pdk_supported = {}
+        for key, _name, supported in pdk_items():
+            self.pdk.addItem(key, key)           # show the PDK key itself
+            self._pdk_supported[key] = supported
+        self.pdk.setFixedWidth(180)
+        self.pdk.setToolTip("Target PDK. VACASK output is currently only "
+                            "supported for the IHP PDKs; the others are disabled.")
+        self._grey_pdks()
+
         self.order = QtWidgets.QSpinBox(); self.order.setRange(2, 40); self.order.setValue(12)
-        self.order.setFixedWidth(70)
+        self.order.setFixedWidth(92)
 
         self.passive = QtWidgets.QCheckBox("Enforce passivity"); self.passive.setChecked(True)
+
+        self.reset = QtWidgets.QPushButton("  Reset")
+        self.reset.setIcon(_reset_icon()); self.reset.setIconSize(QtCore.QSize(16, 16))
+        self.reset.setFixedHeight(30)
+        self.reset.setToolTip("Reset the conversion settings to their defaults.")
 
         lay.addLayout(self._labeled("", self.load))
         lay.addSpacing(6)
         lay.addLayout(self._labeled("Mode", self.mode))
         lay.addLayout(self._labeled("Structure", self.structure))
+        lay.addLayout(self._labeled("PDK", self.pdk))
         lay.addLayout(self._labeled("Max order", self.order))
         lay.addLayout(self._labeled("", self.passive))
         lay.addStretch(1)
+        lay.addLayout(self._labeled("", self.reset))
 
         self.mode.currentIndexChanged.connect(self._on_change)
         self.structure.currentIndexChanged.connect(self._on_change)
+        self.pdk.currentIndexChanged.connect(lambda _=None: self.changed.emit())
         self.order.valueChanged.connect(lambda _=None: self.changed.emit())
         self.passive.toggled.connect(lambda _=None: self.changed.emit())
+        self.reset.clicked.connect(self._on_reset)
         self._apply_constraints()
         return bar
+
+    # ---- reset / view helpers --------------------------------------------
+    def _on_reset(self):
+        """Restore every control to the ConverterState defaults, then recompute once."""
+        widgets = (self.mode, self.structure, self.pdk, self.order, self.passive)
+        for w in widgets:
+            w.blockSignals(True)
+        self.mode.setCurrentIndex(0)                       # universal
+        si = self.structure.findData("inductor-pi")
+        if si >= 0:
+            self.structure.setCurrentIndex(si)
+        pi = self.pdk.findData(DEFAULT_PDK)
+        if pi >= 0:
+            self.pdk.setCurrentIndex(pi)
+        self.order.setValue(12)
+        self.passive.setChecked(True)
+        for w in widgets:
+            w.blockSignals(False)
+        self._apply_constraints()
+        self.changed.emit()
+
+    def set_view(self, name):
+        """Select the Design (name='design') or Plot (name='plot') view."""
+        self.view.setCurrentIndex(0 if name == "design" else 1)
+
+    # ---- PDK greying (static: unsupported kits can never be chosen) -------
+    def _grey_pdks(self):
+        first_ok = None
+        for i in range(self.pdk.count()):
+            key = self.pdk.itemData(i)
+            ok = self._pdk_supported.get(key, False)
+            _set_item_enabled(self.pdk, i, ok)
+            if ok and first_ok is None:
+                first_ok = i
+        cur = self.pdk.itemData(self.pdk.currentIndex())
+        if not self._pdk_supported.get(cur, False) and first_ok is not None:
+            self.pdk.setCurrentIndex(first_ok)
 
     # ---- constraints -----------------------------------------------------
     def set_ports(self, n_ports):
@@ -131,6 +226,7 @@ class TopBar(QtWidgets.QWidget):
         return {
             "mode": self.mode.currentData(),
             "structure_key": self.structure.currentData(),
+            "pdk": self.pdk.currentData(),
             "max_order": int(self.order.value()),
             "enforce_passivity": bool(self.passive.isChecked()),
         }

@@ -10,7 +10,7 @@ import numpy as np
 
 from .base import Structure
 from ..ir import CircuitIR, Element
-from ..units import format_eng
+from ..units import comp_label, port_label
 from .inductor_pi import pi_branches
 
 
@@ -57,19 +57,19 @@ class MimCap(Structure):
         v = {e.name: e.value for e in ir.elements}
         d = sd.Drawing(show=False); d.config(unit=2.0, fontsize=12)
         with d:
-            elm.Dot(open=True).label("P1", loc="left")
+            elm.Dot(open=True).label(port_label(1), loc="left")
             d.push()
-            elm.Capacitor().down().label("C_p1\n" + format_eng(v.get("C1"), "F"))
+            elm.Capacitor().down().label(comp_label("C_p1", v.get("C1"), "F"))
             elm.Ground()
             d.pop()
-            elm.Capacitor().right().label("C_s  " + format_eng(v.get("Cs"), "F"))
-            elm.Inductor2().right().label("L_s " + format_eng(v.get("Ls"), "H"))
-            elm.Resistor().right().label("R_s " + format_eng(v.get("Rs"), "\u03a9"))
+            elm.Capacitor().right().label(comp_label("C_s", v.get("Cs"), "F", sep="  "))
+            elm.Inductor2().right().label(comp_label("L_s", v.get("Ls"), "H", sep="  "))
+            elm.Resistor().right().label(comp_label("R_s", v.get("Rs"), "\u03a9", sep="  "))
             elm.Dot()
             d.push()
-            elm.Capacitor().down().label("C_p2\n" + format_eng(v.get("C2"), "F"))
+            elm.Capacitor().down().label(comp_label("C_p2", v.get("C2"), "F"))
             elm.Ground()
             d.pop()
             elm.Line().right().length(1.0)
-            elm.Dot(open=True).label("P2", loc="right")
+            elm.Dot(open=True).label(port_label(2), loc="right")
         return d

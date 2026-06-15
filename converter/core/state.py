@@ -10,8 +10,9 @@ import json
 
 @dataclass
 class ConverterState:
-    mode: str = "universal"               # universal | structure
+    mode: str = "structure"               # universal | structure
     structure_key: str = "inductor-pi"
+    pdk: str = "ihp-sg13g2"               # target PDK (see core/pdk.py, DEFAULT_PDK)
     max_order: int = 12
     enforce_passivity: bool = True
     source_path: str = ""                 # last loaded .sNp (for save/restore)
@@ -34,6 +35,7 @@ class Results:
     ir: object = None                     # CircuitIR
     ngspice: str = ""
     vacask: str = ""
+    pdk: str = ""                         # target PDK key the netlists were rendered for
 
     n_poles: int = 0
     passive: bool = False

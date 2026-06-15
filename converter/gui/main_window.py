@@ -49,12 +49,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.design.export_clicked.connect(self.on_export)
         self.design.save_clicked.connect(self.on_save_design)
         self.design.load_clicked.connect(self.on_load_design)
+        # pop the plots out -> show Design view; dock them back -> return to Plot
+        self.plots.popped_out.connect(lambda: self.top.set_view("design"))
+        self.plots.docked.connect(lambda: self.top.set_view("plot"))
 
     # ---- state sync ------------------------------------------------------
     def _pull(self):
         v = self.top.values()
         self.state.mode = v["mode"]
         self.state.structure_key = v["structure_key"]
+        self.state.pdk = v["pdk"]
         self.state.max_order = v["max_order"]
         self.state.enforce_passivity = v["enforce_passivity"]
 
