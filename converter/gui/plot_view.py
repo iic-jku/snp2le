@@ -21,7 +21,7 @@ from matplotlib.backend_bases import _Mode
 
 from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN, JKU_RED
 
-# Curve styling — JKU colours paired with distinct line styles, so the traces
+# Curve styling: JKU colours paired with distinct line styles, so the traces
 # stay readable in black-and-white and for colour-blind viewers.  Only `data`
 # and `model` are drawn today; the dash-dot / dotted entries (JKU green / red)
 # are the next styles in the cycle, ready for any future extra series.

@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6 import QtWidgets
 
 _HTML = """
-<h2>S-Parameter&nbsp;\u2192&nbsp;Lumped-Element Netlist Converter</h2>
+<h2>S-Parameter to Lumped-Element Netlist Converter</h2>
 
 <p>This tool turns a Touchstone <b>.sNp</b> S-parameter file (for example from an
 AWS&nbsp;Palace EM simulation) into an equivalent <b>lumped-element netlist</b>
