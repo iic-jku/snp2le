@@ -32,7 +32,7 @@ class InductorPi(Structure):
 
     def extract(self, net):
         if net.nports != 2:
-            raise ValueError("inductor pi-model needs a 2-port (.s2p)")
+            raise ValueError("inductor π-model needs a 2-port (.s2p)")
         f = net.f
         good = f > 0
         w = 2 * np.pi * f

@@ -10,10 +10,10 @@ import json
 
 @dataclass
 class ConverterState:
-    mode: str = "structure"               # universal | structure
+    mode: str = "universal"               # universal | structure
     structure_key: str = "inductor-pi"
     pdk: str = "ihp-sg13g2"               # target PDK (see core/pdk.py, DEFAULT_PDK)
-    max_order: int = 12
+    max_order: int = 6
     enforce_passivity: bool = True
     source_path: str = ""                 # last loaded .sNp (for save/restore)
 

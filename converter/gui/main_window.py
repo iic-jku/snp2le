@@ -1,5 +1,6 @@
 """main_window.py - assembles the UI and is the controller."""
 from __future__ import annotations
+import os
 from PySide6 import QtCore, QtWidgets
 
 from core.state import ConverterState
@@ -21,7 +22,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(1500, 940)
 
         self.state = ConverterState()
-        self.net = io.demo_network()          # seed with a demo 2-port
+        # seed with a bundled example; fall back to the synthetic demo
+        self._examples_dir = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "examples")
+        example = os.path.join(self._examples_dir, "blc_ihp-sg13g2.s4p")
+        try:
+            self.net = io.load_touchstone(example)
+            self.state.source_path = example
+        except Exception:                     # noqa: BLE001
+            self.net = io.demo_network()
 
         root = QtWidgets.QWidget(); root.setObjectName("root")
         lay = QtWidgets.QVBoxLayout(root); lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(0)
@@ -74,9 +83,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # ---- file loading ----------------------------------------------------
     def on_load_snp(self):
+        # start in the folder of the last loaded file, else the examples folder
+        start_dir = self._examples_dir
+        if self.state.source_path:
+            last = os.path.dirname(self.state.source_path)
+            if os.path.isdir(last):
+                start_dir = last
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Load Touchstone file", "",
-            "Touchstone (*.s1p *.s2p *.s3p *.s4p *.snp *.ts);;All files (*)")
+            self, "Load Touchstone file", start_dir,
+            "Touchstone (*.s1p *.s2p *.s3p *.s4p *.s5p *.s6p *.s7p *.s8p "
+            "*.snp *.ts);;All files (*)")
         if not path:
             return
         try:

@@ -83,7 +83,7 @@ def build_parser():
                    help="structure key (see list-structures)")
     c.add_argument("--pdk", default=DEFAULT_PDK,
                    help="target PDK key (see list-pdks)")
-    c.add_argument("--order", type=int, default=12, help="max model order (universal)")
+    c.add_argument("--order", type=int, default=6, help="max model order (universal)")
     c.add_argument("--passive", action="store_true", default=True,
                    help="enforce passivity (universal, default on)")
     c.add_argument("--no-passive", dest="passive", action="store_false")

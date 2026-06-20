@@ -106,9 +106,9 @@ class TopBar(QtWidgets.QWidget):
         self.load.clicked.connect(self.load_clicked.emit)
 
         self.mode = QtWidgets.QComboBox()
+        self.mode.addItem("Universal (any N-port)", "universal")
         self.mode.addItem("Structure-specific", "structure")
-        self.mode.addItem("Universal  (any N-port)", "universal")
-        self.mode.setFixedWidth(180)
+        self.mode.setFixedWidth(220)
 
         self.structure = QtWidgets.QComboBox()
         self._struct_ports = {}
@@ -126,7 +126,7 @@ class TopBar(QtWidgets.QWidget):
                             "supported for the IHP PDKs; the others are disabled.")
         self._grey_pdks()
 
-        self.order = QtWidgets.QSpinBox(); self.order.setRange(2, 40); self.order.setValue(12)
+        self.order = QtWidgets.QSpinBox(); self.order.setRange(2, 40); self.order.setValue(6)
         self.order.setFixedWidth(92)
 
         self.passive = QtWidgets.QCheckBox("Enforce passivity"); self.passive.setChecked(True)
@@ -168,7 +168,7 @@ class TopBar(QtWidgets.QWidget):
         pi = self.pdk.findData(DEFAULT_PDK)
         if pi >= 0:
             self.pdk.setCurrentIndex(pi)
-        self.order.setValue(12)
+        self.order.setValue(6)
         self.passive.setChecked(True)
         for w in widgets:
             w.blockSignals(False)
