@@ -289,7 +289,7 @@ class PlotView(QtWidgets.QWidget):
         bar.addWidget(self._hint("S-parameters"))
         self.selectors = []
         for d in DEFAULTS:
-            cb = QtWidgets.QComboBox(); cb.setFixedWidth(74)
+            cb = QtWidgets.QComboBox(); cb.setFixedWidth(90)
             cb.currentIndexChanged.connect(self._render)
             self.selectors.append(cb); bar.addWidget(cb)
         bar.addSpacing(14)
