@@ -32,6 +32,12 @@ PDKS = {p.key: p for p in (
 
 DEFAULT_PDK = "ihp-sg13g2"
 
+# Structure keys that are not available for a given PDK (the device does not
+# exist in that kit), keyed by PDK.  Used to grey out the Structure dropdown.
+PDK_EXCLUDED_STRUCTURES = {
+    "ihp-sg13cmos5l": frozenset({"mim-cap"}),    # no MIM capacitor in this kit
+}
+
 
 def pdk_items():
     """(key, display_name, supported) for the GUI dropdown / CLI listing."""
@@ -41,3 +47,8 @@ def pdk_items():
 def get_pdk(key) -> Pdk:
     """Return the Pdk for `key`, falling back to the default for unknown keys."""
     return PDKS.get(key) or PDKS[DEFAULT_PDK]
+
+
+def excluded_structures(pdk_key) -> frozenset:
+    """Structure keys unavailable for the given PDK."""
+    return PDK_EXCLUDED_STRUCTURES.get(pdk_key, frozenset())

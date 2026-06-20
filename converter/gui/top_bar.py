@@ -11,7 +11,7 @@ import math
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from core.structures import structure_items
-from core.pdk import pdk_items, DEFAULT_PDK
+from core.pdk import pdk_items, DEFAULT_PDK, excluded_structures
 from .style import JKU_BLUE
 
 _DISABLED_GREY = QtGui.QColor("#9aa0aa")
@@ -148,7 +148,7 @@ class TopBar(QtWidgets.QWidget):
 
         self.mode.currentIndexChanged.connect(self._on_change)
         self.structure.currentIndexChanged.connect(self._on_change)
-        self.pdk.currentIndexChanged.connect(lambda _=None: self.changed.emit())
+        self.pdk.currentIndexChanged.connect(self._on_change)   # may grey a structure
         self.order.valueChanged.connect(lambda _=None: self.changed.emit())
         self.passive.toggled.connect(lambda _=None: self.changed.emit())
         self.reset.clicked.connect(self._on_reset)
@@ -202,21 +202,25 @@ class TopBar(QtWidgets.QWidget):
         self.structure.setEnabled(is_struct)
         self.order.setEnabled(not is_struct)
         self.passive.setEnabled(not is_struct)
-        # grey structures that don't match the loaded port count
+        # grey structures that don't match the loaded port count or aren't
+        # available for the selected PDK (e.g. no MIM in ihp-sg13cmos5l)
+        excluded = excluded_structures(self.pdk.currentData())
+        cur = self.structure.currentIndex()
         first_ok = None
+        cur_ok = False
         for i in range(self.structure.count()):
             key = self.structure.itemData(i)
-            ok = (self._n_ports == 0) or (self._struct_ports.get(key) == self._n_ports)
+            port_ok = (self._n_ports == 0) or (self._struct_ports.get(key) == self._n_ports)
+            ok = port_ok and key not in excluded
             _set_item_enabled(self.structure, i, ok)
             if ok and first_ok is None:
                 first_ok = i
-        if is_struct and first_ok is not None:
-            cur = self.structure.currentIndex()
-            key = self.structure.itemData(cur)
-            if self._struct_ports.get(key) != self._n_ports and self._n_ports:
-                self.structure.blockSignals(True)
-                self.structure.setCurrentIndex(first_ok)
-                self.structure.blockSignals(False)
+            if i == cur:
+                cur_ok = ok
+        if is_struct and not cur_ok and first_ok is not None:
+            self.structure.blockSignals(True)
+            self.structure.setCurrentIndex(first_ok)
+            self.structure.blockSignals(False)
 
     def _on_change(self, *_):
         self._apply_constraints()

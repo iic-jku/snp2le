@@ -16,8 +16,6 @@ from .base import Structure
 from ..ir import CircuitIR, Element
 from ..units import comp_label, port_label
 
-_R_MIN = 1e-9          # below this the substrate R is treated as a short (just C)
-
 
 def pi_branches(net):
     """Split a 2-port into (Zseries, Zshunt1, Zshunt2) over frequency."""
@@ -75,30 +73,28 @@ class InductorPi(Structure):
         Q = np.where(Zdiff.real != 0, Zdiff.imag / Zdiff.real, 0.0)
         k = int(np.argmax(np.where(good, Q, -np.inf)))
 
-        Rs = float(Zseries.real[k])
-        Ls = float(Zseries.imag[k] / w[k])
-        # shunt = capacitor in series with substrate R (read off the impedance)
-        C1 = float(-1.0 / (w[k] * Zshunt1.imag[k])) if Zshunt1.imag[k] != 0 else 0.0
-        C2 = float(-1.0 / (w[k] * Zshunt2.imag[k])) if Zshunt2.imag[k] != 0 else 0.0
-        R1 = max(float(Zshunt1.real[k]), 0.0)
-        R2 = max(float(Zshunt2.real[k]), 0.0)
-        Ls = max(Ls, 0.0); Rs = max(Rs, 0.0); C1 = max(C1, 0.0); C2 = max(C2, 0.0)
+        Rs = max(float(Zseries.real[k]), 0.0)
+        Ls = max(float(Zseries.imag[k] / w[k]), 0.0)
+        # shunt = capacitor in series with substrate R (read off the impedance).
+        # The two ports are nominally equal, so average them for a symmetric model
+        # (a noisy port can otherwise extract a negative R and drop the resistor).
+        C1 = -1.0 / (w[k] * Zshunt1.imag[k]) if Zshunt1.imag[k] != 0 else 0.0
+        C2 = -1.0 / (w[k] * Zshunt2.imag[k]) if Zshunt2.imag[k] != 0 else 0.0
+        Csh = max(0.5 * (C1 + C2), 0.0)
+        Rsh = max(0.5 * (float(Zshunt1.real[k]) + float(Zshunt2.real[k])), 0.0)
 
         ir = CircuitIR(name="inductor", ports=["p1", "p2"], physical=True)
         ir.comments.append(f"inductor model, extracted at peak-Q ({f[k]/1e9:.2f} GHz)")
         ir.add(Element("L", "Ls", ("p1", "n_s"), Ls, label="L_s"))
         ir.add(Element("R", "Rs", ("n_s", "p2"), Rs, label="R_s"))
-        self._add_shunt(ir, "p1", 1, C1, R1)
-        self._add_shunt(ir, "p2", 2, C2, R2)
+        self._add_shunt(ir, "p1", 1, Csh, Rsh)
+        self._add_shunt(ir, "p2", 2, Csh, Rsh)
 
         metrics = {"Q_peak": float(Q[k]), "f_extract": float(f[k]),
                    "Ls": Ls, "Rs": Rs}
-        rows = [("L_s", Ls, "H"), ("R_s", Rs, "Ω"), ("C_p1", C1, "F")]
-        if R1 > _R_MIN:
-            rows.append(("R_p1", R1, "Ω"))
-        rows.append(("C_p2", C2, "F"))
-        if R2 > _R_MIN:
-            rows.append(("R_p2", R2, "Ω"))
+        rows = [("L_s", Ls, "H"), ("R_s", Rs, "Ω"),
+                ("C_p1", Csh, "F"), ("R_p1", Rsh, "Ω"),
+                ("C_p2", Csh, "F"), ("R_p2", Rsh, "Ω")]
         return ir, metrics, rows
 
     def default_plots(self):
@@ -106,13 +102,11 @@ class InductorPi(Structure):
 
     @staticmethod
     def _add_shunt(ir, port, idx, c, r):
-        """Capacitor in series with substrate R to ground (or just C if R~0)."""
-        if r > _R_MIN:
-            mid = f"n_sh{idx}"
-            ir.add(Element("C", f"C{idx}", (port, mid), c, label=f"C_p{idx}"))
-            ir.add(Element("R", f"R{idx}", (mid, "0"), r, label=f"R_p{idx}"))
-        else:
-            ir.add(Element("C", f"C{idx}", (port, "0"), c, label=f"C_p{idx}"))
+        """Capacitor in series with the substrate R to ground.  R is always
+        present (a 0 R simply acts as a wire in the MNA rebuild)."""
+        mid = f"n_sh{idx}"
+        ir.add(Element("C", f"C{idx}", (port, mid), c, label=f"C_p{idx}"))
+        ir.add(Element("R", f"R{idx}", (mid, "0"), r, label=f"R_p{idx}"))
 
     def freq_traces(self, net, model_s):
         """Frequency-domain trace sets for the Plot view (data vs model).
