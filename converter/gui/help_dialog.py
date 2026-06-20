@@ -22,7 +22,7 @@ count and frequency range.</li>
   structure and port count. The netlist is electrically exact but not physically
   interpretable.</li>
   <li><b>Structure-specific</b>: fits a known physical topology so every component
-  maps to reality. Currently available: <i>Inductor</i> (&pi;-model), <i>MIM
+  maps to reality. Currently available: <i>Inductor</i>, <i>MIM
   capacitor</i> and <i>Transmission line</i> (RLGC ladder), all 2-port.
   Only valid for the matching structure and port count.</li>
   </ul>
@@ -57,8 +57,8 @@ human-readable schematic.</li>
 </ul>
 
 <h3>Plot</h3>
-<p>Overlays the <b>loaded S-parameter data</b> (dashed grey) against the
-<b>fitted/extracted model</b> (blue). Up to <b>four</b> S-parameters are shown
+<p>Overlays the <b>loaded S-parameter data</b> (solid grey) against the
+<b>fitted/extracted model</b> (dashed blue). Up to <b>four</b> S-parameters are shown
 side by side. Each has its own selector, with magnitude (dB) on top and phase
 (\u00b0) below. This is how you confirm the netlist reproduces the EM result. The
 plots can be popped out into their own window and exported to CSV. Verification of

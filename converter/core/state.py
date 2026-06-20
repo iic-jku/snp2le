@@ -49,3 +49,4 @@ class Results:
     data_s: object = None                 # measured/EM S[f,i,j]
     model_s: object = None                # fitted/extracted S[f,i,j]
     n_ports: int = 0
+    aux_traces: dict = field(default_factory=dict)   # extra plots, e.g. {"L/Q": {...}}

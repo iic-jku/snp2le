@@ -19,7 +19,8 @@ PySide6 `gui/`, both driven by one entry point, `engine.convert(state, net)`.
 * **Structure-specific.** Fits a known physical topology so every component maps
   to reality. Available models (all 2-port, inspired by Volker Muehlhaus'
   [lumpedmodel](https://github.com/VolkerMuehlhaus/lumpedmodel)):
-  * **Inductor (π-model).** Series R-L, shunt C/R at each port, extracted at peak-Q.
+  * **Inductor.** Series R-L between the ports, plus a shunt capacitor and
+    substrate resistor to ground at each port, extracted at peak-Q.
   * **MIM capacitor.** Series C with parasitic L/R, plus shunt C at each port.
   * **Transmission line (RLGC).** An N-cell π-ladder from γℓ and Z_c (ABCD).
 
@@ -157,7 +158,7 @@ pyinstaller snp2le.spec            # output in dist/snp2le/
 
 ## Acknowledgements
 
-* The structure-specific extractors (inductor π, MIM capacitor, RLGC line) were
+* The structure-specific extractors (inductor, MIM capacitor, RLGC line) were
   inspired by Volker Muehlhaus'
   [lumpedmodel](https://github.com/VolkerMuehlhaus/lumpedmodel).
 * The passivity-enforcement strategy for the universal macromodel (escalate the

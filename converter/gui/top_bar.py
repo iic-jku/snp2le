@@ -73,7 +73,7 @@ class TopBar(QtWidgets.QWidget):
     # ---- title bar -------------------------------------------------------
     def _build_titlebar(self):
         from .logo import logo_pixmap
-        bar = QtWidgets.QWidget(); bar.setObjectName("titlebar"); bar.setFixedHeight(38)
+        bar = QtWidgets.QWidget(); bar.setObjectName("titlebar"); bar.setFixedHeight(34)
         lay = QtWidgets.QHBoxLayout(bar); lay.setContentsMargins(12, 0, 12, 0)
         logo = QtWidgets.QLabel(); logo.setPixmap(logo_pixmap(26))
         logo.setFixedWidth(32); logo.setAlignment(QtCore.Qt.AlignVCenter)

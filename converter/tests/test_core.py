@@ -65,7 +65,7 @@ def test_all_structures_extract():
 
 
 def test_inductor_values_recovered():
-    """The pi-model should recover Ls=0.82 nH, Rs=1.4 ohm, C=40 fF closely."""
+    """The inductor model should recover Ls=0.82 nH, Rs=1.4 ohm, C=40 fF closely."""
     net = inductor_2port()
     res = engine.convert(ConverterState(mode="structure", structure_key="inductor-pi"), net)
     vals = {lab: v for lab, v, _ in res.value_rows}

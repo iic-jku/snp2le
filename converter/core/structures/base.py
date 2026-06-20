@@ -24,3 +24,12 @@ class Structure(ABC):
     def schematic_drawing(self, ir):
         """Return a schemdraw.Drawing for the extracted IR (or None)."""
         return None
+
+    def freq_traces(self, net, model_s):
+        """Optional extra frequency-domain traces for the Plot view.
+
+        Returns a dict {label: {"top": spec, "bottom": spec}} or None, where each
+        spec is {"title", "ylabel", "data", "model"} with data/model arrays over
+        the network's frequency grid.  Default: no extra traces.
+        """
+        return None

@@ -2,8 +2,8 @@
 
 Four S-parameters are shown side by side.  Each column shows magnitude (dB, top)
 and phase (deg, bottom) of one selected S_ij; the four selectors default to the
-2-port set S11/S21/S12/S22.  Each curve overlays the loaded data (dashed grey)
-against the fitted/extracted model (blue).
+2-port set S11/S21/S12/S22.  Each curve overlays the loaded data (solid grey)
+against the fitted/extracted model (dashed blue).
 
 Each panel has a live mouse read-out and a "marker mode": with it on, clicking a
 curve drops a labelled data-point marker (up to three per panel), clicking a
@@ -27,8 +27,8 @@ from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN, JKU_RED
 # are the next styles in the cycle, ready for any future extra series.
 # Each entry is (label, colour, matplotlib line style).
 CURVE_STYLES = [
-    ("data",  JKU_GRAY,  "--"),    # dashed
-    ("model", JKU_BLUE,  "-"),     # solid
+    ("data",  JKU_GRAY,  "-"),     # solid
+    ("model", JKU_BLUE,  "--"),    # dashed
     ("aux-1", JKU_GREEN, "-."),    # dash-dot
     ("aux-2", JKU_RED,   ":"),     # dotted
 ]
@@ -289,7 +289,7 @@ class PlotView(QtWidgets.QWidget):
         bar.addWidget(self._hint("S-parameters"))
         self.selectors = []
         for d in DEFAULTS:
-            cb = QtWidgets.QComboBox(); cb.setFixedWidth(90)
+            cb = QtWidgets.QComboBox(); cb.setFixedWidth(150)
             cb.currentIndexChanged.connect(self._render)
             self.selectors.append(cb); bar.addWidget(cb)
         bar.addSpacing(14)
@@ -324,6 +324,7 @@ class PlotView(QtWidgets.QWidget):
         self._popout = None
         self._res = None
         self._last = None
+        self._had_aux = False         # were extra (e.g. L/Q) traces available last time
 
     def _hint(self, text):
         lab = QtWidgets.QLabel(text); lab.setProperty("class", "hint")
@@ -333,13 +334,21 @@ class PlotView(QtWidgets.QWidget):
     def update_results(self, res):
         self._res = res
         n = res.n_ports or 0
-        items = [(f"S{i+1}{j+1}", (i, j)) for i in range(n) for j in range(n)]
-        for combo, default in zip(self.selectors, DEFAULTS):
+        aux = list((res.aux_traces or {}).keys())          # e.g. ["L/Q"]
+        # extra traces first in the dropdown, then the S-parameters
+        items = [(lbl, lbl) for lbl in aux]
+        items += [(f"S{i+1}{j+1}", (i, j)) for i in range(n) for j in range(n)]
+        # with extra traces (inductor): show them all, then S21; else the S-set
+        defaults = ((aux + ["S21", "S11", "S22", "S12"])[:4] if aux else list(DEFAULTS))
+        # when the set of extra traces appears/disappears, re-apply the defaults
+        reset = bool(aux) != self._had_aux
+        self._had_aux = bool(aux)
+        for combo, default in zip(self.selectors, defaults):
             cur = combo.currentText()
             combo.blockSignals(True); combo.clear()
             for text, data in items:
                 combo.addItem(text, data)
-            idx = combo.findText(cur) if cur else -1
+            idx = combo.findText(cur) if (cur and not reset) else -1
             if idx < 0:
                 idx = combo.findText(default)
             if idx < 0:
@@ -360,38 +369,54 @@ class PlotView(QtWidgets.QWidget):
         xlabel = r"$f\ \mathrm{(GHz)}$"
         self._last = {"f_Hz": f}
         for side, combo in zip(SIDES, self.selectors):
-            ij = combo.currentData()
-            if ij is None:
-                continue
-            i, j = ij
-            sij = combo.currentText()
-            sub = sij[1:]                               # "11" from "S11"
-            d = np.asarray(res.data_s)[:, i, j]
-            m = np.asarray(res.model_s)[:, i, j]
-            mag_d = 20 * np.log10(np.maximum(np.abs(d), 1e-12))
-            mag_m = 20 * np.log10(np.maximum(np.abs(m), 1e-12))
-            ph_d = np.unwrap(np.angle(d)) * 180 / np.pi
-            ph_m = np.unwrap(np.angle(m)) * 180 / np.pi
-
-            self._panels["mag" + side].plot_series(
-                fg,
-                [{"label": DATA[0], "color": DATA[1], "ls": DATA[2], "lw": 1.4, "y": mag_d},
-                 {"label": MODEL[0], "color": MODEL[1], "ls": MODEL[2], "lw": 1.6, "y": mag_m}],
-                xlabel, rf"$|S_{{{sub}}}|\ \mathrm{{(dB)}}$")
-
-            self._panels["ph" + side].plot_series(
-                fg,
-                [{"label": DATA[0], "color": DATA[1], "ls": DATA[2], "lw": 1.4, "y": ph_d},
-                 {"label": MODEL[0], "color": MODEL[1], "ls": MODEL[2], "lw": 1.6, "y": ph_m}],
-                xlabel, rf"$\angle S_{{{sub}}}\ (^\circ)$")
-
-            self._last[f"{sij}|data_dB"] = mag_d
-            self._last[f"{sij}|model_dB"] = mag_m
-            self._last[f"{sij}|data_deg"] = ph_d
-            self._last[f"{sij}|model_deg"] = ph_m
+            sel = combo.currentData()
+            magp = self._panels["mag" + side]; php = self._panels["ph" + side]
+            if isinstance(sel, tuple):                  # an S-parameter
+                i, j = sel
+                sij = combo.currentText(); sub = sij[1:]
+                d = np.asarray(res.data_s)[:, i, j]
+                m = np.asarray(res.model_s)[:, i, j]
+                mag_d = 20 * np.log10(np.maximum(np.abs(d), 1e-12))
+                mag_m = 20 * np.log10(np.maximum(np.abs(m), 1e-12))
+                ph_d = np.unwrap(np.angle(d)) * 180 / np.pi
+                ph_m = np.unwrap(np.angle(m)) * 180 / np.pi
+                magp.head.setText("Magnitude  (dB)")
+                magp.plot_series(fg, self._pair(mag_d, mag_m), xlabel,
+                                 rf"$|S_{{{sub}}}|\ \mathrm{{(dB)}}$")
+                php.head.setText("Phase  (°)")
+                php.plot_series(fg, self._pair(ph_d, ph_m), xlabel,
+                               rf"$\angle S_{{{sub}}}\ (^\circ)$")
+                self._last[f"{sij}|data_dB"] = mag_d
+                self._last[f"{sij}|model_dB"] = mag_m
+                self._last[f"{sij}|data_deg"] = ph_d
+                self._last[f"{sij}|model_deg"] = ph_m
+            elif isinstance(sel, str) and res.aux_traces and sel in res.aux_traces:
+                spec = res.aux_traces[sel]
+                self._plot_aux(magp, fg, xlabel, spec["top"], f"{sel}|top")
+                self._plot_aux(php, fg, xlabel, spec["bottom"], f"{sel}|bottom")
 
         for panel in self._panels.values():
             panel.draw()
+
+    @staticmethod
+    def _pair(data_y, model_y):
+        return [{"label": DATA[0], "color": DATA[1], "ls": DATA[2], "lw": 1.4, "y": data_y},
+                {"label": MODEL[0], "color": MODEL[1], "ls": MODEL[2], "lw": 1.6, "y": model_y}]
+
+    def _plot_aux(self, panel, fg, xlabel, spec, key):
+        """Plot one extra-trace subplot (e.g. L_series or Q over frequency)."""
+        series = [{"label": DATA[0], "color": DATA[1], "ls": DATA[2], "lw": 1.4,
+                   "y": np.asarray(spec["data"], float)}]
+        if spec.get("model") is not None:
+            series.append({"label": MODEL[0], "color": MODEL[1], "ls": MODEL[2],
+                           "lw": 1.6, "y": np.asarray(spec["model"], float)})
+        panel.plot_series(fg, series, xlabel, spec["ylabel"])
+        panel.head.setText(spec.get("title", ""))
+        if spec.get("ylim"):
+            panel.ax.set_ylim(*spec["ylim"])
+        self._last[f"{key}|data"] = np.asarray(spec["data"], float)
+        if spec.get("model") is not None:
+            self._last[f"{key}|model"] = np.asarray(spec["model"], float)
 
     # ---- CSV / pop-out ---------------------------------------------------
     def export_csv(self):
