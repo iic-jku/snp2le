@@ -9,3 +9,5 @@ __pycache__/
 *.ext
 .DS_Store
 VSCode.md
+/schematic/xschem/simulations
+/testbenches/xschem/simulations
