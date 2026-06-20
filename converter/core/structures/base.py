@@ -33,3 +33,8 @@ class Structure(ABC):
         the network's frequency grid.  Default: no extra traces.
         """
         return None
+
+    def default_plots(self):
+        """Preferred initial plot selectors (list of 4 labels), or None to use
+        the default S-parameter set."""
+        return None

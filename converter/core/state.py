@@ -50,3 +50,4 @@ class Results:
     model_s: object = None                # fitted/extracted S[f,i,j]
     n_ports: int = 0
     aux_traces: dict = field(default_factory=dict)   # extra plots, e.g. {"L/Q": {...}}
+    default_plots: object = None          # preferred initial plot selectors (labels)

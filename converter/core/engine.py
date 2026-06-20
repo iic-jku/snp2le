@@ -74,9 +74,10 @@ def _convert_structure(state, net, res):
         res.rms_error = _rms(res.model_s, net.s)
     except Exception as exc:                          # noqa: BLE001
         res.messages.append(f"model rebuild failed: {exc}")
-    # optional extra frequency-domain traces (e.g. inductor L/Q)
+    # optional extra frequency-domain traces (e.g. inductor L/Q) and plot defaults
     try:
         res.aux_traces = struct.freq_traces(net, res.model_s) or {}
+        res.default_plots = struct.default_plots()
     except Exception as exc:                          # noqa: BLE001
         res.messages.append(f"freq traces failed: {exc}")
     res.passive = True                                # passive RLC by construction

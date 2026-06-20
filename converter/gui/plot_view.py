@@ -324,7 +324,7 @@ class PlotView(QtWidgets.QWidget):
         self._popout = None
         self._res = None
         self._last = None
-        self._had_aux = False         # were extra (e.g. L/Q) traces available last time
+        self._prev_aux = ()           # aux-trace labels available last update
 
     def _hint(self, text):
         lab = QtWidgets.QLabel(text); lab.setProperty("class", "hint")
@@ -334,15 +334,23 @@ class PlotView(QtWidgets.QWidget):
     def update_results(self, res):
         self._res = res
         n = res.n_ports or 0
-        aux = list((res.aux_traces or {}).keys())          # e.g. ["L/Q"]
+        aux = list((res.aux_traces or {}).keys())          # e.g. ["Ldiff / Q", ...]
         # extra traces first in the dropdown, then the S-parameters
         items = [(lbl, lbl) for lbl in aux]
         items += [(f"S{i+1}{j+1}", (i, j)) for i in range(n) for j in range(n)]
-        # with extra traces (inductor): show them all, then S21; else the S-set
-        defaults = ((aux + ["S21", "S11", "S22", "S12"])[:4] if aux else list(DEFAULTS))
-        # when the set of extra traces appears/disappears, re-apply the defaults
-        reset = bool(aux) != self._had_aux
-        self._had_aux = bool(aux)
+        # structures may declare preferred defaults; else extra traces then S21,
+        # else the plain S-parameter set
+        dp = getattr(res, "default_plots", None)
+        if dp:
+            defaults = (list(dp) + list(DEFAULTS))[:4]
+        elif aux:
+            defaults = (aux + ["S21", "S11", "S22", "S12"])[:4]
+        else:
+            defaults = list(DEFAULTS)
+        # re-apply defaults when the available extra traces change (mode/structure
+        # switch); otherwise preserve the user's selections
+        reset = tuple(aux) != self._prev_aux
+        self._prev_aux = tuple(aux)
         for combo, default in zip(self.selectors, defaults):
             cur = combo.currentText()
             combo.blockSignals(True); combo.clear()
