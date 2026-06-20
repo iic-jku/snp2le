@@ -18,7 +18,7 @@ PySide6 `gui/`, both driven by one entry point, `engine.convert(state, net)`.
   count. Electrically exact, but not physically interpretable.
 * **Structure-specific.** Fits a known physical topology so every component maps
   to reality. Available models (all 2-port, inspired by Volker Muehlhaus'
-  *lumpedmodel*):
+  [lumpedmodel](https://github.com/VolkerMuehlhaus/lumpedmodel)):
   * **Inductor (π-model).** Series R-L, shunt C/R at each port, extracted at peak-Q.
   * **MIM capacitor.** Series C with parasitic L/R, plus shunt C at each port.
   * **Transmission line (RLGC).** An N-cell π-ladder from γℓ and Z_c (ABCD).
@@ -152,5 +152,18 @@ pyinstaller snp2le.spec            # output in dist/snp2le/
   Y-/ABCD-parameter extraction and the MNA rebuild.
 * The transmission-line ladder uses 4 π-cells by default (`N_SEGMENTS` in
   `core/structures/tline.py`).
+
+---
+
+## Acknowledgements
+
+* The structure-specific extractors (inductor π, MIM capacitor, RLGC line) were
+  inspired by Volker Muehlhaus'
+  [lumpedmodel](https://github.com/VolkerMuehlhaus/lumpedmodel).
+* The passivity-enforcement strategy for the universal macromodel (escalate the
+  sample count, then fall back to a lower model order) was adapted from the
+  [COBRA project](https://github.com/DI-PASSIONATE/COBRA)
+  (`src/cobra/spice_sim/vector_fit.py`).
+* Vector fitting is provided by [scikit-rf](https://scikit-rf.org).
 
 (c) Simon Dorrer, IICQC, JKU Linz
