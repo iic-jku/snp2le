@@ -101,6 +101,9 @@ class InductorPi(Structure):
             rows.append(("R_p2", R2, "Ω"))
         return ir, metrics, rows
 
+    def default_plots(self):
+        return ["Ldiff / Q", "Lseries / Cshunt", "Rseries / Rshunt", "S21"]
+
     @staticmethod
     def _add_shunt(ir, port, idx, c, r):
         """Capacitor in series with substrate R to ground (or just C if R~0)."""
