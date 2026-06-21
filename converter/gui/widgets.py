@@ -55,6 +55,40 @@ class OutputField(QtWidgets.QWidget):
         self.value.setText(text)
 
 
+class FitComboBox(QtWidgets.QComboBox):
+    """A QComboBox that is always exactly wide enough for a reference string.
+
+    Width is derived at layout time from Qt's own size hint, so it adapts to the
+    real font, DPI, style and stylesheet padding on any platform (no hard-coded
+    pixel chrome, which is what made earlier fixed-width attempts clip on Linux).
+    With AdjustToContents the base hint is `chrome + width(widest item)`, so
+    adding `width(ref) - width(widest item)` yields `chrome + width(ref)` - the
+    tightest width that still fits `ref`, constant across selections and items.
+    """
+
+    def __init__(self, ref, parent=None):
+        super().__init__(parent)
+        self._ref = ref
+        self.setSizeAdjustPolicy(
+            QtWidgets.QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed,
+                           QtWidgets.QSizePolicy.Policy.Fixed)
+
+    def _hint(self):
+        base = super().sizeHint()                      # chrome + widest current item
+        fm = self.fontMetrics()
+        widest = max((fm.horizontalAdvance(self.itemText(i))
+                      for i in range(self.count())), default=0)
+        extra = fm.horizontalAdvance(self._ref) - widest
+        return QtCore.QSize(base.width() + max(0, extra), base.height())
+
+    def sizeHint(self):
+        return self._hint()
+
+    def minimumSizeHint(self):
+        return self._hint()
+
+
 def passivity_text(res) -> str:
     """The passivity status for a result: 'passive', 'near-passive' or 'not
     enforced'.  Shared by the design and plot views so they always agree."""

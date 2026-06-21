@@ -11,6 +11,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from core.structures import structure_items
 from .style import JKU_BLUE
+from .widgets import FitComboBox
 
 _DISABLED_GREY = QtGui.QColor("#9aa0aa")
 
@@ -41,6 +42,18 @@ def _reset_icon(color=JKU_BLUE):
     path.lineTo(base[0] - nx * half_w, base[1] - ny * half_w)
     path.closeSubpath()
     p.drawPath(path)
+    p.end()
+    return QtGui.QIcon(pm)
+
+
+def _load_icon(color="#ffffff"):
+    """A simple folder QIcon, drawn (not an emoji) so it renders on every platform
+    including the Linux container where the emoji glyph is missing."""
+    pm = QtGui.QPixmap(32, 32); pm.fill(QtCore.Qt.transparent)
+    p = QtGui.QPainter(pm); p.setRenderHint(QtGui.QPainter.Antialiasing, True)
+    p.setPen(QtCore.Qt.NoPen); p.setBrush(QtGui.QColor(color))
+    p.drawRoundedRect(QtCore.QRectF(6, 9.5, 9, 5), 1.5, 1.5)       # tab
+    p.drawRoundedRect(QtCore.QRectF(6, 12, 20, 12.5), 2.0, 2.0)    # body
     p.end()
     return QtGui.QIcon(pm)
 
@@ -79,8 +92,8 @@ class TopBar(QtWidgets.QWidget):
         title.setObjectName("title")
         lay.addWidget(logo); lay.addWidget(title); lay.addStretch(1)
         vlab = QtWidgets.QLabel("View"); vlab.setObjectName("viewLabel")
-        self.view = QtWidgets.QComboBox()
-        self.view.addItems(["Design & Schematic", "Plot"]); self.view.setFixedWidth(180)
+        self.view = FitComboBox("Design & Schematic")
+        self.view.addItems(["Design & Schematic", "Plot"])
         self.view.currentIndexChanged.connect(
             lambda _: self.view_changed.emit("design" if self.view.currentIndex() == 0 else "plot"))
         self.help = QtWidgets.QPushButton("?  Help"); self.help.setObjectName("chip")
@@ -99,20 +112,19 @@ class TopBar(QtWidgets.QWidget):
         bar = QtWidgets.QWidget(); bar.setObjectName("topbar")
         lay = QtWidgets.QHBoxLayout(bar); lay.setContentsMargins(16, 8, 16, 10); lay.setSpacing(14)
 
-        self.load = QtWidgets.QPushButton("\U0001F4C2  Load .sNp")
+        self.load = QtWidgets.QPushButton("Load .sNp")
         self.load.setObjectName("primary"); self.load.setFixedHeight(30)
+        self.load.setIcon(_load_icon()); self.load.setIconSize(QtCore.QSize(16, 16))
         self.load.clicked.connect(self.load_clicked.emit)
 
-        self.mode = QtWidgets.QComboBox()
+        self.mode = FitComboBox("Universal (any N-port)")
         self.mode.addItem("Universal (any N-port)", "universal")
         self.mode.addItem("Structure-specific", "structure")
-        self.mode.setFixedWidth(220)
 
-        self.structure = QtWidgets.QComboBox()
+        self.structure = FitComboBox("MIM capacitor")
         self._struct_ports = {}
         for key, name, nports in structure_items():
             self.structure.addItem(name, key); self._struct_ports[key] = nports
-        self.structure.setFixedWidth(180)
 
         self.order = QtWidgets.QSpinBox(); self.order.setRange(2, 40); self.order.setValue(6)
         self.order.setFixedWidth(92)
@@ -161,6 +173,27 @@ class TopBar(QtWidgets.QWidget):
     def set_view(self, name):
         """Select the Design (name='design') or Plot (name='plot') view."""
         self.view.setCurrentIndex(0 if name == "design" else 1)
+
+    def set_values(self, state):
+        """Apply a ConverterState to the controls (e.g. after loading a design).
+
+        Signals are blocked so this does not trigger a recompute; the caller
+        recomputes once afterwards.
+        """
+        widgets = (self.mode, self.structure, self.order, self.passive)
+        for w in widgets:
+            w.blockSignals(True)
+        mi = self.mode.findData(state.mode)
+        if mi >= 0:
+            self.mode.setCurrentIndex(mi)
+        si = self.structure.findData(state.structure_key)
+        if si >= 0:
+            self.structure.setCurrentIndex(si)
+        self.order.setValue(int(state.max_order))
+        self.passive.setChecked(bool(state.enforce_passivity))
+        for w in widgets:
+            w.blockSignals(False)
+        self._apply_constraints()
 
     # ---- constraints -----------------------------------------------------
     def set_ports(self, n_ports):

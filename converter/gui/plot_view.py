@@ -22,7 +22,7 @@ from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 from matplotlib.backend_bases import _Mode
 
 from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN
-from .widgets import passivity_text
+from .widgets import passivity_text, FitComboBox
 from core import io
 
 # Curve styling: JKU colours paired with distinct line styles, so the traces
@@ -311,10 +311,12 @@ class PlotView(QtWidgets.QWidget):
         bar = QtWidgets.QHBoxLayout()
         title = QtWidgets.QLabel("Results"); title.setProperty("class", "panelTitle")
         bar.addWidget(title); bar.addSpacing(12)
-        bar.addWidget(self._hint("S-parameters"))
         self.selectors = []
         for d in DEFAULTS:
-            cb = QtWidgets.QComboBox(); cb.setFixedWidth(150)
+            # sizes to the longest trace label ("Rseries / Rshunt") via Qt's own
+            # metrics, so it fits on any platform font; the legend after the
+            # selectors shifts left to match
+            cb = FitComboBox("Rseries / Rshunt")
             cb.currentIndexChanged.connect(self._render)
             self.selectors.append(cb); bar.addWidget(cb)
         bar.addSpacing(14)

@@ -166,6 +166,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.top.set_ports(self.net.nports)
             except Exception:                             # noqa: BLE001
                 pass
+        self.top.set_values(self.state)        # sync the controls to the loaded design
         self.recompute()
 
     # ---- the pipeline ----------------------------------------------------

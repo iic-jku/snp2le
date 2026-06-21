@@ -46,7 +46,7 @@ def combobox_qss(accent=ACCENT_ARROW, disabled=DISABLED_ARROW):
 QComboBox {{
     background: #ffffff; color: #000000;
     border: 1px solid #c2cad4; border-radius: 6px;
-    padding: 3px 8px; padding-right: 24px;
+    padding: 3px 6px; padding-right: 18px;
     font-size: 12px; font-weight: 600;
 }}
 QComboBox:hover {{ border: 1px solid {accent}; }}
@@ -55,7 +55,7 @@ QComboBox:disabled {{ background: #f0f1f3; color: {disabled}; }}
 /* drop-down button: no separator box (removes the faint left/top lines) */
 QComboBox::drop-down {{
     subcontrol-origin: padding; subcontrol-position: center right;
-    width: 24px; border: none; background: transparent; margin: 0;
+    width: 18px; border: none; background: transparent; margin: 0;
 }}
 QComboBox::down-arrow {{ image: url("{normal}"); width: 11px; height: 11px; }}
 QComboBox::down-arrow:disabled {{ image: url("{dis}"); }}
