@@ -12,6 +12,8 @@ import json
 class ConverterState:
     mode: str = "universal"               # universal | structure
     structure_key: str = "inductor-pi"
+    f_extract: float = 10e9               # extraction frequency for structure modes [Hz]
+    n_segments: int = 2                   # RLGC ladder stages (transmission-line model)
     max_order: int = 6
     enforce_passivity: bool = True
     source_path: str = ""                 # last loaded .sNp (for save/restore)

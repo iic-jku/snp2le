@@ -60,18 +60,17 @@ class InductorPi(Structure):
     display_name = "Inductor"
     n_ports = 2
 
-    def extract(self, net):
+    def extract(self, net, f_extract, n_segments=None):     # n_segments: not used
         if net.nports != 2:
             raise ValueError("inductor model needs a 2-port (.s2p)")
         f = net.f
-        good = f > 0
         w = 2 * np.pi * f
         Zseries, Zshunt1, Zshunt2 = pi_branches(net)
 
-        # series Q over frequency; extract at peak Q (lies below self-resonance)
+        # read the element values off at the requested extraction frequency
         Zdiff = net.z[:, 0, 0] - net.z[:, 0, 1] - net.z[:, 1, 0] + net.z[:, 1, 1]
         Q = np.where(Zdiff.real != 0, Zdiff.imag / Zdiff.real, 0.0)
-        k = int(np.argmax(np.where(good, Q, -np.inf)))
+        k = self.nearest_index(f, f_extract)
 
         Rs = max(float(Zseries.real[k]), 0.0)
         Ls = max(float(Zseries.imag[k] / w[k]), 0.0)
@@ -84,7 +83,7 @@ class InductorPi(Structure):
         Rsh = max(0.5 * (float(Zshunt1.real[k]) + float(Zshunt2.real[k])), 0.0)
 
         ir = CircuitIR(name="inductor", ports=["p1", "p2"], physical=True)
-        ir.comments.append(f"inductor model, extracted at peak-Q ({f[k]/1e9:.2f} GHz)")
+        ir.comments.append(f"inductor model, extracted at {f[k]/1e9:.2f} GHz")
         ir.add(Element("L", "Ls", ("p1", "n_s"), Ls, label="L_s"))
         ir.add(Element("R", "Rs", ("n_s", "p2"), Rs, label="R_s"))
         self._add_shunt(ir, "p1", 1, Csh, Rsh)
@@ -92,7 +91,8 @@ class InductorPi(Structure):
 
         metrics = {"Q_peak": float(Q[k]), "f_extract": float(f[k]),
                    "Ls": Ls, "Rs": Rs}
-        rows = [("L_s", Ls, "H"), ("R_s", Rs, "Ω"),
+        rows = [("Q", float(Q[k]), ""),
+                ("L_s", Ls, "H"), ("R_s", Rs, "Ω"),
                 ("C_p1", Csh, "F"), ("R_p1", Rsh, "Ω"),
                 ("C_p2", Csh, "F"), ("R_p2", Rsh, "Ω")]
         return ir, metrics, rows

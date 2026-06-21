@@ -58,8 +58,14 @@ def _convert_universal(state, net, res):
 
 
 def _convert_structure(state, net, res):
+    from .units import format_eng
     struct = get_structure(state.structure_key)
-    ir, metrics, rows = struct.extract(net)
+    ir, metrics, rows = struct.extract(net, state.f_extract, state.n_segments)
+    pos = net.f[net.f > 0]
+    if pos.size and (state.f_extract < pos[0] or state.f_extract > pos[-1]):
+        res.messages.append(
+            f"f_ext {format_eng(state.f_extract, 'Hz')} outside the data; "
+            f"extracted at {format_eng(metrics.get('f_extract'), 'Hz')}")
     _nl.clamp_ir(ir)                          # one clamped model: netlist == overlay == table
     res.ir = ir
     res.physical = True

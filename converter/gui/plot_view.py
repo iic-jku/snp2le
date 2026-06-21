@@ -4,7 +4,7 @@ Four S-parameters are shown side by side.  Each column shows magnitude (dB, top)
 and phase (deg, bottom) of one selected S_ij; the four selectors default to the
 2-port set S11/S21/S12/S22.  Each panel overlays the loaded data (solid grey),
 the fitted/extracted model (blue long dashes) and, once imported, an ngspice
-simulation table (green short dashes) on its own frequency grid.
+simulation table (red dash-dot, drawn thicker on top) on its own frequency grid.
 
 Each panel has a live mouse read-out and a "marker mode": with it on, clicking a
 curve drops a labelled data-point marker (up to three per panel), clicking a
@@ -21,7 +21,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 from matplotlib.backend_bases import _Mode
 
-from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN
+from .style import JKU_BLUE, JKU_GRAY, JKU_RED
 from .widgets import passivity_text, FitComboBox
 from core import io
 
@@ -31,9 +31,9 @@ from core import io
 # simulation.  Each entry is (label, colour, matplotlib line style); the dash
 # tuples are (offset, (on, off)) in points.
 CURVE_STYLES = [
-    ("data",       JKU_GRAY,  "-"),            # solid
-    ("model",      JKU_BLUE,  (0, (7, 3))),    # long dashes
-    ("simulation", JKU_GREEN, (0, (2, 2))),    # short dashes
+    ("data",       JKU_GRAY,  "-"),                  # solid
+    ("model",      JKU_BLUE,  (0, (7, 3))),          # long dashes
+    ("simulation", JKU_RED,   (0, (5, 2, 1, 2))),    # dash-dot, high contrast vs model
 ]
 DATA, MODEL, SIM = CURVE_STYLES[0], CURVE_STYLES[1], CURVE_STYLES[2]
 SIDES = ["A", "B", "C", "D"]
@@ -472,18 +472,57 @@ class PlotView(QtWidgets.QWidget):
 
     def _plot_aux(self, panel, fg, xlabel, spec, key):
         """Plot one extra-trace subplot (e.g. L_series or Q over frequency)."""
+        data_y = np.asarray(spec["data"], float)
         series = [{"label": DATA[0], "color": DATA[1], "ls": DATA[2], "lw": 1.4,
-                   "y": np.asarray(spec["data"], float)}]
+                   "y": data_y}]
+        model_y = None
         if spec.get("model") is not None:
+            model_y = np.asarray(spec["model"], float)
             series.append({"label": MODEL[0], "color": MODEL[1], "ls": MODEL[2],
-                           "lw": 1.6, "y": np.asarray(spec["model"], float)})
+                           "lw": 1.6, "y": model_y})
         panel.plot_series(fg, series, xlabel, spec["ylabel"])
         panel.head.setText(spec.get("title", ""))
-        if spec.get("ylim"):
-            panel.ax.set_ylim(*spec["ylim"])
-        self._last[f"{key}|data"] = np.asarray(spec["data"], float)
-        if spec.get("model") is not None:
-            self._last[f"{key}|model"] = np.asarray(spec["model"], float)
+        # frame the y-axis on the model curve so it fills the axis; resonance poles
+        # in the element values and spikes in the measured data simply clip
+        ylim = self._frame_ylim(model_y, data_y) or spec.get("ylim")
+        if ylim:
+            panel.ax.set_ylim(*ylim)
+        self._last[f"{key}|data"] = data_y
+        if model_y is not None:
+            self._last[f"{key}|model"] = model_y
+
+    @staticmethod
+    def _frame_ylim(model_y, data_y):
+        """Y-limits that frame the model curve over the full axis.
+
+        The element-value curves (L, C, R, Q) can diverge near resonances and the
+        measured data can carry large spikes.  A robust body is taken from the 5-95
+        percentile band; the axis extends to the true extremum only when it is within
+        a few body-widths (so a bounded feature such as the Q peak is kept whole),
+        otherwise a runaway pole / spike is clipped.  Falls back to the data when no
+        model curve is present."""
+        def frame(y):
+            if y is None:
+                return None
+            y = np.asarray(y, float)
+            y = y[np.isfinite(y)]
+            if y.size == 0:
+                return None
+            lo_b, hi_b = (float(v) for v in np.percentile(y, [5.0, 95.0]))
+            body = hi_b - lo_b
+            ymin, ymax = float(np.min(y)), float(np.max(y))
+            hi = ymax if ymax <= hi_b + 4.0 * body else hi_b   # keep peak, clip pole
+            lo = ymin if ymin >= lo_b - 4.0 * body else lo_b
+            return lo, hi
+
+        r = frame(model_y) or frame(data_y)
+        if r is None:
+            return None
+        lo, hi = r
+        span = hi - lo
+        pad = 0.08 * span if span > 1e-9 * max(abs(lo), abs(hi), 1.0) \
+            else 0.1 * max(abs(hi), 1.0)
+        return lo - pad, hi + pad
 
     def _overlay_sim(self, magp, php, sij):
         """Overlay the imported simulation for S_ij, if present, on its own grid."""
@@ -493,11 +532,11 @@ class PlotView(QtWidgets.QWidget):
         rec = self._sim[sij]
         if rec.get("db") is not None:
             magp.add_series(sf, {"label": SIM[0], "color": SIM[1], "ls": SIM[2],
-                                 "lw": 1.4, "y": rec["db"]})
+                                 "lw": 1.9, "y": rec["db"]})
         if rec.get("deg") is not None:               # unwrap to match data/model
             ph = np.unwrap(np.deg2rad(np.asarray(rec["deg"], float))) * 180 / np.pi
             php.add_series(sf, {"label": SIM[0], "color": SIM[1], "ls": SIM[2],
-                                "lw": 1.4, "y": ph})
+                                "lw": 1.9, "y": ph})
 
     # ---- import simulation / CSV / pop-out -------------------------------
     def _sim_dir(self):
@@ -512,8 +551,13 @@ class PlotView(QtWidgets.QWidget):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "Import ngspice simulation", self._sim_dir(),
             "ngspice output (*.txt);;All files (*)")
-        if not path:
-            return
+        if path:
+            self.import_sim_file(path)
+
+    def import_sim_file(self, path):
+        """Load an ngspice S-parameter table from `path` and overlay it; returns
+        True on success.  Shared by the Import button and by auto-import after a
+        successful Xschem run."""
         try:
             self._sim = io.load_ngspice_sim(path)
         except Exception as exc:                          # noqa: BLE001
@@ -521,9 +565,20 @@ class PlotView(QtWidgets.QWidget):
             QtWidgets.QMessageBox.warning(
                 self, "Import failed",
                 f"Could not read this simulation file:\n{exc}")
-            return
+            return False
         self._last_sim_dir = os.path.dirname(path)
         self._render()
+        return True
+
+    def reset(self):
+        """Return the plot view to its freshly-opened state: no simulation overlay,
+        plots docked, and the trace selectors back to their defaults on the next
+        update (the caller recomputes)."""
+        if self._popout is not None:
+            self._dock_back(None)
+        self._sim = None
+        self._last_sim_dir = ""
+        self._prev_aux = None          # force the trace selectors back to defaults
 
     def export_csv(self):
         if not self._last:

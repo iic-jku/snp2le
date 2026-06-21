@@ -10,6 +10,7 @@ where `rows` is the concise, nicely-labelled set of values shown in the UI.
 """
 from __future__ import annotations
 from abc import ABC, abstractmethod
+import numpy as np
 
 
 class Structure(ABC):
@@ -18,8 +19,20 @@ class Structure(ABC):
     n_ports = 2          # required port count
 
     @abstractmethod
-    def extract(self, net):
-        """Return (CircuitIR, metrics, rows). Raises ValueError if not applicable."""
+    def extract(self, net, f_extract, n_segments=None):
+        """Return (CircuitIR, metrics, rows) with the lumped values read off near
+        `f_extract` [Hz].  `n_segments` sets the ladder stage count for structures
+        that use one (the RLGC line); others ignore it.  Raises ValueError if not
+        applicable."""
+
+    @staticmethod
+    def nearest_index(f, f_extract):
+        """Index of the (positive) frequency sample closest to `f_extract` [Hz]."""
+        f = np.asarray(f, float)
+        idx = np.where(f > 0)[0]
+        if idx.size == 0:
+            return 0
+        return int(idx[np.argmin(np.abs(f[idx] - float(f_extract)))])
 
     def schematic_drawing(self, ir):
         """Return a schemdraw.Drawing for the extracted IR (or None)."""

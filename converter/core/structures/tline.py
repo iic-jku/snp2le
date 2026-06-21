@@ -15,7 +15,7 @@ from .base import Structure
 from ..ir import CircuitIR, Element
 from ..units import comp_label, port_label
 
-N_SEGMENTS = 4          # number of pi-cells in the ladder
+N_SEGMENTS = 2          # default number of L-cells in the ladder
 
 
 def _rlgc_decomp(s, f, z0):
@@ -44,36 +44,40 @@ class TransmissionLine(Structure):
     display_name = "Tline (RLGC)"
     n_ports = 2
 
-    def extract(self, net):
+    def extract(self, net, f_extract, n_segments=N_SEGMENTS):
         if net.nports != 2:
             raise ValueError("transmission-line model needs a 2-port (.s2p)")
         f = net.f
         w = 2 * np.pi * f
         A = net.a[:, 0, 0]; B = net.a[:, 0, 1]; C = net.a[:, 1, 0]
-        k = int(np.argmin(np.abs(f - 0.5 * f[-1])))        # mid-band extraction
-        gl = np.arccosh(A[k])
-        Zc = np.sqrt(B[k] / C[k]) if C[k] != 0 else np.sqrt(B[k])
-        n = N_SEGMENTS
-        theta = gl / n
-        Zcell = Zc * np.sinh(theta)
-        Ycell = (2.0 / Zc) * np.tanh(theta / 2.0)
+        k = self.nearest_index(f, f_extract)               # extraction frequency
         wk = w[k]
-        R_seg = float(abs(Zcell.real)); L_seg = float(abs(Zcell.imag / wk))
-        G_seg = float(abs(Ycell.real)); C_seg = float(abs(Ycell.imag / wk))
+        gl = np.arccosh(A[k])                               # electrical length gamma*l
+        Zc = np.sqrt(B[k] / C[k]) if C[k] != 0 else np.sqrt(B[k])
+        # whole-line series Z and shunt Y (the physical length cancels), shared
+        # equally over N L-cells: each cell is series R+L then shunt C||G
+        Ztot = gl * Zc                                      # R_tot + j w L_tot
+        Ytot = gl / Zc                                      # G_tot + j w C_tot
+        n = max(1, int(n_segments))
+        R_seg = float(abs(Ztot.real)) / n
+        L_seg = float(abs(Ztot.imag / wk)) / n
+        G_seg = float(abs(Ytot.real)) / n
+        C_seg = float(abs(Ytot.imag / wk)) / n
         Rsh = 1.0 / G_seg if G_seg > 1e-15 else 1e12
 
         ir = CircuitIR(name="tline_rlgc", ports=["p1", "p2"], physical=True)
-        ir.comments.append(f"RLGC line, {n} pi-cells, extracted at {f[k]/1e9:.2f} GHz")
-        nodes = ["p1"] + [f"n{i}" for i in range(1, n)] + ["p2"]
-        for i in range(n):                                  # series branches
-            a, b = nodes[i], nodes[i + 1]
-            mid = f"s{i}"
-            ir.add(Element("L", f"Ls{i+1}", (a, mid), L_seg, label="L_s"))
-            ir.add(Element("R", f"Rs{i+1}", (mid, b), R_seg, label="R_s"))
-        for i, node in enumerate(nodes):                    # shunt branches
-            half = 0.5 if (i == 0 or i == len(nodes) - 1) else 1.0
-            ir.add(Element("C", f"Csh{i}", (node, "0"), C_seg * half, label="C_sh"))
-            ir.add(Element("R", f"Rsh{i}", (node, "0"), Rsh / half, label="R_sh"))
+        ir.comments.append(f"RLGC line, {n} L-cells, extracted at {f[k]/1e9:.2f} GHz")
+        # N L-cells: series L+R, then a shunt C||G to ground after each cell.  The
+        # output port (p2) keeps its shunt; the input port has none (rlgc_from_s2p).
+        prev = "p1"
+        for i in range(n):
+            out = "p2" if i == n - 1 else f"n{i+1}"
+            mid = f"s{i+1}"
+            ir.add(Element("L", f"Ls{i+1}", (prev, mid), L_seg, label="L_s"))
+            ir.add(Element("R", f"Rs{i+1}", (mid, out), R_seg, label="R_s"))
+            ir.add(Element("C", f"Csh{i+1}", (out, "0"), C_seg, label="C_sh"))
+            ir.add(Element("R", f"Rsh{i+1}", (out, "0"), Rsh, label="R_sh"))
+            prev = out
 
         metrics = {"segments": n, "f_extract": float(f[k]),
                    "Zc": float(abs(Zc))}
@@ -123,30 +127,34 @@ class TransmissionLine(Structure):
         import schemdraw as sd
         import schemdraw.elements as elm
         sd.use("matplotlib")
-        segs = sorted({int(e.name[2:]) for e in ir.elements if e.name.startswith("Ls")})
-        show = min(len(segs), 2)
+        n = len([e for e in ir.elements if e.name.startswith("Ls")])     # L-cells
         d = sd.Drawing(show=False); d.config(unit=1.5, fontsize=11)
-        with d:
-            elm.Dot(open=True).label(port_label(1), loc="left")
-            for i in range(show):
-                elm.Inductor2().right().label(comp_label("L_s"))
-                elm.Resistor().right().label(comp_label("R_s"))
-                elm.Dot()
-                # shunt cell: G' (R_sh) in parallel with C' (C_sh) to ground,
-                # drawn below the rail so it clears the series line
-                d.push()
-                elm.Line().down().length(0.4)
-                d.push()
-                elm.Resistor().down().label(comp_label("R_sh"))
-                elm.Ground()
-                d.pop()
-                elm.Line().right().length(0.8)
-                elm.Capacitor().down().label(comp_label("C_sh"))
-                elm.Ground()
-                d.pop()
+
+        def cell():
+            """One L-cell: series L+R, then a shunt R_sh||C_sh to ground."""
             elm.Inductor2().right().label(comp_label("L_s"))
             elm.Resistor().right().label(comp_label("R_s"))
             elm.Dot()
-            elm.Line().right().length(0.5).label(r"$\cdots$")
+            d.push()                              # shunt below the rail
+            elm.Line().down().length(0.4)
+            d.push()
+            elm.Resistor().down().label(comp_label("R_sh"))
+            elm.Ground()
+            d.pop()
+            elm.Line().right().length(0.8)
+            elm.Capacitor().down().label(comp_label("C_sh"))
+            elm.Ground()
+            d.pop()
+
+        with d:
+            elm.Dot(open=True).label(port_label(1), loc="left")
+            if n <= 4:                            # small ladder: draw every stage
+                for _ in range(n):
+                    cell()
+            else:                                 # large ladder: abbreviate the middle
+                cell(); cell()
+                elm.Line().right().length(0.6).label(r"$\cdots$")
+                cell()                            # last cell keeps the output shunt
+            elm.Line().right().length(0.4)
             elm.Dot(open=True).label(port_label(2), loc="right")
         return d

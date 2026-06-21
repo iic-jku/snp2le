@@ -58,6 +58,7 @@ QScrollArea {{ background: #ffffff; border: none; }}
 QLineEdit {{ background: #ffffff; border: 1px solid {FIELD_BORDER};
     border-radius: 5px; padding: 3px 6px; }}
 QLineEdit:read-only {{ color: {JKU_BLUE}; font-weight: 600; background: #fbfcfe; }}
+QLineEdit:disabled {{ background: #eef1f5; color: #aab2bd; }}
 QLineEdit[error="true"] {{ border: 1px solid {JKU_RED}; background: #fdeeec; }}
 QSpinBox {{ background: #ffffff; border: 1px solid {FIELD_BORDER};
     border-radius: 5px; padding: 3px 6px; }}
@@ -88,6 +89,12 @@ QPushButton:disabled {{ color: #aab2bd; }}
 QPushButton#primary {{ background: {JKU_BLUE}; color: #ffffff; border: none;
     font-weight: 600; }}
 QPushButton#primary:hover {{ background: #0072a3; }}
+QPushButton#primary:disabled {{ background: #aab2bd; color: #eef1f5; }}
+/* Run Simulation outcome: green on success, red on failure (white, bold) */
+QPushButton#runOk {{ background: {JKU_GREEN}; color: #ffffff; border: none; font-weight: 600; }}
+QPushButton#runOk:hover {{ background: #4f9249; }}
+QPushButton#runFail {{ background: {JKU_RED}; color: #ffffff; border: none; font-weight: 600; }}
+QPushButton#runFail:hover {{ background: #c54e3f; }}
 
 /* ---- tabs ---- */
 QTabWidget::pane {{ border: 1px solid {PANEL_BORDER}; border-radius: 8px; top: -1px; }}

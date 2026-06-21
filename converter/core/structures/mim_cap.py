@@ -42,7 +42,7 @@ class MimCap(Structure):
     display_name = "MIM capacitor"
     n_ports = 2
 
-    def extract(self, net):
+    def extract(self, net, f_extract, n_segments=None):     # n_segments: not used
         if net.nports != 2:
             raise ValueError("MIM model needs a 2-port (.s2p)")
         f = net.f
@@ -50,12 +50,8 @@ class MimCap(Structure):
         Zs, Zsh1, Zsh2 = pi_branches(net)
 
         lo = int(np.argmin(np.abs(f - max(f[-1] / 20.0, f[f > 0][0]))))
-        # extract L/R/Cshunt below the series self-resonance (where the series
-        # reactance crosses from capacitive to inductive); else use mid-band
-        Xs = Zs.imag
-        cross = np.where((Xs[:-1] < 0) & (Xs[1:] >= 0))[0]
-        f_hi = 0.7 * f[cross[0]] if cross.size else 0.6 * f[-1]
-        hi = int(np.argmin(np.abs(f - f_hi)))
+        # series C read off at low f; L / R / shunt C at the extraction frequency
+        hi = self.nearest_index(f, f_extract)
 
         Cs = float(-1.0 / (w[lo] * Zs.imag[lo]))          # series C at low f
         # series L from the residual reactance at the higher frequency

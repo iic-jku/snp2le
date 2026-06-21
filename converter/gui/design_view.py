@@ -51,10 +51,11 @@ class DesignView(QtWidgets.QWidget):
         left.addWidget(self.file_lbl)
 
         left.addWidget(section_title("Result"))
-        self.mode_out = OutputField("mode", "\u2014", label_w=70, equals=False)
-        self.rms_out = OutputField("RMS error", "\u2014", label_w=70, equals=False)
-        self.pass_out = OutputField("passivity", "\u2014", label_w=70, equals=False)
-        self.order_out = OutputField("order / Q", "\u2014", label_w=70, equals=False)
+        # label_w fits the widest label ("ext. frequency") so the values stay aligned
+        self.mode_out = OutputField("mode", "\u2014", label_w=100, equals=False)
+        self.rms_out = OutputField("RMS error", "\u2014", label_w=100, equals=False)
+        self.pass_out = OutputField("passivity", "\u2014", label_w=100, equals=False)
+        self.order_out = OutputField("order / Q", "\u2014", label_w=100, equals=False)
         for w in (self.mode_out, self.rms_out, self.pass_out, self.order_out):
             left.addWidget(w)
 
@@ -111,15 +112,10 @@ class DesignView(QtWidgets.QWidget):
         if res.mode == "universal":
             self.order_out.label.setText("order")
             self.order_out.set_value(f"{res.n_poles} poles")
-        else:
-            q = res.metrics.get("Q_peak")
-            if q is not None and q == q:                  # inductor model stores Q
-                self.order_out.label.setText("Q (peak)")
-                self.order_out.set_value(f"{q:.2f}")
-            else:                                         # MIM / tline: show extraction freq
-                f_ext = res.metrics.get("f_extract")
-                self.order_out.label.setText("f extract")
-                self.order_out.set_value(format_eng(f_ext, "Hz") if f_ext else "\u2014")
+        else:                                             # structure: extraction freq used
+            f_ext = res.metrics.get("f_extract")
+            self.order_out.label.setText("ext. frequency")
+            self.order_out.set_value(format_eng(f_ext, "Hz") if f_ext else "\u2014")
 
         self._clear_values()
         if not res.ok:
