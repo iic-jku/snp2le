@@ -60,13 +60,13 @@ A demo 2-port is preloaded on first run. `examples/ind_demo.s2p` is included.
 ## Command line (for Makefiles / batch)
 
 ```bash
-python cli.py convert coupler.s4p --mode universal --order 12 --format ngspice -o coupler.cir
+python cli.py convert coupler.s4p --mode universal --order 12 --format ngspice -o coupler.spice
 python cli.py convert ind.s2p --mode structure --structure inductor-pi --format both
 python cli.py convert "*.s2p" --mode universal --format both
 python cli.py list-structures
 ```
 
-`--format both` writes a `.cir` (Ngspice) and a `.scs` (VACASK). The exit code is
+`--format both` writes a `.spice` (Ngspice) and a `.scs` (VACASK). The exit code is
 non-zero if any conversion fails, so it drops into a build cleanly.
 
 ---

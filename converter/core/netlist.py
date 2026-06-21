@@ -14,6 +14,51 @@ def _num(x: float) -> str:
     return f"{x:.10g}"
 
 
+# Simulator element-value limits.  ngspice floors a resistance below 1e-12 ohm to
+# 1e-12 (with the "resistor too small" warning), so we clamp R to that range; this
+# matches what the simulator does anyway, so the result is unchanged.  C/L get
+# wide safety bounds that leave every realistic value untouched (including the
+# universal macromodel's 1 F state capacitors).  V sources and controlled-source
+# gains are not clamped.  The clamp is applied to the *model* (see clamp_ir /
+# clamp_rows, called from the engine) so the netlist, schematic, values table and
+# rebuilt response all describe the same circuit.
+_LIMITS = {"R": (1e-12, 1e12), "C": (1e-18, 1e3), "L": (1e-18, 1e3)}
+_UNIT_KIND = {"Ω": "R", "F": "C", "H": "L"}
+
+
+def _clamp(kind: str, value: float) -> float:
+    lo_hi = _LIMITS.get(kind)
+    if lo_hi is None:
+        return value
+    lo, hi = lo_hi
+    return min(max(value, lo), hi)
+
+
+def clamp_ir(ir):
+    """Clamp every R/L/C element value to the simulator-valid range, in place."""
+    for e in ir.elements:
+        e.value = _clamp(e.kind, e.value)
+    return ir
+
+
+def clamp_rows(rows):
+    """Clamp (label, value, unit) value-table rows to match the clamped model."""
+    return [(lab, _clamp(_UNIT_KIND.get(unit, ""), val), unit)
+            for lab, val, unit in rows]
+
+
+def safe_subckt_name(text: str, fallback: str = "s_equivalent") -> str:
+    """Turn an arbitrary string (e.g. an export file stem) into a valid SPICE
+    subcircuit name: keep letters/digits/underscore, map the rest to '_', and
+    avoid a leading digit."""
+    name = re.sub(r"[^A-Za-z0-9_]", "_", str(text)).strip("_")
+    if not name:
+        return fallback
+    if name[0].isdigit():
+        name = "x" + name
+    return name
+
+
 # --------------------------------------------------------------------------- #
 #  Parse the scikit-rf SPICE subcircuit text into a CircuitIR
 # --------------------------------------------------------------------------- #

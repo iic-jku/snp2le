@@ -63,10 +63,11 @@ def _convert_universal(state, net, res):
 def _convert_structure(state, net, res):
     struct = get_structure(state.structure_key)
     ir, metrics, rows = struct.extract(net)
+    _nl.clamp_ir(ir)                          # one clamped model: netlist == overlay == table
     res.ir = ir
     res.physical = True
     res.metrics = metrics
-    res.value_rows = rows
+    res.value_rows = _nl.clamp_rows(rows)
     res._structure = struct                          # noqa: SLF001 (used by GUI schematic)
     # rebuild the model response from the extracted RLC for the overlay
     try:

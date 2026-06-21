@@ -68,7 +68,7 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True) -> F
             os.unlink(tmp)
         except OSError:
             pass
-    res.ir = _nl.parse_spice_subckt(spice_text, name="s_equivalent")
+    res.ir = _nl.clamp_ir(_nl.parse_spice_subckt(spice_text, name="s_equivalent"))
     return res
 
 

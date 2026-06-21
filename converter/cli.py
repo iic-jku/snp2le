@@ -2,7 +2,7 @@
 """cli.py - command-line interface for batch / Makefile use.
 
     snp2le convert coupler.s4p --mode universal --order 12 --passive \
-        --format ngspice -o coupler.cir
+        --format ngspice -o coupler.spice
     snp2le convert ind.s2p --mode structure --structure inductor-pi --format both
 
 Globs are expanded; with --format both, two files are written per input.
@@ -21,7 +21,7 @@ from core.pdk import pdk_items, get_pdk, DEFAULT_PDK
 
 
 def _out_path(src, explicit, dialect, n_inputs, n_formats):
-    ext = "scs" if dialect == "vacask" else "cir"
+    ext = "scs" if dialect == "vacask" else "spice"
     if explicit and n_inputs == 1 and n_formats == 1:
         return explicit
     base = os.path.splitext(os.path.basename(explicit or src))[0]

@@ -4,7 +4,8 @@ import os
 from PySide6 import QtCore, QtWidgets
 
 from core.state import ConverterState
-from core import io, engine
+from core import io, engine, netlist
+from core.pdk import get_pdk
 
 from .top_bar import TopBar
 from .design_view import DesignView
@@ -25,6 +26,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # seed with a bundled example; fall back to the synthetic demo
         self._examples_dir = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "examples")
+        self._last_export_dir = {}        # per-dialect remembered export folder
         example = os.path.join(self._examples_dir, "blc_ihp-sg13g2.s4p")
         try:
             self.net = io.load_touchstone(example)
@@ -105,16 +107,43 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.set_ports(self.net.nports)
         self.recompute()
 
+    def _export_dir(self, dialect):
+        # last folder for this dialect, else netlist/spectre (vacask) or
+        # netlist/spice (ngspice) at the repo root
+        last = self._last_export_dir.get(dialect)
+        if last and os.path.isdir(last):
+            return last
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        sub = "spectre" if dialect == "vacask" else "spice"
+        default = os.path.join(repo_root, "netlist", sub)
+        os.makedirs(default, exist_ok=True)
+        return default
+
     def on_export(self, dialect):
         res = engine.convert(self.state, self.net)
-        text = res.vacask if dialect == "vacask" else res.ngspice
-        ext = "scs" if dialect == "vacask" else "cir"
+        ext = "scs" if dialect == "vacask" else "spice"
+        # default name: <source>_le, falling back to the subcircuit's own name
+        src = os.path.splitext(os.path.basename(self.state.source_path))[0] \
+            if self.state.source_path else ""
+        name = f"{src + '_le' if src else (res.ir.name if res.ir else 's_equivalent')}.{ext}"
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, f"Export {dialect} netlist", f"s_equivalent.{ext}",
+            self, f"Export {dialect} netlist",
+            os.path.join(self._export_dir(dialect), name),
             f"Netlist (*.{ext});;All files (*)")
-        if path:
-            with open(path, "w") as fh:
-                fh.write(text)
+        if not path:
+            return
+        self._last_export_dir[dialect] = os.path.dirname(path)   # remember per dialect
+        if res.ir is not None:
+            # name the .SUBCKT after the chosen file, e.g. bpf_le.spice -> bpf_le
+            res.ir.name = netlist.safe_subckt_name(
+                os.path.splitext(os.path.basename(path))[0])
+            pdk = get_pdk(self.state.pdk)
+            text = (netlist.render_vacask(res.ir, pdk) if dialect == "vacask"
+                    else netlist.render_ngspice(res.ir, pdk))
+        else:
+            text = res.vacask if dialect == "vacask" else res.ngspice
+        with open(path, "w") as fh:
+            fh.write(text)
 
     def on_save_design(self):
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
