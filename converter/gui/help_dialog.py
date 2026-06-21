@@ -31,9 +31,6 @@ count and frequency range.</li>
   passivity</b> controls are greyed out (they only affect the universal fit).</li>
 <li><b>Structure</b>: which physical model to fit. Structures whose port
 count does not match the loaded file are greyed out.</li>
-<li><b>PDK</b>: the target process design kit. It tags the netlist and decides
-which simulators apply. VACASK output is currently supported only for the IHP
-PDKs, so the other kits are greyed out.</li>
 <li><b>Max order</b>: the number of poles the universal vector fit may use.
 More poles track sharp resonances and wideband data better but enlarge the
 netlist. Fewer poles are smaller but coarser.</li>

@@ -17,7 +17,6 @@ import sys
 from core import io, engine
 from core.state import ConverterState
 from core.structures import structure_items
-from core.pdk import pdk_items, get_pdk, DEFAULT_PDK
 
 
 def _out_path(src, explicit, dialect, n_inputs, n_formats):
@@ -36,17 +35,6 @@ def cmd_convert(args):
         print("no input files", file=sys.stderr)
         return 2
 
-    pdk = get_pdk(args.pdk)
-    if not pdk.supported:
-        print(f"PDK '{pdk.key}' is not supported yet (see list-pdks)",
-              file=sys.stderr)
-        return 2
-    if "vacask" in (["ngspice", "vacask"] if args.format == "both" else [args.format]) \
-            and not pdk.vacask:
-        print(f"VACASK output is not available for PDK '{pdk.key}'",
-              file=sys.stderr)
-        return 2
-
     formats = ["ngspice", "vacask"] if args.format == "both" else [args.format]
     rc = 0
     for src in paths:
@@ -55,7 +43,7 @@ def cmd_convert(args):
         except Exception as exc:                          # noqa: BLE001
             print(f"[FAIL] {src}: {exc}", file=sys.stderr); rc = 1; continue
         state = ConverterState(mode=args.mode, structure_key=args.structure,
-                               pdk=args.pdk, max_order=args.order,
+                               max_order=args.order,
                                enforce_passivity=args.passive)
         res = engine.convert(state, net)
         if not res.ok:
@@ -81,8 +69,6 @@ def build_parser():
     c.add_argument("--mode", choices=["universal", "structure"], default="universal")
     c.add_argument("--structure", default="inductor-pi",
                    help="structure key (see list-structures)")
-    c.add_argument("--pdk", default=DEFAULT_PDK,
-                   help="target PDK key (see list-pdks)")
     c.add_argument("--order", type=int, default=6, help="max model order (universal)")
     c.add_argument("--passive", action="store_true", default=True,
                    help="enforce passivity (universal, default on)")
@@ -93,7 +79,6 @@ def build_parser():
     c.set_defaults(func=cmd_convert)
 
     sub.add_parser("list-structures", help="list available structure keys")
-    sub.add_parser("list-pdks", help="list available PDK keys")
     return p
 
 
@@ -102,11 +87,6 @@ def main(argv=None):
     if args.cmd == "list-structures":
         for key, name, nports in structure_items():
             print(f"{key:16s} {name}  ({nports}-port)")
-        return 0
-    if args.cmd == "list-pdks":
-        for key, name, supported in pdk_items():
-            tag = "" if supported else "  (not supported yet)"
-            print(f"{key:16s} {name}{tag}")
         return 0
     return args.func(args)
 

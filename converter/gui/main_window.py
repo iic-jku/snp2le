@@ -5,7 +5,6 @@ from PySide6 import QtCore, QtWidgets
 
 from core.state import ConverterState
 from core import io, engine, netlist
-from core.pdk import get_pdk
 
 from .top_bar import TopBar
 from .design_view import DesignView
@@ -69,7 +68,6 @@ class MainWindow(QtWidgets.QMainWindow):
         v = self.top.values()
         self.state.mode = v["mode"]
         self.state.structure_key = v["structure_key"]
-        self.state.pdk = v["pdk"]
         self.state.max_order = v["max_order"]
         self.state.enforce_passivity = v["enforce_passivity"]
 
@@ -137,9 +135,8 @@ class MainWindow(QtWidgets.QMainWindow):
             # name the .SUBCKT after the chosen file, e.g. bpf_le.spice -> bpf_le
             res.ir.name = netlist.safe_subckt_name(
                 os.path.splitext(os.path.basename(path))[0])
-            pdk = get_pdk(self.state.pdk)
-            text = (netlist.render_vacask(res.ir, pdk) if dialect == "vacask"
-                    else netlist.render_ngspice(res.ir, pdk))
+            text = (netlist.render_vacask(res.ir) if dialect == "vacask"
+                    else netlist.render_ngspice(res.ir))
         else:
             text = res.vacask if dialect == "vacask" else res.ngspice
         with open(path, "w") as fh:

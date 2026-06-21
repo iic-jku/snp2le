@@ -12,7 +12,6 @@ from . import netlist as _nl
 from . import universal as _uni
 from . import mna as _mna
 from .structures import get_structure
-from .pdk import get_pdk, DEFAULT_PDK
 
 
 def convert(state, net) -> Results:
@@ -39,10 +38,8 @@ def convert(state, net) -> Results:
         res.error = str(exc)
         return res
 
-    pdk = get_pdk(getattr(state, "pdk", DEFAULT_PDK))
-    res.pdk = pdk.key
-    res.ngspice = _nl.render_ngspice(res.ir, pdk)
-    res.vacask = _nl.render_vacask(res.ir, pdk)
+    res.ngspice = _nl.render_ngspice(res.ir)
+    res.vacask = _nl.render_vacask(res.ir)
     if not res.value_rows:
         res.value_rows = res.ir.value_rows()
     return res

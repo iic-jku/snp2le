@@ -15,7 +15,6 @@ from core import io, engine
 from core.state import ConverterState
 from core.units import parse_eng, format_eng
 from core.structures import structure_items, get_structure
-from core.pdk import pdk_items, get_pdk, DEFAULT_PDK
 
 
 # ---------------------------------------------------------------- fixtures
@@ -94,39 +93,6 @@ def test_structure_rejects_wrong_port_count():
 def test_no_network():
     res = engine.convert(ConverterState(), None)
     assert not res.ok and res.error
-
-
-# ---------------------------------------------------------------- PDK
-def test_pdk_registry_has_expected_kits():
-    keys = [k for k, _name, _ok in pdk_items()]
-    assert keys == ["ihp-sg13g2", "ihp-sg13cmos5l", "gf180mcuD", "sky130A"]
-    supported = {k: ok for k, _name, ok in pdk_items()}
-    assert supported["ihp-sg13g2"] and supported["ihp-sg13cmos5l"]
-    assert not supported["gf180mcuD"] and not supported["sky130A"]
-    # unknown keys fall back to the default kit
-    assert get_pdk("nope").key == DEFAULT_PDK
-
-
-def test_ihp_pdk_tags_both_netlists():
-    net = inductor_2port()
-    res = engine.convert(
-        ConverterState(mode="structure", structure_key="inductor-pi",
-                       pdk="ihp-sg13g2"), net)
-    assert res.ok and res.pdk == "ihp-sg13g2"
-    assert "ihp-sg13g2" in res.ngspice
-    assert "ihp-sg13g2" in res.vacask and "subckt" in res.vacask   # VACASK available
-
-
-def test_unsupported_pdk_disables_vacask():
-    """A non-IHP PDK (reachable via a loaded design JSON) yields no VACASK."""
-    net = inductor_2port()
-    res = engine.convert(
-        ConverterState(mode="structure", structure_key="inductor-pi",
-                       pdk="sky130A"), net)
-    assert res.ok
-    assert "not available" in res.vacask.lower()
-    assert "subckt" not in res.vacask
-    assert ".SUBCKT" in res.ngspice                                # ngspice still fine
 
 
 # ---------------------------------------------------------------- sim import

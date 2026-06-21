@@ -4,7 +4,7 @@ ConverterState is a plain dataclass (no Qt) so the logic is testable and the
 design is serialisable for save/load, exactly like the filter designer.
 """
 from __future__ import annotations
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields
 import json
 
 
@@ -12,7 +12,6 @@ import json
 class ConverterState:
     mode: str = "universal"               # universal | structure
     structure_key: str = "inductor-pi"
-    pdk: str = "ihp-sg13g2"               # target PDK (see core/pdk.py, DEFAULT_PDK)
     max_order: int = 6
     enforce_passivity: bool = True
     source_path: str = ""                 # last loaded .sNp (for save/restore)
@@ -22,7 +21,9 @@ class ConverterState:
 
     @classmethod
     def from_json(cls, text: str) -> "ConverterState":
-        return cls(**json.loads(text))
+        data = json.loads(text)
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 @dataclass
@@ -35,7 +36,6 @@ class Results:
     ir: object = None                     # CircuitIR
     ngspice: str = ""
     vacask: str = ""
-    pdk: str = ""                         # target PDK key the netlists were rendered for
 
     n_poles: int = 0
     passive: bool = False

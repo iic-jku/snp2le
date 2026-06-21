@@ -1,17 +1,15 @@
 """top_bar.py - control strip.
 
 Dark title bar: snp2le logo + title, then (right) View selector + Help.
-Light controls row: Load .sNp, Mode (Universal / Structure), Structure, PDK, Max
-order, Enforce passivity.  Structures that do not match the loaded port count, and
-PDKs that are not supported yet, are greyed out so an invalid choice can never be
-made.
+Light controls row: Load .sNp, Mode (Universal / Structure), Structure, Max
+order, Enforce passivity.  Structures that do not match the loaded port count are
+greyed out so an invalid choice can never be made.
 """
 from __future__ import annotations
 import math
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from core.structures import structure_items
-from core.pdk import pdk_items, DEFAULT_PDK, excluded_structures
 from .style import JKU_BLUE
 
 _DISABLED_GREY = QtGui.QColor("#9aa0aa")
@@ -116,16 +114,6 @@ class TopBar(QtWidgets.QWidget):
             self.structure.addItem(name, key); self._struct_ports[key] = nports
         self.structure.setFixedWidth(180)
 
-        self.pdk = QtWidgets.QComboBox()
-        self._pdk_supported = {}
-        for key, _name, supported in pdk_items():
-            self.pdk.addItem(key, key)           # show the PDK key itself
-            self._pdk_supported[key] = supported
-        self.pdk.setFixedWidth(180)
-        self.pdk.setToolTip("Target PDK. VACASK output is currently only "
-                            "supported for the IHP PDKs; the others are disabled.")
-        self._grey_pdks()
-
         self.order = QtWidgets.QSpinBox(); self.order.setRange(2, 40); self.order.setValue(6)
         self.order.setFixedWidth(92)
 
@@ -140,7 +128,6 @@ class TopBar(QtWidgets.QWidget):
         lay.addSpacing(6)
         lay.addLayout(self._labeled("Mode", self.mode))
         lay.addLayout(self._labeled("Structure", self.structure))
-        lay.addLayout(self._labeled("PDK", self.pdk))
         lay.addLayout(self._labeled("Max order", self.order))
         lay.addLayout(self._labeled("", self.passive))
         lay.addStretch(1)
@@ -148,7 +135,6 @@ class TopBar(QtWidgets.QWidget):
 
         self.mode.currentIndexChanged.connect(self._on_change)
         self.structure.currentIndexChanged.connect(self._on_change)
-        self.pdk.currentIndexChanged.connect(self._on_change)   # may grey a structure
         self.order.valueChanged.connect(lambda _=None: self.changed.emit())
         self.passive.toggled.connect(lambda _=None: self.changed.emit())
         self.reset.clicked.connect(self._on_reset)
@@ -158,16 +144,13 @@ class TopBar(QtWidgets.QWidget):
     # ---- reset / view helpers --------------------------------------------
     def _on_reset(self):
         """Restore every control to the ConverterState defaults, then recompute once."""
-        widgets = (self.mode, self.structure, self.pdk, self.order, self.passive)
+        widgets = (self.mode, self.structure, self.order, self.passive)
         for w in widgets:
             w.blockSignals(True)
         self.mode.setCurrentIndex(0)                       # universal
         si = self.structure.findData("inductor-pi")
         if si >= 0:
             self.structure.setCurrentIndex(si)
-        pi = self.pdk.findData(DEFAULT_PDK)
-        if pi >= 0:
-            self.pdk.setCurrentIndex(pi)
         self.order.setValue(6)
         self.passive.setChecked(True)
         for w in widgets:
@@ -179,19 +162,6 @@ class TopBar(QtWidgets.QWidget):
         """Select the Design (name='design') or Plot (name='plot') view."""
         self.view.setCurrentIndex(0 if name == "design" else 1)
 
-    # ---- PDK greying (static: unsupported kits can never be chosen) -------
-    def _grey_pdks(self):
-        first_ok = None
-        for i in range(self.pdk.count()):
-            key = self.pdk.itemData(i)
-            ok = self._pdk_supported.get(key, False)
-            _set_item_enabled(self.pdk, i, ok)
-            if ok and first_ok is None:
-                first_ok = i
-        cur = self.pdk.itemData(self.pdk.currentIndex())
-        if not self._pdk_supported.get(cur, False) and first_ok is not None:
-            self.pdk.setCurrentIndex(first_ok)
-
     # ---- constraints -----------------------------------------------------
     def set_ports(self, n_ports):
         self._n_ports = n_ports
@@ -202,16 +172,13 @@ class TopBar(QtWidgets.QWidget):
         self.structure.setEnabled(is_struct)
         self.order.setEnabled(not is_struct)
         self.passive.setEnabled(not is_struct)
-        # grey structures that don't match the loaded port count or aren't
-        # available for the selected PDK (e.g. no MIM in ihp-sg13cmos5l)
-        excluded = excluded_structures(self.pdk.currentData())
+        # grey structures that don't match the loaded port count
         cur = self.structure.currentIndex()
         first_ok = None
         cur_ok = False
         for i in range(self.structure.count()):
             key = self.structure.itemData(i)
-            port_ok = (self._n_ports == 0) or (self._struct_ports.get(key) == self._n_ports)
-            ok = port_ok and key not in excluded
+            ok = (self._n_ports == 0) or (self._struct_ports.get(key) == self._n_ports)
             _set_item_enabled(self.structure, i, ok)
             if ok and first_ok is None:
                 first_ok = i
@@ -230,7 +197,6 @@ class TopBar(QtWidgets.QWidget):
         return {
             "mode": self.mode.currentData(),
             "structure_key": self.structure.currentData(),
-            "pdk": self.pdk.currentData(),
             "max_order": int(self.order.value()),
             "enforce_passivity": bool(self.passive.isChecked()),
         }
