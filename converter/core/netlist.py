@@ -47,6 +47,49 @@ def clamp_rows(rows):
             for lab, val, unit in rows]
 
 
+def rescale_state_resistors(ir, target: float = 1e-9):
+    """Rescale a vector-fit state realisation so every state self-resistor is at
+    least `target` ohms, keeping the transfer function *exactly* the same.
+
+    scikit-rf realises each pole with a 1 F state capacitor and a self-resistor
+    R = 1/Re(pole); fast poles give R below ngspice's 1e-12 resistor floor.  Both
+    ngspice and a plain clamp would round that to 1e-12 and corrupt the pole,
+    which badly distorts the reflection terms (S11/S22) while barely touching
+    transmission (this is the order >= 13 bug).  Scaling a state node's capacitor
+    by 1/K, its self-resistor by K and every source feeding that node (its n-
+    terminal) by 1/K leaves the node voltage - hence every port response -
+    unchanged, so the rescaling is lossless.  Only the universal macromodel uses
+    this; physical structure models keep clamp_ir (their near-zero resistors are
+    genuine shorts).
+    """
+    cap_nodes = set()
+    for e in ir.elements:
+        if e.kind == "C" and "0" in e.nodes:
+            cap_nodes.add(e.nodes[0] if e.nodes[1] == "0" else e.nodes[1])
+    k = {}                                        # state node -> scale factor
+    for e in ir.elements:
+        if e.kind == "R" and "0" in e.nodes:
+            n = e.nodes[0] if e.nodes[1] == "0" else e.nodes[1]
+            if n in cap_nodes and 0.0 < e.value < target:
+                k[n] = target / e.value
+    if not k:
+        return ir
+    for e in ir.elements:
+        if e.kind == "C" and "0" in e.nodes:
+            n = e.nodes[0] if e.nodes[1] == "0" else e.nodes[1]
+            if n in k:
+                e.value /= k[n]
+        elif e.kind == "R" and "0" in e.nodes:
+            n = e.nodes[0] if e.nodes[1] == "0" else e.nodes[1]
+            if n in k:
+                e.value *= k[n]
+        elif e.kind in ("G", "E", "F"):
+            tgt = e.nodes[1]                       # current is injected into n-
+            if tgt in k:
+                e.value /= k[tgt]
+    return ir
+
+
 def safe_subckt_name(text: str, fallback: str = "s_equivalent") -> str:
     """Turn an arbitrary string (e.g. an export file stem) into a valid SPICE
     subcircuit name: keep letters/digits/underscore, map the rest to '_', and

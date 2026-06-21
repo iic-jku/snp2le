@@ -68,7 +68,11 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True) -> F
             os.unlink(tmp)
         except OSError:
             pass
-    res.ir = _nl.clamp_ir(_nl.parse_spice_subckt(spice_text, name="s_equivalent"))
+    # rescale (do NOT clamp) so the realisation's sub-1e-12 state resistors stay
+    # representable in ngspice without corrupting the fit (clamping them breaks
+    # S11/S22 at higher orders)
+    res.ir = _nl.rescale_state_resistors(
+        _nl.parse_spice_subckt(spice_text, name="s_equivalent"))
     return res
 
 

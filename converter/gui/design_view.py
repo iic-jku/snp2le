@@ -24,7 +24,6 @@ def _panel(title):
 
 
 class DesignView(QtWidgets.QWidget):
-    export_clicked = QtCore.Signal(str)      # "ngspice" | "vacask"
     save_clicked = QtCore.Signal()
     load_clicked = QtCore.Signal()
 
@@ -81,17 +80,11 @@ class DesignView(QtWidgets.QWidget):
         self.vacask_edit = QtWidgets.QPlainTextEdit(); self.vacask_edit.setReadOnly(True)
         self.tabs.addTab(self.ngspice_edit, "Ngspice (SPICE)")
         self.tabs.addTab(self.vacask_edit, "VACASK (Spectre)")
-        # VACASK is generated but not exposed yet: disable its tab + export
+        # VACASK is generated but not exposed yet: disable its tab (export buttons
+        # live in the top bar now, so the netlist text fills the whole panel)
         self.tabs.setTabEnabled(1, False)
         self.tabs.setCurrentIndex(0)
         net_lay.addWidget(self.tabs, 1)
-        btn_row = QtWidgets.QHBoxLayout(); btn_row.addStretch(1)
-        self.exp_ng = QtWidgets.QPushButton("Export Ngspice"); self.exp_ng.setObjectName("primary")
-        self.exp_va = QtWidgets.QPushButton("Export VACASK"); self.exp_va.setEnabled(False)
-        self.exp_ng.clicked.connect(lambda: self.export_clicked.emit("ngspice"))
-        self.exp_va.clicked.connect(lambda: self.export_clicked.emit("vacask"))
-        btn_row.addWidget(self.exp_ng); btn_row.addWidget(self.exp_va)
-        net_lay.addLayout(btn_row)
         right.addWidget(net_frame, 4)
         root.addLayout(right, 1)
 

@@ -72,6 +72,7 @@ class TopBar(QtWidgets.QWidget):
     view_changed = QtCore.Signal(str)
     help_clicked = QtCore.Signal()
     load_clicked = QtCore.Signal()
+    export_clicked = QtCore.Signal(str)      # "ngspice" | "vacask"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -131,6 +132,13 @@ class TopBar(QtWidgets.QWidget):
 
         self.passive = QtWidgets.QCheckBox("Enforce passivity"); self.passive.setChecked(True)
 
+        # export buttons live here (not in the netlist panel) so they are reachable
+        # from the Plot view too
+        self.exp_ng = QtWidgets.QPushButton("Export Ngspice")
+        self.exp_ng.setObjectName("primary"); self.exp_ng.setFixedHeight(30)
+        self.exp_va = QtWidgets.QPushButton("Export VACASK")
+        self.exp_va.setFixedHeight(30); self.exp_va.setEnabled(False)
+
         self.reset = QtWidgets.QPushButton("  Reset")
         self.reset.setIcon(_reset_icon()); self.reset.setIconSize(QtCore.QSize(16, 16))
         self.reset.setFixedHeight(30)
@@ -143,12 +151,16 @@ class TopBar(QtWidgets.QWidget):
         lay.addLayout(self._labeled("Max order", self.order))
         lay.addLayout(self._labeled("", self.passive))
         lay.addStretch(1)
+        lay.addLayout(self._labeled("", self.exp_ng))
+        lay.addLayout(self._labeled("", self.exp_va))
         lay.addLayout(self._labeled("", self.reset))
 
         self.mode.currentIndexChanged.connect(self._on_change)
         self.structure.currentIndexChanged.connect(self._on_change)
         self.order.valueChanged.connect(lambda _=None: self.changed.emit())
         self.passive.toggled.connect(lambda _=None: self.changed.emit())
+        self.exp_ng.clicked.connect(lambda: self.export_clicked.emit("ngspice"))
+        self.exp_va.clicked.connect(lambda: self.export_clicked.emit("vacask"))
         self.reset.clicked.connect(self._on_reset)
         self._apply_constraints()
         return bar

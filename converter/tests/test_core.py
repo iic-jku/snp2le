@@ -52,6 +52,19 @@ def test_universal_fits_and_renders():
     assert res.model_s.shape == (len(net.f), 2, 2)
 
 
+def test_universal_high_order_resistors_above_ngspice_floor():
+    """Regression: scikit-rf's fast-pole state resistors can fall below ngspice's
+    1e-12 floor at higher orders; rounding them up corrupts S11/S22.  They must be
+    rescaled (not clamped) so the exported netlist has no near-floor resistors."""
+    bpf = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "examples", "bpf_ihp-sg13g2.s2p")
+    net = io.load_touchstone(bpf)
+    res = engine.convert(ConverterState(mode="universal", max_order=14), net)
+    assert res.ok
+    rvals = [e.value for e in res.ir.elements if e.kind == "R"]
+    assert rvals and min(rvals) >= 1e-10        # clamp would leave one at 1e-12
+
+
 # ---------------------------------------------------------------- structures
 def test_all_structures_extract():
     net = inductor_2port()

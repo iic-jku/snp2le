@@ -56,7 +56,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.view_changed.connect(self.on_view_change)
         self.top.help_clicked.connect(self.on_help)
         self.top.load_clicked.connect(self.on_load_snp)
-        self.design.export_clicked.connect(self.on_export)
+        self.top.export_clicked.connect(self.on_export)
         self.design.save_clicked.connect(self.on_save_design)
         self.design.load_clicked.connect(self.on_load_design)
         # pop the plots out -> show Design view; dock them back -> return to Plot
