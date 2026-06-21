@@ -129,6 +129,25 @@ def test_unsupported_pdk_disables_vacask():
     assert ".SUBCKT" in res.ngspice                                # ngspice still fine
 
 
+# ---------------------------------------------------------------- sim import
+def test_load_ngspice_sim():
+    import tempfile
+    text = (" frequency  s11_db  s21_db  s11_deg  s21_deg \n"
+            " 1.0e9  -3.0  -0.5  10.0  -20.0 \n"
+            " 2.0e9  -6.0  -1.0  15.0  -25.0 \n")
+    fd, path = tempfile.mkstemp(suffix=".txt")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(text)
+        sim = io.load_ngspice_sim(path)
+    finally:
+        os.unlink(path)
+    assert list(sim["f"]) == [1.0e9, 2.0e9]
+    assert sim["S11"]["db"][0] == -3.0
+    assert sim["S21"]["deg"][1] == -25.0          # phase column keyed correctly
+    assert "S12" not in sim                        # only present columns parsed
+
+
 if __name__ == "__main__":
     # allow running without pytest
     for name, fn in sorted(globals().items()):

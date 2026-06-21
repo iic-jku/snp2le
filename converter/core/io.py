@@ -62,6 +62,52 @@ def without_dc(net: skrf.Network) -> skrf.Network:
     return net[keep]
 
 
+def load_ngspice_sim(path: str) -> dict:
+    """Parse an ngspice S-parameter table into a plain dict for the plot overlay.
+
+    The file is a whitespace-separated table whose first row names the columns,
+    e.g.::
+
+        frequency   s11_db   s21_db   ...   s11_deg   s21_deg   ...
+
+    The first three characters of a column name are the S-parameter (``s11`` ->
+    ``S11``), the ``_db`` suffix is magnitude in dB and ``_deg`` is phase in
+    degrees.  Returns ``{"f": Hz, "S11": {"db": arr, "deg": arr}, ...}``.
+    """
+    with open(path) as fh:
+        lines = [ln for ln in fh if ln.strip()]
+    if len(lines) < 2:
+        raise ValueError("file has no data rows")
+    header = lines[0].split()
+    rows = []
+    for ln in lines[1:]:
+        parts = ln.split()
+        if len(parts) != len(header):
+            continue                              # skip ragged / comment lines
+        try:
+            rows.append([float(x) for x in parts])
+        except ValueError:
+            continue
+    if not rows:
+        raise ValueError("no numeric data rows found")
+    data = np.asarray(rows, dtype=float)
+    cols = {name: data[:, i] for i, name in enumerate(header)}
+
+    fname = "frequency" if "frequency" in cols else header[0]
+    out: dict = {"f": cols[fname]}
+    for name in header:
+        if name == fname:
+            continue
+        key = name[:3].upper()                    # "s11_db" -> "S11"
+        if name.endswith("_db"):
+            out.setdefault(key, {})["db"] = cols[name]
+        elif name.endswith("_deg"):
+            out.setdefault(key, {})["deg"] = cols[name]
+    if len(out) < 2:
+        raise ValueError("no S-parameter columns (expected names like 's11_db')")
+    return out
+
+
 def demo_network() -> skrf.Network:
     """A synthetic 2-port pi-network (series R-L, shunt C) for first-run/demo."""
     f = skrf.Frequency(0.1, 20, 201, "ghz")

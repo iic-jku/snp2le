@@ -55,6 +55,16 @@ class OutputField(QtWidgets.QWidget):
         self.value.setText(text)
 
 
+def passivity_text(res) -> str:
+    """The passivity status for a result: 'passive', 'near-passive' or 'not
+    enforced'.  Shared by the design and plot views so they always agree."""
+    if res.passive:
+        return "passive ✓"
+    if any("passivity enforced" in m for m in res.messages):
+        return "near-passive"
+    return "not enforced"
+
+
 def section_title(text: str) -> QtWidgets.QWidget:
     w = QtWidgets.QWidget()
     lay = QtWidgets.QHBoxLayout(w)

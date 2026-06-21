@@ -9,7 +9,7 @@ from __future__ import annotations
 from PySide6 import QtCore, QtWidgets
 
 from core.units import format_eng
-from .widgets import OutputField, section_title, MathLabel
+from .widgets import OutputField, section_title, MathLabel, passivity_text
 from .schematic_widget import SchematicWidget
 
 
@@ -114,13 +114,7 @@ class DesignView(QtWidgets.QWidget):
             self.rms_out.set_value(f"{res.rms_error:.2e}")
         else:
             self.rms_out.set_value("\u2014")
-        enforced = any("passivity enforced" in m for m in res.messages)
-        if res.passive:
-            self.pass_out.set_value("passive \u2713")
-        elif enforced:
-            self.pass_out.set_value("near-passive")
-        else:
-            self.pass_out.set_value("not enforced")
+        self.pass_out.set_value(passivity_text(res))
         if res.mode == "universal":
             self.order_out.label.setText("order")
             self.order_out.set_value(f"{res.n_poles} poles")

@@ -30,8 +30,32 @@ def _set_windows_app_id():
         pass
 
 
+def _install_message_filter():
+    """Hide one benign Qt warning, passing every other message through.
+
+    On some Windows setups Qt prints "QFont::setPointSize: Point size <= 0 (-1)"
+    once at startup. It is a side effect of the stylesheet defining fonts in
+    pixels (so QFont.pointSize() is -1) being read back by a widget during the
+    first paint. Qt keeps the current size, so it is only console noise; we drop
+    just that line so genuine warnings stay visible.
+    """
+    from PySide6 import QtCore
+    _default = [None]
+
+    def _filter(mode, ctx, msg):
+        if "setPointSize" in msg:
+            return
+        if _default[0] is not None:
+            _default[0](mode, ctx, msg)
+        else:
+            sys.stderr.write(msg + "\n")
+
+    _default[0] = QtCore.qInstallMessageHandler(_filter)
+
+
 def main():
     _set_windows_app_id()
+    _install_message_filter()
     apply_style()
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("snp2le")

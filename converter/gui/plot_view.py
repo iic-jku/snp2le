@@ -2,16 +2,18 @@
 
 Four S-parameters are shown side by side.  Each column shows magnitude (dB, top)
 and phase (deg, bottom) of one selected S_ij; the four selectors default to the
-2-port set S11/S21/S12/S22.  Each curve overlays the loaded data (solid grey)
-against the fitted/extracted model (dashed blue).
+2-port set S11/S21/S12/S22.  Each panel overlays the loaded data (solid grey),
+the fitted/extracted model (blue long dashes) and, once imported, an ngspice
+simulation table (green short dashes) on its own frequency grid.
 
 Each panel has a live mouse read-out and a "marker mode": with it on, clicking a
 curve drops a labelled data-point marker (up to three per panel), clicking a
-marker removes it, and right-clicking clears them all.  Plots pop out and export
-to CSV.
+marker removes it, and right-clicking clears them all.  Plots pop out, export to
+CSV, and can import an ngspice simulation to overlay.
 """
 from __future__ import annotations
 import csv
+import os
 import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 from matplotlib.figure import Figure
@@ -19,28 +21,47 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 from matplotlib.backend_bases import _Mode
 
-from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN, JKU_RED
+from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN
+from .widgets import passivity_text
+from core import io
 
 # Curve styling: JKU colours paired with distinct line styles, so the traces
-# stay readable in black-and-white and for colour-blind viewers.  Only `data`
-# and `model` are drawn today; the dash-dot / dotted entries (JKU green / red)
-# are the next styles in the cycle, ready for any future extra series.
-# Each entry is (label, colour, matplotlib line style).
+# stay readable in black-and-white and for colour-blind viewers.  `data` is the
+# loaded Touchstone, `model` the fit/extraction, `sim` an imported ngspice
+# simulation.  Each entry is (label, colour, matplotlib line style); the dash
+# tuples are (offset, (on, off)) in points.
 CURVE_STYLES = [
-    ("data",  JKU_GRAY,  "-"),     # solid
-    ("model", JKU_BLUE,  "--"),    # dashed
-    ("aux-1", JKU_GREEN, "-."),    # dash-dot
-    ("aux-2", JKU_RED,   ":"),     # dotted
+    ("data",       JKU_GRAY,  "-"),            # solid
+    ("model",      JKU_BLUE,  (0, (7, 3))),    # long dashes
+    ("simulation", JKU_GREEN, (0, (2, 2))),    # short dashes
 ]
-DATA, MODEL = CURVE_STYLES[0], CURVE_STYLES[1]
+DATA, MODEL, SIM = CURVE_STYLES[0], CURVE_STYLES[1], CURVE_STYLES[2]
 SIDES = ["A", "B", "C", "D"]
 DEFAULTS = ["S11", "S21", "S12", "S22"]
 
-# matplotlib line style -> Qt pen style, for drawing matching legend swatches.
+# matplotlib named line style -> Qt pen style, for drawing matching legend
+# swatches; dash-tuple styles are converted on the fly in _qt_pen.
 _QT_DASH = {
     "-": QtCore.Qt.SolidLine, "--": QtCore.Qt.DashLine,
     "-.": QtCore.Qt.DashDotLine, ":": QtCore.Qt.DotLine,
 }
+
+
+def _qt_pen(color, linestyle, width=2.0):
+    """A QPen matching a matplotlib line style (named string or (offset, (on,
+    off)) dash tuple), so legend swatches mirror the plotted curves."""
+    pen = QtGui.QPen(QtGui.QColor(color), width)
+    # flat cap: the default square cap extends each dash by half the line width,
+    # which fills the gaps of short dashes and makes them look solid
+    pen.setCapStyle(QtCore.Qt.FlatCap)
+    if isinstance(linestyle, (tuple, list)):
+        _, seq = linestyle
+        pen.setStyle(QtCore.Qt.CustomDashLine)
+        # Qt dash units are multiples of the pen width; matplotlib's are points
+        pen.setDashPattern([max(0.5, v / width) for v in seq])
+    else:
+        pen.setStyle(_QT_DASH.get(linestyle, QtCore.Qt.SolidLine))
+    return pen
 
 _TB_QSS = """
 QToolBar { background:transparent; border:none; spacing:1px; }
@@ -106,9 +127,7 @@ def _legend_swatch(color, linestyle):
     pm = QtGui.QPixmap(30, 12)
     pm.fill(QtCore.Qt.transparent)
     p = QtGui.QPainter(pm)
-    pen = QtGui.QPen(QtGui.QColor(color), 2.0)
-    pen.setStyle(_QT_DASH.get(linestyle, QtCore.Qt.SolidLine))
-    p.setPen(pen)
+    p.setPen(_qt_pen(color, linestyle))
     p.drawLine(1, 6, 29, 6)
     p.end()
     lab = QtWidgets.QLabel()
@@ -205,6 +224,12 @@ class _PlotPanel:
         self.ax.set_ylabel(ylabel, fontsize=9)
         self.ax.grid(True, alpha=0.3)
 
+    def add_series(self, x, s):
+        """Overlay one extra curve (with its own x grid) without clearing."""
+        x = np.asarray(x, float); y = np.asarray(s["y"], float)
+        self.ax.plot(x, y, color=s["color"], ls=s["ls"], lw=s["lw"], label=s["label"])
+        self.series.append({"label": s["label"], "color": s["color"], "x": x, "y": y})
+
     def clear_axes(self):
         self.ax.clear(); self.series = []; self.markers = []
 
@@ -293,15 +318,26 @@ class PlotView(QtWidgets.QWidget):
             cb.currentIndexChanged.connect(self._render)
             self.selectors.append(cb); bar.addWidget(cb)
         bar.addSpacing(14)
-        for name, color, ls in (DATA, MODEL):
+        for name, color, ls in (DATA, MODEL, SIM):
             bar.addWidget(_legend_swatch(color, ls))
             bar.addWidget(self._hint(name)); bar.addSpacing(8)
         bar.addStretch(1)
+        # universal-mode status mirrored from the Design tab (passivity + order),
+        # placed just before Export CSV; hidden in structure mode
+        self.stats_box = QtWidgets.QWidget()
+        sb = QtWidgets.QHBoxLayout(self.stats_box)
+        sb.setContentsMargins(0, 0, 14, 0); sb.setSpacing(16)
+        self.pass_stat = self._stat(); self.order_stat = self._stat()
+        sb.addWidget(self.pass_stat); sb.addWidget(self.order_stat)
+        bar.addWidget(self.stats_box)
         self.export_btn = QtWidgets.QPushButton("Export CSV")
+        self.import_btn = QtWidgets.QPushButton("Import simulation")
         self.popout_btn = QtWidgets.QPushButton("Pop out plots"); self.popout_btn.setObjectName("primary")
         self.export_btn.clicked.connect(self.export_csv)
+        self.import_btn.clicked.connect(self.import_sim)
         self.popout_btn.clicked.connect(self.toggle_popout)
-        bar.addWidget(self.export_btn); bar.addWidget(self.popout_btn)
+        bar.addWidget(self.export_btn); bar.addWidget(self.import_btn)
+        bar.addWidget(self.popout_btn)
         content.addLayout(bar)
 
         self.grid_host = QtWidgets.QWidget()
@@ -325,14 +361,34 @@ class PlotView(QtWidgets.QWidget):
         self._res = None
         self._last = None
         self._prev_aux = ()           # aux-trace labels available last update
+        self._sim = None              # imported ngspice simulation overlay
+        self._last_sim_dir = ""       # remembered import folder
 
     def _hint(self, text):
         lab = QtWidgets.QLabel(text); lab.setProperty("class", "hint")
         return lab
 
+    def _stat(self):
+        """A grey-caption / dark-value status label for the control bar."""
+        lab = QtWidgets.QLabel(""); lab.setProperty("class", "hint")
+        lab.setTextFormat(QtCore.Qt.RichText)
+        return lab
+
+    @staticmethod
+    def _stat_html(caption, value):
+        return (f"{caption}:&nbsp;&nbsp;"
+                f'<b style="color:{JKU_BLUE}">{value}</b>')
+
     # ---- entry point -----------------------------------------------------
     def update_results(self, res):
         self._res = res
+        # mirror the Design tab's passivity + order for the universal macromodel
+        if res.mode == "universal":
+            self.pass_stat.setText(self._stat_html("passivity", passivity_text(res)))
+            self.order_stat.setText(self._stat_html("order", f"{res.n_poles} poles"))
+            self.stats_box.setVisible(True)
+        else:
+            self.stats_box.setVisible(False)
         n = res.n_ports or 0
         aux = list((res.aux_traces or {}).keys())          # e.g. ["Ldiff / Q", ...]
         # extra traces first in the dropdown, then the S-parameters
@@ -398,6 +454,7 @@ class PlotView(QtWidgets.QWidget):
                 self._last[f"{sij}|model_dB"] = mag_m
                 self._last[f"{sij}|data_deg"] = ph_d
                 self._last[f"{sij}|model_deg"] = ph_m
+                self._overlay_sim(magp, php, sij)
             elif isinstance(sel, str) and res.aux_traces and sel in res.aux_traces:
                 spec = res.aux_traces[sel]
                 self._plot_aux(magp, fg, xlabel, spec["top"], f"{sel}|top")
@@ -426,7 +483,46 @@ class PlotView(QtWidgets.QWidget):
         if spec.get("model") is not None:
             self._last[f"{key}|model"] = np.asarray(spec["model"], float)
 
-    # ---- CSV / pop-out ---------------------------------------------------
+    def _overlay_sim(self, magp, php, sij):
+        """Overlay the imported simulation for S_ij, if present, on its own grid."""
+        if not self._sim or sij not in self._sim:
+            return
+        sf = np.asarray(self._sim["f"], float) / 1e9
+        rec = self._sim[sij]
+        if rec.get("db") is not None:
+            magp.add_series(sf, {"label": SIM[0], "color": SIM[1], "ls": SIM[2],
+                                 "lw": 1.4, "y": rec["db"]})
+        if rec.get("deg") is not None:               # unwrap to match data/model
+            ph = np.unwrap(np.deg2rad(np.asarray(rec["deg"], float))) * 180 / np.pi
+            php.add_series(sf, {"label": SIM[0], "color": SIM[1], "ls": SIM[2],
+                                "lw": 1.4, "y": ph})
+
+    # ---- import simulation / CSV / pop-out -------------------------------
+    def _sim_dir(self):
+        # the last import folder, else the repo's sim_data folder
+        if self._last_sim_dir and os.path.isdir(self._last_sim_dir):
+            return self._last_sim_dir
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        d = os.path.join(repo_root, "sim_data")
+        return d if os.path.isdir(d) else repo_root
+
+    def import_sim(self):
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Import ngspice simulation", self._sim_dir(),
+            "ngspice output (*.txt);;All files (*)")
+        if not path:
+            return
+        try:
+            self._sim = io.load_ngspice_sim(path)
+        except Exception as exc:                          # noqa: BLE001
+            self._sim = None
+            QtWidgets.QMessageBox.warning(
+                self, "Import failed",
+                f"Could not read this simulation file:\n{exc}")
+            return
+        self._last_sim_dir = os.path.dirname(path)
+        self._render()
+
     def export_csv(self):
         if not self._last:
             return
