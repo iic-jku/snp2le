@@ -104,7 +104,7 @@ N 1360 -1240 1440 -1240 {lab=vout}
 N 1000 -1240 1080 -1240 {lab=vin}
 C {devices/code_shown.sym} 40 -1330 0 0 {name=NGSPICE
 only_toplevel=true
-lock=true
+lock=false
 value="
 .include ../../../netlist/spice/bpf_le.spice
 .param temp=27
@@ -154,7 +154,9 @@ plot s12_deg s21_deg
 unset appendwrite
 set wr_vecnames
 set wr_singlescale
-wrdata ../../../sim_data//@schname\\\\.txt v(s11) v(s22) v(s21) v(s12)
+wrdata ../../../sim_data/@schname\\\\.txt
++ s11_dB s22_dB s12_dB s21_dB
++ s11_deg s22_deg s12_deg s21_deg
 
 *quit
 .endc
