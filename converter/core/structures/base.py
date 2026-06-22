@@ -19,10 +19,11 @@ class Structure(ABC):
     n_ports = 2          # required port count
 
     @abstractmethod
-    def extract(self, net, f_extract, n_segments=None):
+    def extract(self, net, f_extract, n_segments=None, iso_r=True):
         """Return (CircuitIR, metrics, rows) with the lumped values read off near
         `f_extract` [Hz].  `n_segments` sets the ladder stage count for structures
-        that use one (the RLGC line); others ignore it.  Raises ValueError if not
+        that use one (the RLGC line); `iso_r` toggles the isolation resistor for the
+        Wilkinson dividers; other structures ignore them.  Raises ValueError if not
         applicable."""
 
     @staticmethod

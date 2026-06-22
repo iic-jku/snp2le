@@ -14,6 +14,7 @@ class ConverterState:
     structure_key: str = "inductor-pi"
     f_extract: float = 10e9               # extraction frequency for structure modes [Hz]
     n_segments: int = 2                   # RLGC ladder stages (transmission-line model)
+    iso_resistor: bool = True             # include the Wilkinson isolation resistor
     max_order: int = 6
     enforce_passivity: bool = True
     source_path: str = ""                 # last loaded .sNp (for save/restore)

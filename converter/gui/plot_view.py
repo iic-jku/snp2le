@@ -363,6 +363,7 @@ class PlotView(QtWidgets.QWidget):
         self._res = None
         self._last = None
         self._prev_aux = ()           # aux-trace labels available last update
+        self._prev_defaults = ()      # preferred default plot set last update
         self._sim = None              # imported ngspice simulation overlay
         self._last_sim_dir = ""       # remembered import folder
 
@@ -405,10 +406,11 @@ class PlotView(QtWidgets.QWidget):
             defaults = (aux + ["S21", "S11", "S22", "S12"])[:4]
         else:
             defaults = list(DEFAULTS)
-        # re-apply defaults when the available extra traces change (mode/structure
-        # switch); otherwise preserve the user's selections
-        reset = tuple(aux) != self._prev_aux
+        # re-apply defaults when the available extra traces OR the preferred default
+        # set change (mode/structure switch); otherwise preserve the user's selections
+        reset = (tuple(aux) != self._prev_aux) or (tuple(defaults) != self._prev_defaults)
         self._prev_aux = tuple(aux)
+        self._prev_defaults = tuple(defaults)
         for combo, default in zip(self.selectors, defaults):
             cur = combo.currentText()
             combo.blockSignals(True); combo.clear()

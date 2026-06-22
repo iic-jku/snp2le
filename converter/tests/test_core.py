@@ -66,14 +66,75 @@ def test_universal_high_order_resistors_above_ngspice_floor():
 
 
 # ---------------------------------------------------------------- structures
+def _example(name):
+    return io.load_touchstone(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "examples", name))
+
+
 def test_all_structures_extract():
-    net = inductor_2port()
     for key, _name, nports in structure_items():
-        assert nports == 2
+        net = inductor_2port() if nports == 2 else _example("wpd_ihp-sg13g2.s3p")
         res = engine.convert(ConverterState(mode="structure", structure_key=key), net)
         assert res.ok, (key, res.error)
         assert res.value_rows                         # has labelled values
         assert res.model_s is not None
+        assert res.model_s.shape == (len(net.f), nports, nports)
+
+
+def test_wilkinson_synthesises_quadrature_divider():
+    """The Wilkinson model is the full quadrature divider of the paper: all eight
+    elements present, matched input, -3 dB equal split, isolation, and 90 deg between
+    the two outputs at the detected centre frequency."""
+    net = _example("wpd_ihp-sg13g2.s3p")
+    res = engine.convert(ConverterState(mode="structure", structure_key="wilkinson"), net)
+    vals = {lab: v for lab, v, _ in res.value_rows}
+    assert set(vals) >= {"L_1", "C_1", "L_2", "C_2", "L_3", "C_3", "L_int", "R_int"}
+    assert abs(vals["R_int"] - 50.0) < 1.0                 # Rint = Z0 (normalised 1)
+    k = int(np.argmin(np.abs(net.s[:, 0, 0])))             # centre frequency index
+    m = res.model_s
+    assert 20 * np.log10(abs(m[k, 0, 0])) < -20            # matched input
+    s21 = 20 * np.log10(abs(m[k, 1, 0])); s31 = 20 * np.log10(abs(m[k, 2, 0]))
+    assert abs(s21 - (-3.0)) < 0.3 and abs(s31 - (-3.0)) < 0.3   # equal -3 dB split
+    dphi = (np.angle(m[k, 1, 0]) - np.angle(m[k, 2, 0])) * 180 / np.pi
+    dphi = (dphi + 180) % 360 - 180
+    assert abs(abs(dphi) - 90.0) < 5.0                     # quadrature outputs
+
+
+def test_wilkinson_inphase_is_quarter_wave():
+    """In-phase Wilkinson: matched, -3 dB equal split, and both outputs at -90 deg
+    (in phase) at the centre frequency - the lumped quarter-wave divider."""
+    net = _example("wpd_ihp-sg13g2.s3p")
+    res = engine.convert(ConverterState(mode="structure",
+                                        structure_key="wilkinson-inphase"), net)
+    vals = {lab: v for lab, v, _ in res.value_rows}
+    assert abs(vals["Z_c"] - np.sqrt(2) * 50.0) < 1.0 and abs(vals["R_iso"] - 100.0) < 1.0
+    k = int(np.argmin(np.abs(net.s[:, 0, 0])))
+    m = res.model_s
+    assert 20 * np.log10(abs(m[k, 0, 0])) < -20            # matched input
+    s21 = 20 * np.log10(abs(m[k, 1, 0])); s31 = 20 * np.log10(abs(m[k, 2, 0]))
+    assert abs(s21 - (-3.0)) < 0.3 and abs(s31 - (-3.0)) < 0.3       # -3 dB split
+    p21 = np.angle(m[k, 1, 0], deg=True); p31 = np.angle(m[k, 2, 0], deg=True)
+    assert abs(p21 - (-90.0)) < 5.0 and abs(p31 - (-90.0)) < 5.0     # both -90 deg
+
+
+def test_wilkinson_isolation_resistor_toggle():
+    """Dropping the isolation resistor removes it from the model and degrades the
+    output match (S22) from a deep null to the resistor-less ~-6 dB."""
+    net = _example("wpd_ihp-sg13g2.s3p")
+    k = int(np.argmin(np.abs(net.s[:, 0, 0])))
+
+    on = engine.convert(ConverterState(mode="structure",
+                        structure_key="wilkinson-inphase", iso_resistor=True), net)
+    off = engine.convert(ConverterState(mode="structure",
+                         structure_key="wilkinson-inphase", iso_resistor=False), net)
+
+    assert any(lab == "R_iso" for lab, _, _ in on.value_rows)
+    assert not any(lab == "R_iso" for lab, _, _ in off.value_rows)
+    assert not any(e.kind == "R" for e in off.ir.elements)          # no resistor at all
+    s22_on = 20 * np.log10(abs(on.model_s[k, 1, 1]) + 1e-12)
+    s22_off = 20 * np.log10(abs(off.model_s[k, 1, 1]) + 1e-12)
+    assert s22_on < -40.0                                            # matched output
+    assert s22_off > s22_on + 20.0                                  # un-matched without R
 
 
 def test_inductor_values_recovered():

@@ -79,6 +79,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.structure_key = v["structure_key"]
         self.state.f_extract = v["f_extract"]
         self.state.n_segments = v["n_segments"]
+        self.state.iso_resistor = v["iso_resistor"]
         self.state.max_order = v["max_order"]
         self.state.enforce_passivity = v["enforce_passivity"]
 
@@ -148,7 +149,8 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "Load failed",
                                           f"Could not load this file:\n{exc}")
             return
-        self.top.set_ports(self.net.nports)
+        self.top.set_ports(self.net.nports)   # may auto-switch the structure to fit
+        self._pull()                          # sync state from the (re-fitted) controls
         self.recompute()
 
     def _export_dir(self, dialect):
@@ -381,5 +383,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def recompute(self):
         self.design.set_file_info(io.info_for(self.net).summary)
         res = engine.convert(self.state, self.net)
+        if res.mode == "structure":            # mirror the freq actually used (it may
+            self.top.show_fext(res.metrics.get("f_extract"))   # have been auto-detected)
         self.design.update_results(res)
         self.plots.update_results(res)

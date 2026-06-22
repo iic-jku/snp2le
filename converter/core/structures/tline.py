@@ -44,7 +44,7 @@ class TransmissionLine(Structure):
     display_name = "Tline (RLGC)"
     n_ports = 2
 
-    def extract(self, net, f_extract, n_segments=N_SEGMENTS):
+    def extract(self, net, f_extract, n_segments=N_SEGMENTS, iso_r=True):   # iso_r: not used
         if net.nports != 2:
             raise ValueError("transmission-line model needs a 2-port (.s2p)")
         f = net.f

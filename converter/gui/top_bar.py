@@ -143,6 +143,11 @@ class TopBar(QtWidgets.QWidget):
         self.stages.setFixedWidth(70)
         self.stages.setToolTip("Number of RLGC ladder stages (transmission-line model).")
 
+        # Wilkinson isolation resistor (2*Z0) - on/off (Wilkinson models only)
+        self.iso_r = QtWidgets.QCheckBox("Isolation R"); self.iso_r.setChecked(True)
+        self.iso_r.setToolTip("Include the Wilkinson output isolation resistor (2*Z0).\n"
+                              "Uncheck to model a divider with the resistor omitted.")
+
         self.order = QtWidgets.QSpinBox(); self.order.setRange(2, 40); self.order.setValue(6)
         self.order.setFixedWidth(92)
 
@@ -188,6 +193,7 @@ class TopBar(QtWidgets.QWidget):
         lay.addLayout(self._labeled("Structure", self.structure))
         lay.addLayout(self._labeled("<i>f</i><sub>ext</sub>", self.f_ext))
         lay.addLayout(self._labeled("Stages", self.stages))
+        lay.addLayout(self._labeled("", self.iso_r))
         lay.addLayout(self._labeled("Max order", self.order))
         lay.addLayout(self._labeled("", self.passive))
         lay.addStretch(1)
@@ -216,6 +222,7 @@ class TopBar(QtWidgets.QWidget):
         self.structure.currentIndexChanged.connect(self._on_change)
         self.f_ext.editingFinished.connect(self._on_fext)
         self.stages.valueChanged.connect(lambda _=None: self.changed.emit())
+        self.iso_r.toggled.connect(lambda _=None: self.changed.emit())
         self.order.valueChanged.connect(lambda _=None: self.changed.emit())
         self.passive.toggled.connect(lambda _=None: self.changed.emit())
         self.exp_ng.clicked.connect(lambda: self.export_clicked.emit("ngspice"))
@@ -232,7 +239,7 @@ class TopBar(QtWidgets.QWidget):
 
         Also unticks 'Ngspice output' and clears the run-status label so the bar
         matches a freshly-opened window; the caller recomputes once."""
-        widgets = (self.mode, self.structure, self.stages, self.order,
+        widgets = (self.mode, self.structure, self.stages, self.iso_r, self.order,
                    self.passive, self.sim_output)
         for w in widgets:
             w.blockSignals(True)
@@ -241,6 +248,7 @@ class TopBar(QtWidgets.QWidget):
         if si >= 0:
             self.structure.setCurrentIndex(si)
         self.stages.setValue(2)
+        self.iso_r.setChecked(True)
         self.order.setValue(6)
         self.passive.setChecked(True)
         self.sim_output.setChecked(False)
@@ -279,7 +287,8 @@ class TopBar(QtWidgets.QWidget):
         Signals are blocked so this does not trigger a recompute; the caller
         recomputes once afterwards.
         """
-        widgets = (self.mode, self.structure, self.stages, self.order, self.passive)
+        widgets = (self.mode, self.structure, self.stages, self.iso_r, self.order,
+                   self.passive)
         for w in widgets:
             w.blockSignals(True)
         mi = self.mode.findData(state.mode)
@@ -289,6 +298,7 @@ class TopBar(QtWidgets.QWidget):
         if si >= 0:
             self.structure.setCurrentIndex(si)
         self.stages.setValue(int(state.n_segments))
+        self.iso_r.setChecked(bool(state.iso_resistor))
         self.order.setValue(int(state.max_order))
         self.passive.setChecked(bool(state.enforce_passivity))
         for w in widgets:
@@ -305,8 +315,6 @@ class TopBar(QtWidgets.QWidget):
         is_struct = self.mode.currentData() == "structure"
         self.structure.setEnabled(is_struct)
         self.f_ext.setEnabled(is_struct)           # extraction freq: structure modes only
-        self.stages.setEnabled(                    # stages: RLGC line model only
-            is_struct and self.structure.currentData() == "tline-rlgc")
         self.order.setEnabled(not is_struct)
         self.passive.setEnabled(not is_struct)
         # grey structures that don't match the loaded port count
@@ -325,6 +333,10 @@ class TopBar(QtWidgets.QWidget):
             self.structure.blockSignals(True)
             self.structure.setCurrentIndex(first_ok)
             self.structure.blockSignals(False)
+        # structure-specific control enables (after any auto-switch above)
+        key = self.structure.currentData()
+        self.stages.setEnabled(is_struct and key == "tline-rlgc")   # RLGC line only
+        self.iso_r.setEnabled(is_struct and key == "wilkinson-inphase")  # in-phase WPD only
 
     def _on_change(self, *_):
         self._apply_constraints()
@@ -336,6 +348,12 @@ class TopBar(QtWidgets.QWidget):
         self.f_ext.setText(format_eng(hz, "Hz"))
         self.f_ext.setProperty("error", False)
         self._repolish(self.f_ext)
+
+    def show_fext(self, hz):
+        """Mirror the actually-used extraction frequency into the field (e.g. the
+        auto-detected centre frequency), without triggering a recompute."""
+        if hz and abs(float(hz) - self._f_extract_hz) > 1e-3:
+            self._set_fext(hz)
 
     def _on_fext(self):
         """Parse the field on edit; recompute only on a valid, changed value."""
@@ -359,6 +377,7 @@ class TopBar(QtWidgets.QWidget):
             "structure_key": self.structure.currentData(),
             "f_extract": self._f_extract_hz,
             "n_segments": int(self.stages.value()),
+            "iso_resistor": bool(self.iso_r.isChecked()),
             "max_order": int(self.order.value()),
             "enforce_passivity": bool(self.passive.isChecked()),
         }

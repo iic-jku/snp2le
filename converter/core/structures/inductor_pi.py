@@ -60,7 +60,7 @@ class InductorPi(Structure):
     display_name = "Inductor"
     n_ports = 2
 
-    def extract(self, net, f_extract, n_segments=None):     # n_segments: not used
+    def extract(self, net, f_extract, n_segments=None, iso_r=True):   # last two: not used
         if net.nports != 2:
             raise ValueError("inductor model needs a 2-port (.s2p)")
         f = net.f
