@@ -199,7 +199,9 @@ def test_balun_extracts_transformer():
     assert res.model_s.shape == (len(net.f), 4, 4) and np.isfinite(res.model_s).all()
     assert len(res.ir.couplings) == 2
     assert "K1 L5 L9" in res.ngspice and "K2 L7 L8" in res.ngspice
-    assert "mutual K1" in res.vacask                   # VACASK lists couplings as notes
+    # VACASK builtin mutual inductance: K1 () mutual k=.. ind1="L5" ind2="L9"
+    assert 'K1 () mutual' in res.vacask and 'ind1="L5" ind2="L9"' in res.vacask
+    assert "mutual" in res.vacask.split("models needed")[1].split("\n")[0]  # in models list
 
 
 def test_branchline_synthesises_quadrature_coupler():
@@ -264,8 +266,8 @@ def test_vacask_rlgc_netlist():
     res = engine.convert(ConverterState(mode="structure", structure_key="tline-rlgc"), net)
     res.ir.name = "tline_le"
     vc = netlist.render_vacask(res.ir)
-    assert "subckt tline_le ( p1 p2 )" in vc and vc.rstrip().endswith("ends")
-    assert "( p1 s1 ) inductor l=" in vc               # name ( nodes ) model param=value
+    assert "subckt tline_le (p1 p2)" in vc and vc.rstrip().endswith("ends")
+    assert "(p1 s1) inductor l=" in vc                 # name (nodes) model param=value
     assert "resistor r=" in vc and "capacitor c=" in vc
     assert "load " not in vc                           # loads/models come from the testbench
     assert "\nmodel " not in vc and "simulator lang=spectre" not in vc

@@ -167,7 +167,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_export(self, dialect):
         res = engine.convert(self.state, self.net)
-        ext = "spectre" if dialect == "vacask" else "spice"   # Xschem's VACASK netlist ext
+        ext = "inc" if dialect == "vacask" else "spice"   # VACASK include file (.inc)
         # default name: <source>_le, falling back to the subcircuit's own name
         src = os.path.splitext(os.path.basename(self.state.source_path))[0] \
             if self.state.source_path else ""
@@ -244,7 +244,7 @@ class MainWindow(QtWidgets.QMainWindow):
         return os.path.join(repo_root, "sim_data")
 
     # extensions that are never an ngspice data table (binary raw, netlists, logs)
-    _NON_DATA_EXTS = (".raw", ".spice", ".cir", ".net", ".log", ".out",
+    _NON_DATA_EXTS = (".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out",
                       ".svg", ".png", ".ps", ".pdf", ".sch")
     _DATA_EXTS = (".txt", ".data", ".dat", ".csv")
 
