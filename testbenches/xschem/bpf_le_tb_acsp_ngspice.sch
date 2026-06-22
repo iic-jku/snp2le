@@ -93,7 +93,7 @@ unitx=1
 logx=0
 logy=0
 linewidth_mult=4}
-T {Testbench for AC S-parameter analysis - Bandpass Filter} 480 -1720 0 0 1 1 {}
+T {Ngspice Testbench for AC S-parameter analysis - Bandpass Filter} 370 -1720 0 0 1 1 {}
 N 1000 -1240 1000 -1180 {lab=vin}
 N 1000 -1120 1000 -1060 {lab=GND}
 N 920 -1240 1000 -1240 {lab=vin}
