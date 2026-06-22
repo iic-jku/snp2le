@@ -165,7 +165,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_export(self, dialect):
         res = engine.convert(self.state, self.net)
-        ext = "scs" if dialect == "vacask" else "spice"
+        ext = "spectre" if dialect == "vacask" else "spice"   # Xschem's VACASK netlist ext
         # default name: <source>_le, falling back to the subcircuit's own name
         src = os.path.splitext(os.path.basename(self.state.source_path))[0] \
             if self.state.source_path else ""

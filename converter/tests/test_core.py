@@ -98,11 +98,11 @@ def test_vacask_rlgc_netlist():
     res = engine.convert(ConverterState(mode="structure", structure_key="tline-rlgc"), net)
     res.ir.name = "tline_le"
     vc = netlist.render_vacask(res.ir)
-    assert 'load "spice/resistor.osdi"' in vc and 'load "spice/inductor.osdi"' in vc
-    assert "model defmod_r sp_resistor" in vc and "model defmod_l sp_inductor" in vc
-    assert "subckt tline_le(p1 p2)" in vc and vc.rstrip().endswith("ends")
-    assert "defmod_l l=" in vc and "defmod_r r=" in vc and "defmod_c c=" in vc
-    assert "simulator lang=spectre" not in vc          # VACASK reads its native form
+    assert "subckt tline_le ( p1 p2 )" in vc and vc.rstrip().endswith("ends")
+    assert "( p1 s1 ) inductor l=" in vc               # name ( nodes ) model param=value
+    assert "resistor r=" in vc and "capacitor c=" in vc
+    assert "load " not in vc                           # loads/models come from the testbench
+    assert "\nmodel " not in vc and "simulator lang=spectre" not in vc
 
 
 # ---------------------------------------------------------------- edge cases
