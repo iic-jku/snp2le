@@ -81,9 +81,6 @@ class DesignView(QtWidgets.QWidget):
         self.vacask_edit = QtWidgets.QPlainTextEdit(); self.vacask_edit.setReadOnly(True)
         self.tabs.addTab(self.ngspice_edit, "Ngspice (SPICE)")
         self.tabs.addTab(self.vacask_edit, "VACASK (Spectre)")
-        # VACASK is generated but not exposed yet: disable its tab (export buttons
-        # live in the top bar now, so the netlist text fills the whole panel)
-        self.tabs.setTabEnabled(1, False)
         self.tabs.setCurrentIndex(0)
         net_lay.addWidget(self.tabs, 1)
         right.addWidget(net_frame, 4)

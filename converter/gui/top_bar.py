@@ -153,7 +153,7 @@ class TopBar(QtWidgets.QWidget):
         self.exp_ng = QtWidgets.QPushButton("Export Ngspice")
         self.exp_ng.setObjectName("primary"); self.exp_ng.setFixedHeight(30)
         self.exp_va = QtWidgets.QPushButton("Export VACASK")
-        self.exp_va.setFixedHeight(30); self.exp_va.setEnabled(False)
+        self.exp_va.setObjectName("primary"); self.exp_va.setFixedHeight(30)
 
         # Xschem testbench: load a .sch and simulate it; only usable if xschem
         # is installed (checked once), otherwise both are greyed out

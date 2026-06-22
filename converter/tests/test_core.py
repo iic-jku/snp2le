@@ -87,6 +87,24 @@ def test_inductor_values_recovered():
     assert res.rms_error < 1e-6                        # near-exact rebuild
 
 
+# ---------------------------------------------------------------- VACASK export
+def test_vacask_rlgc_netlist():
+    """The RLGC structure exports a valid VACASK (Spectre) netlist: OSDI default
+    models for the passives and `name (nodes) model param=value` instances."""
+    from core import netlist
+    tline = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "examples", "tline_100um_ihp-sg13g2.s2p")
+    net = io.load_touchstone(tline)
+    res = engine.convert(ConverterState(mode="structure", structure_key="tline-rlgc"), net)
+    res.ir.name = "tline_le"
+    vc = netlist.render_vacask(res.ir)
+    assert 'load "spice/resistor.osdi"' in vc and 'load "spice/inductor.osdi"' in vc
+    assert "model defmod_r sp_resistor" in vc and "model defmod_l sp_inductor" in vc
+    assert "subckt tline_le(p1 p2)" in vc and vc.rstrip().endswith("ends")
+    assert "defmod_l l=" in vc and "defmod_r r=" in vc and "defmod_c c=" in vc
+    assert "simulator lang=spectre" not in vc          # VACASK reads its native form
+
+
 # ---------------------------------------------------------------- edge cases
 def test_dc_point_is_dropped():
     net = inductor_2port(with_dc=True)
