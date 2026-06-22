@@ -517,12 +517,17 @@ class PlotView(QtWidgets.QWidget):
             lo = ymin if ymin >= lo_b - 4.0 * body else lo_b
             return lo, hi
 
-        r = frame(model_y) or frame(data_y)
+        r = frame(model_y)
+        # a (near-)constant model carries no vertical information to frame on - its
+        # tiny numerical span would collapse the axis to an unreadable offset range -
+        # so frame on the data instead (e.g. a flat transformer L vs its rising data)
+        if r is not None and (r[1] - r[0]) <= 1e-3 * max(abs(r[0]), abs(r[1]), 1.0):
+            r = frame(data_y) or r
         if r is None:
             return None
         lo, hi = r
         span = hi - lo
-        pad = 0.08 * span if span > 1e-9 * max(abs(lo), abs(hi), 1.0) \
+        pad = 0.08 * span if span > 1e-3 * max(abs(lo), abs(hi), 1.0) \
             else 0.1 * max(abs(hi), 1.0)
         return lo - pad, hi + pad
 

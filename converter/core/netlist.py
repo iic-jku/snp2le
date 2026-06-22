@@ -42,8 +42,12 @@ def clamp_ir(ir):
 
 
 def clamp_rows(rows):
-    """Clamp (label, value, unit) value-table rows to match the clamped model."""
-    return [(lab, _clamp(_UNIT_KIND.get(unit, ""), val), unit)
+    """Clamp (label, value, unit) value-table rows to match the clamped model.
+
+    Negative values are derived display quantities (e.g. a mutual inductance M),
+    not netlist elements, so they pass through unclamped (the simulator floors only
+    apply to real positive R/L/C device values)."""
+    return [(lab, val if val < 0 else _clamp(_UNIT_KIND.get(unit, ""), val), unit)
             for lab, val, unit in rows]
 
 
@@ -153,6 +157,8 @@ def render_ngspice(ir: CircuitIR) -> str:
         elif e.kind == "F":
             L.append(f"{e.name} {e.nodes[0]} {e.nodes[1]} "
                      f"{e.ctrl[0]} {_num(e.value)}")
+    for i, (la, lb, kk) in enumerate(getattr(ir, "couplings", []), 1):
+        L.append(f"K{i} {la} {lb} {_num(kk)}")        # mutual inductance (coupling)
     L.append(f".ENDS {ir.name}")
     return "\n".join(L) + "\n"
 
@@ -200,9 +206,15 @@ def render_vacask(ir: CircuitIR) -> str:
     if any(k in kinds for k in ("G", "E", "F")):
         L.append("// NOTE: controlled sources (universal macromodel) - verify "
                  "vccs / vcvs / cccs against your VACASK build")
+    couplings = getattr(ir, "couplings", [])
+    if couplings:
+        L.append("// NOTE: mutual inductors (transformer coupling) are listed as "
+                 "comments below - wire them up with your VACASK mutual-inductor primitive")
     L.append(f"subckt {ir.name} ( {' '.join(ir.ports)} )")
     for e in ir.elements:
         L.append("  " + _vc_instance(e))
+    for i, (la, lb, kk) in enumerate(couplings, 1):
+        L.append(f"  // mutual K{i}: {la} <-> {lb}, k = {_num(kk)}")
     L.append("ends")
     return "\n".join(L) + "\n"
 

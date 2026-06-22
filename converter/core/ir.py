@@ -35,10 +35,17 @@ class CircuitIR:
     elements: list = field(default_factory=list)  # list[Element]
     comments: list = field(default_factory=list)  # provenance / header notes
     physical: bool = False          # True for structure models (interpretable)
+    couplings: list = field(default_factory=list)  # list[(L_name, L_name, k)] mutual
 
     def add(self, el: Element):
         self.elements.append(el)
         return el
+
+    def add_coupling(self, l_a: str, l_b: str, k: float):
+        """Magnetically couple two inductors (by name) with coefficient k (a SPICE
+        K element / mutual inductance M = k*sqrt(La*Lb))."""
+        self.couplings.append((l_a, l_b, float(k)))
+        return self.couplings[-1]
 
     def value_rows(self):
         """(label, value, unit) rows for the values table (physical models)."""

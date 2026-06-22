@@ -72,8 +72,11 @@ def _example(name):
 
 
 def test_all_structures_extract():
+    example = {2: lambda: inductor_2port(),
+               3: lambda: _example("wpd_ihp-sg13g2.s3p"),
+               4: lambda: _example("balun_ihp-sg13cmos5l.s4p")}
     for key, _name, nports in structure_items():
-        net = inductor_2port() if nports == 2 else _example("wpd_ihp-sg13g2.s3p")
+        net = example[nports]()
         res = engine.convert(ConverterState(mode="structure", structure_key=key), net)
         assert res.ok, (key, res.error)
         assert res.value_rows                         # has labelled values
@@ -135,6 +138,46 @@ def test_wilkinson_isolation_resistor_toggle():
     s22_off = 20 * np.log10(abs(off.model_s[k, 1, 1]) + 1e-12)
     assert s22_on < -40.0                                            # matched output
     assert s22_off > s22_on + 20.0                                  # un-matched without R
+
+
+def test_mna_coupled_inductors_match_mutual_impedance():
+    """Two magnetically coupled inductors to ground form a 2-port whose Z-matrix is
+    the textbook [[jwL1, jwM],[jwM, jwL2]] with M = k*sqrt(L1*L2)."""
+    from core.ir import CircuitIR, Element
+    from core import mna
+    L1, L2, k = 2e-9, 8e-9, 0.6
+    ir = CircuitIR(name="xfmr", ports=["p1", "p2"])
+    ir.add(Element("L", "L1", ("p1", "0"), L1))
+    ir.add(Element("L", "L2", ("p2", "0"), L2))
+    ir.add_coupling("L1", "L2", k)
+    f = np.array([1e9, 5e9])
+    Z = skrf.network.s2z(mna.rlc_sparams(ir, f, z0=50.0), z0=50.0)
+    w = 2 * np.pi * f
+    M = k * np.sqrt(L1 * L2)
+    for i, wi in enumerate(w):
+        assert abs(Z[i, 0, 0].imag - wi * L1) < 1e-4 * wi * L1
+        assert abs(Z[i, 1, 1].imag - wi * L2) < 1e-4 * wi * L2
+        assert abs(Z[i, 0, 1].imag - wi * M) < 1e-4 * wi * M
+        assert abs(Z[i, 1, 0].imag - wi * M) < 1e-4 * wi * M
+
+
+def test_balun_extracts_transformer():
+    """4-port transformer balun: differential L/k/n extracted, the coupled-inductor
+    model rebuilds finite, and both netlists carry the mutual coupling."""
+    net = _example("balun_ihp-sg13cmos5l.s4p")
+    res = engine.convert(ConverterState(mode="structure", structure_key="balun",
+                                        f_extract=7e9), net)
+    assert res.ok, res.error
+    vals = {lab: v for lab, v, _ in res.value_rows}
+    assert 0.5e-9 < vals["L_p"] < 1e-9 and 0.5e-9 < vals["L_s"] < 1e-9
+    assert abs(abs(vals["k"]) - 0.694) < 0.05          # coupling matches balun.spice
+    assert abs(vals["n"] - 1.0) < 0.05                 # symmetric 1:1 balun
+    assert abs(vals["Q_p"] - 5.91) < 0.2 and abs(vals["Q_s"] - 5.96) < 0.2
+    assert abs(vals["M"] - (-0.516e-9)) < 0.05e-9      # negative mutual, not clamped
+    assert res.model_s.shape == (len(net.f), 4, 4) and np.isfinite(res.model_s).all()
+    assert len(res.ir.couplings) == 2
+    assert "K1 L5 L9" in res.ngspice and "K2 L7 L8" in res.ngspice
+    assert "mutual K1" in res.vacask                   # VACASK lists couplings as notes
 
 
 def test_inductor_values_recovered():

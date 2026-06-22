@@ -5,9 +5,10 @@ from .inductor_pi import InductorPi
 from .mim_cap import MimCap
 from .tline import TransmissionLine
 from .wilkinson import Wilkinson, WilkinsonInphase
+from .balun import Balun
 
 STRUCTURES = {s.key: s for s in (InductorPi(), MimCap(), TransmissionLine(),
-                                 WilkinsonInphase(), Wilkinson())}
+                                 WilkinsonInphase(), Wilkinson(), Balun())}
 
 
 def structure_items():

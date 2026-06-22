@@ -82,11 +82,12 @@ def eng_mathtext(value, unit: str = "") -> str:
 
 
 def comp_label(sym: str, value=None, unit: str = "", sep: str = "\n") -> str:
-    """A full schematic label in mathtext, e.g. '$C_{\\mathrm{p1}}$\\n$40\\,\\mathrm{fF}$'."""
-    label = f"${sym_mathtext(sym)}$"
-    if value is not None:
-        label += sep + f"${eng_mathtext(value, unit)}$"
-    return label
+    """A schematic label in mathtext: the component *name* only (e.g. '$C_{\\mathrm{p1}}$').
+
+    Component values are intentionally omitted so the drawings stay uncluttered - the
+    numeric values are listed in the values table beside the schematic.  `value`,
+    `unit` and `sep` are accepted for call-site compatibility but ignored."""
+    return f"${sym_mathtext(sym)}$"
 
 
 def port_label(n) -> str:
