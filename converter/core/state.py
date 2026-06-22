@@ -45,6 +45,7 @@ class Results:
     rms_error: float = float("nan")
     metrics: dict = field(default_factory=dict)
     value_rows: list = field(default_factory=list)   # (name, value, unit)
+    value_drift: dict = field(default_factory=dict)  # {label: band-drift %} per value
     messages: list = field(default_factory=list)
 
     # plotting payload

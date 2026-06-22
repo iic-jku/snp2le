@@ -63,6 +63,26 @@ class DesignView(QtWidgets.QWidget):
         self.values_host = QtWidgets.QVBoxLayout(); self.values_host.setSpacing(4)
         left.addLayout(self.values_host)
 
+        self.tol_title = section_title("Tolerances")
+        left.addWidget(self.tol_title)
+        self.tol_caption = QtWidgets.QLabel(
+            "± tolerance at the ext. frequency (the ○ marker on the model curve): "
+            "|data − model| / model.")
+        self.tol_caption.setStyleSheet("color:#7d828c;font-size:10px;")
+        self.tol_caption.setWordWrap(True)
+        self.tol_caption.setToolTip(
+            "At the ext. frequency (the ○ marker on the model curve), the parameter the "
+            "measured data implies is compared to the model value:\n\n"
+            "    tolerance = |value − model| / |model| × 100\n\n"
+            "Directly-read reciprocal terms (e.g. the series L, R) read 0 % — the model "
+            "reproduces them exactly. Terms the model must approximate (e.g. the shunt C "
+            "forced equal across two slightly asymmetric ports) carry the residual it "
+            "cannot fit. Frequency dispersion away from the ext. frequency is visible in "
+            "the plots.")
+        left.addWidget(self.tol_caption)
+        self.tol_host = QtWidgets.QVBoxLayout(); self.tol_host.setSpacing(4)
+        left.addLayout(self.tol_host)
+
         self.msg_lbl = QtWidgets.QLabel("")
         self.msg_lbl.setStyleSheet("color:#7d828c;font-size:10px;"); self.msg_lbl.setWordWrap(True)
         left.addWidget(self.msg_lbl)
@@ -90,13 +110,29 @@ class DesignView(QtWidgets.QWidget):
     def set_file_info(self, text):
         self.file_lbl.setText(text)
 
-    def _clear_values(self):
-        while self.values_host.count():
-            it = self.values_host.takeAt(0)
+    def _clear(self, host):
+        while host.count():
+            it = host.takeAt(0)
             w = it.widget()
             if w:
                 w.setParent(None)          # synchronous removal (no overlap)
                 w.deleteLater()
+
+    @staticmethod
+    def _tol_color(pct):
+        if pct < 2.0:
+            return "#2e7d32"               # green - model fits this value at f_ext
+        if pct < 10.0:
+            return "#b8860b"               # amber - moderate residual
+        return "#d95c4c"                   # red - the model cannot fit this term
+
+    @staticmethod
+    def _tol_text(pct):
+        if pct != pct:                     # NaN: not defined for this value
+            return "—", "#7d828c"
+        if pct > 100.0:                    # value not stable in the operating band
+            return ">100%", "#d95c4c"
+        return f"±{pct:.1f}%", DesignView._tol_color(pct)
 
     def update_results(self, res):
         self.mode_out.set_value("universal" if res.mode == "universal"
@@ -114,7 +150,7 @@ class DesignView(QtWidgets.QWidget):
             self.order_out.label.setText("ext. frequency")
             self.order_out.set_value(format_eng(f_ext, "Hz") if f_ext else "\u2014")
 
-        self._clear_values()
+        self._clear(self.values_host)
         if not res.ok:
             lab = QtWidgets.QLabel(res.error)
             lab.setStyleSheet("color:#d95c4c;"); lab.setWordWrap(True)
@@ -131,6 +167,20 @@ class DesignView(QtWidgets.QWidget):
                 "Electrically exact, not physically interpretable.")
             note.setStyleSheet("color:#7d828c;font-size:11px;"); note.setWordWrap(True)
             self.values_host.addWidget(note)
+
+        # ---- Tolerances: per-element band drift around f_ext (structures) ----
+        self._clear(self.tol_host)
+        drift = res.value_drift if (res.ok and res.physical) else {}
+        rows = [(lab, drift[lab]) for lab, _, _ in res.value_rows
+                if lab in drift] if res.physical else []
+        show_tol = bool(rows)
+        self.tol_title.setVisible(show_tol)
+        self.tol_caption.setVisible(show_tol)
+        for lab, pct in rows:
+            text, color = self._tol_text(pct)
+            of = OutputField(lab, text, label_w=52, equals=True, field_w=128)
+            of.value.setStyleSheet(f"color:{color};")
+            self.tol_host.addWidget(of, alignment=QtCore.Qt.AlignHCenter)
 
         self.msg_lbl.setText("  \u00b7  ".join(res.messages) if res.messages else "")
         self.ngspice_edit.setPlainText(res.ngspice or "")

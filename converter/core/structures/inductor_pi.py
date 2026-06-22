@@ -100,6 +100,16 @@ class InductorPi(Structure):
     def default_plots(self):
         return ["Ldiff / Q", "Lseries / Cshunt", "Rseries / Rshunt", "S21"]
 
+    def value_drift(self, net, value_rows, f_extract):
+        z0 = float(np.real(net.z0.flatten()[0]))
+        D = _pi_decomp(net.s, net.f, z0)
+        vals = {lab: v for lab, v, _ in value_rows}
+        curves = {"Q": D["Q"], "L_s": D["Lseries"], "R_s": D["Rseries"],
+                  "C_p1": D["Cshunt"], "R_p1": D["Rshunt"],
+                  "C_p2": D["Cshunt"], "R_p2": D["Rshunt"]}
+        return {lab: self.fext_tolerance_pct(c, vals[lab], net.f, f_extract)
+                for lab, c in curves.items() if lab in vals}
+
     @staticmethod
     def _add_shunt(ir, port, idx, c, r):
         """Capacitor in series with the substrate R to ground.  R is always

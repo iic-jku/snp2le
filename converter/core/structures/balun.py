@@ -97,6 +97,17 @@ class Balun(Structure):
     def default_plots(self):
         return ["Lp / Rp", "Ls / Rs", "Qp / Qs", "k / M"]   # the four transformer views
 
+    def value_drift(self, net, value_rows, f_extract):
+        z0 = float(np.real(net.z0.flatten()[0]))
+        D = _balun_decomp(net.s, net.f, z0)
+        vals = {lab: v for lab, v, _ in value_rows}
+        with np.errstate(divide="ignore", invalid="ignore"):
+            nturns = np.sqrt(D["Lp"] / D["Ls"])
+        curves = {"L_p": D["Lp"], "R_p": D["Rp"], "Q_p": D["Qp"], "L_s": D["Ls"],
+                  "R_s": D["Rs"], "Q_s": D["Qs"], "M": D["M"], "k": D["k"], "n": nturns}
+        return {lab: self.fext_tolerance_pct(c, vals[lab], net.f, f_extract)
+                for lab, c in curves.items() if lab in vals}
+
     def freq_traces(self, net, model_s):
         """Frequency-domain trace sets for the Plot view (data vs model):
           * 'Lp / Rp' - primary differential inductance and resistance

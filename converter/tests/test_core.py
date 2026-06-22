@@ -140,6 +140,28 @@ def test_wilkinson_isolation_resistor_toggle():
     assert s22_off > s22_on + 20.0                                  # un-matched without R
 
 
+def test_value_tolerance_at_fext():
+    """Per-element tolerance is taken at f_ext: directly-read reciprocal terms match
+    exactly (0 %); a symmetrised shunt carries the small port-asymmetry residual."""
+    net = _example("sample_inductor_ihp-sg13g2.s2p")
+    res = engine.convert(ConverterState(mode="structure", structure_key="inductor-pi",
+                                        f_extract=10e9), net)
+    tol = res.value_drift
+    assert tol["L_s"] < 1e-3 and tol["R_s"] < 1e-3        # series: exact at f_ext
+    assert 0.0 < tol["C_p1"] < 5.0                        # shunt: symmetry residual
+    # the balun extracts everything directly -> all match at f_ext
+    bres = engine.convert(ConverterState(mode="structure", structure_key="balun",
+                                         f_extract=7e9), net=_example("balun_ihp-sg13cmos5l.s4p"))
+    assert all(v < 1e-3 for v in bres.value_drift.values())
+    # clamped-placeholder values are dropped (no meaningless relative tolerance)
+    mres = engine.convert(ConverterState(mode="structure", structure_key="mim-cap"),
+                          _example("mim_cap_170fF_ihp-sg13g2.s2p"))
+    assert "L_s" not in mres.value_drift                  # L_s clamped to ~0 -> dropped
+    # universal macromodel exposes no per-element tolerance
+    ures = engine.convert(ConverterState(mode="universal", max_order=6), inductor_2port())
+    assert not ures.value_drift
+
+
 def test_mna_coupled_inductors_match_mutual_impedance():
     """Two magnetically coupled inductors to ground form a 2-port whose Z-matrix is
     the textbook [[jwL1, jwM],[jwM, jwL2]] with M = k*sqrt(L1*L2)."""
@@ -178,6 +200,46 @@ def test_balun_extracts_transformer():
     assert len(res.ir.couplings) == 2
     assert "K1 L5 L9" in res.ngspice and "K2 L7 L8" in res.ngspice
     assert "mutual K1" in res.vacask                   # VACASK lists couplings as notes
+
+
+def test_branchline_synthesises_quadrature_coupler():
+    """Branch-line coupler: the canonical pi-LP design synthesises a 3 dB quadrature
+    hybrid - matched input, isolated port 4, equal through/coupled split 90 deg apart."""
+    net = _example("blc_ihp-sg13g2.s4p")
+    res = engine.convert(ConverterState(mode="structure", structure_key="branchline",
+                                        iso_resistor=False), net)    # ideal lossless
+    assert res.ok, res.error
+    vals = {lab: v for lab, v, _ in res.value_rows}
+    z0 = 50.0; w0 = 2 * np.pi * res.metrics["f_extract"]
+    assert np.isclose(vals["L_se"], z0 / (np.sqrt(2) * w0), rtol=1e-6)
+    assert np.isclose(vals["L_sh"], z0 / w0, rtol=1e-6)
+    assert np.isclose(vals["C"], (1 + np.sqrt(2)) / (z0 * w0), rtol=1e-6)
+    k = int(np.argmin(np.abs(net.f - res.metrics["f_extract"])))
+    m = res.model_s
+    assert 20 * np.log10(abs(m[k, 0, 0])) < -40        # matched input
+    assert 20 * np.log10(abs(m[k, 3, 0])) < -40        # isolated port 4
+    s21 = 20 * np.log10(abs(m[k, 1, 0])); s31 = 20 * np.log10(abs(m[k, 2, 0]))
+    assert abs(s21 + 3.0) < 0.3 and abs(s31 + 3.0) < 0.3            # equal -3 dB split
+    dphi = (np.angle(m[k, 1, 0]) - np.angle(m[k, 2, 0])) * 180 / np.pi
+    dphi = (dphi + 180) % 360 - 180
+    assert abs(abs(dphi) - 90.0) < 5.0                             # quadrature
+
+
+def test_branchline_arm_loss_improves_fit():
+    """The 'arm loss' option fits a series R (single arm Q) so the model dissipates
+    like the device: reflection terms lift off the ideal null and the RMS improves."""
+    net = _example("blc_ihp-sg13g2.s4p")
+    k_ref = engine.convert(ConverterState(mode="structure", structure_key="branchline",
+                                          iso_resistor=False), net)
+    lossy = engine.convert(ConverterState(mode="structure", structure_key="branchline",
+                                          iso_resistor=True), net)
+    lv = {lab: v for lab, v, _ in lossy.value_rows}
+    assert {"R_se", "R_sh", "Q"} <= set(lv) and lv["R_se"] > 0 and 1 < lv["Q"] < 1e4
+    assert any(e.kind == "R" for e in lossy.ir.elements)
+    assert "R0" in lossy.ngspice                       # arm resistors emitted
+    k = int(np.argmin(np.abs(net.f - lossy.metrics["f_extract"])))
+    assert 20 * np.log10(abs(lossy.model_s[k, 0, 0])) > -35    # S11 lifted off the null
+    assert lossy.rms_error < k_ref.rms_error                   # closer to the data
 
 
 def test_inductor_values_recovered():

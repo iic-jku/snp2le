@@ -80,6 +80,15 @@ class MimCap(Structure):
     def default_plots(self):
         return ["Cseries / Cshunt", "Rseries / Lseries", "S11", "S21"]
 
+    def value_drift(self, net, value_rows, f_extract):
+        z0 = float(np.real(net.z0.flatten()[0]))
+        D = _mim_decomp(net.s, net.f, z0)
+        vals = {lab: v for lab, v, _ in value_rows}
+        curves = {"C_s": D["Cseries"], "L_s": D["Lseries"], "R_s": D["Rseries"],
+                  "C_p1": D["Cshunt"], "C_p2": D["Cshunt"]}
+        return {lab: self.fext_tolerance_pct(c, vals[lab], net.f, f_extract)
+                for lab, c in curves.items() if lab in vals}
+
     def freq_traces(self, net, model_s):
         """Frequency-domain trace sets for the Plot view (data vs model):
           * 'Cseries / Cshunt' - effective series C and shunt C over frequency

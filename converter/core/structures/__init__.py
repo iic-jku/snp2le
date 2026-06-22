@@ -6,9 +6,11 @@ from .mim_cap import MimCap
 from .tline import TransmissionLine
 from .wilkinson import Wilkinson, WilkinsonInphase
 from .balun import Balun
+from .branchline import BranchLineCoupler
 
 STRUCTURES = {s.key: s for s in (InductorPi(), MimCap(), TransmissionLine(),
-                                 WilkinsonInphase(), Wilkinson(), Balun())}
+                                 WilkinsonInphase(), Wilkinson(), Balun(),
+                                 BranchLineCoupler())}
 
 
 def structure_items():

@@ -114,6 +114,15 @@ class TopBar(QtWidgets.QWidget):
         box.addStretch(1)                      # pin label + widget to the top of the row
         return box
 
+    def _labeled_widget(self, text, widget):
+        """Like _labeled but wrapped in a QWidget so the whole group (label + widget)
+        can be shown/hidden as a unit (used for the structure-specific options)."""
+        w = QtWidgets.QWidget()
+        box = QtWidgets.QVBoxLayout(w); box.setContentsMargins(0, 0, 0, 0); box.setSpacing(2)
+        lab = QtWidgets.QLabel(text); lab.setProperty("class", "fieldLabel")
+        box.addWidget(lab); box.addWidget(widget); box.addStretch(1)
+        return w
+
     # ---- controls --------------------------------------------------------
     def _build_controls(self):
         bar = QtWidgets.QWidget(); bar.setObjectName("topbar")
@@ -143,15 +152,52 @@ class TopBar(QtWidgets.QWidget):
         self.stages.setFixedWidth(70)
         self.stages.setToolTip("Number of RLGC ladder stages (transmission-line model).")
 
-        # Wilkinson isolation resistor (2*Z0) - on/off (Wilkinson models only)
+        # Wilkinson isolation resistor / branch-line resistive loss (model-specific)
         self.iso_r = QtWidgets.QCheckBox("Isolation R"); self.iso_r.setChecked(True)
-        self.iso_r.setToolTip("Include the Wilkinson output isolation resistor (2*Z0).\n"
-                              "Uncheck to model a divider with the resistor omitted.")
+        self.iso_r.setToolTip("Include the modelled resistance (Wilkinson isolation "
+                              "resistor 2*Z0, or branch-line arm loss).\n"
+                              "Uncheck to drop it.")
+        # reserve room for the longest label so the option slot width never changes
+        self.iso_r.setMinimumWidth(
+            self.iso_r.fontMetrics().horizontalAdvance("Resistive loss") + 28)
 
         self.order = QtWidgets.QSpinBox(); self.order.setRange(2, 40); self.order.setValue(6)
         self.order.setFixedWidth(92)
 
         self.passive = QtWidgets.QCheckBox("Enforce passivity"); self.passive.setChecked(True)
+
+        # structure-specific options live in their own containers so each can be shown
+        # only for the structure it belongs to (otherwise hidden entirely)
+        self.stages_box = self._labeled_widget("Stages", self.stages)
+        self.iso_r_box = self._labeled_widget("", self.iso_r)
+        # a stacked slot sized to its widest page holds whichever option applies, so
+        # selecting one never changes the bar width (window opens wide and stays put)
+        self.opt_box = QtWidgets.QStackedWidget()
+        self._opt_empty = QtWidgets.QWidget()
+        for w in (self._opt_empty, self.stages_box, self.iso_r_box):
+            self.opt_box.addWidget(w)
+
+        # the controls between Structure and the divider depend on the mode: universal
+        # shows max order + passivity, structure shows f_ext + the option.  A stack
+        # holds both pages and reserves the wider one, so the bar width and the divider
+        # position never change with the mode either.
+        self.uni_page = QtWidgets.QWidget()
+        up = QtWidgets.QHBoxLayout(self.uni_page); up.setContentsMargins(0, 0, 0, 0)
+        up.setSpacing(14)
+        up.addLayout(self._labeled("Max order", self.order))
+        up.addLayout(self._labeled("", self.passive)); up.addStretch(1)
+        self.struct_page = QtWidgets.QWidget()
+        sp = QtWidgets.QHBoxLayout(self.struct_page); sp.setContentsMargins(0, 0, 0, 0)
+        sp.setSpacing(14)
+        sp.addLayout(self._labeled("<i>f</i><sub>ext</sub>", self.f_ext))
+        sp.addWidget(self.opt_box); sp.addStretch(1)
+        self.mode_stack = QtWidgets.QStackedWidget()
+        self.mode_stack.addWidget(self.uni_page); self.mode_stack.addWidget(self.struct_page)
+
+        # fixed vertical divider between the conversion controls and the action buttons
+        self.sep = QtWidgets.QFrame(); self.sep.setFixedWidth(1)
+        self.sep.setStyleSheet("background-color:#d4d6db;")
+        self.sep.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
 
         # export buttons live here (not in the netlist panel) so they are reachable
         # from the Plot view too
@@ -191,11 +237,10 @@ class TopBar(QtWidgets.QWidget):
         lay.addSpacing(6)
         lay.addLayout(self._labeled("Mode", self.mode))
         lay.addLayout(self._labeled("Structure", self.structure))
-        lay.addLayout(self._labeled("<i>f</i><sub>ext</sub>", self.f_ext))
-        lay.addLayout(self._labeled("Stages", self.stages))
-        lay.addLayout(self._labeled("", self.iso_r))
-        lay.addLayout(self._labeled("Max order", self.order))
-        lay.addLayout(self._labeled("", self.passive))
+        lay.addWidget(self.mode_stack)         # f_ext+option (structure) or order+passivity
+        lay.addSpacing(24)
+        lay.addWidget(self.sep)                # fixed divider, always visible
+        lay.addSpacing(24)
         lay.addStretch(1)
         lay.addLayout(self._labeled("", self.exp_ng))
         lay.addLayout(self._labeled("", self.exp_va))
@@ -313,10 +358,9 @@ class TopBar(QtWidgets.QWidget):
 
     def _apply_constraints(self):
         is_struct = self.mode.currentData() == "structure"
-        self.structure.setEnabled(is_struct)
-        self.f_ext.setEnabled(is_struct)           # extraction freq: structure modes only
-        self.order.setEnabled(not is_struct)
-        self.passive.setEnabled(not is_struct)
+        self.structure.setEnabled(is_struct)       # greyed in universal mode
+        # show the mode's own controls: structure -> f_ext + option, universal -> order + passivity
+        self.mode_stack.setCurrentWidget(self.struct_page if is_struct else self.uni_page)
         # grey structures that don't match the loaded port count
         cur = self.structure.currentIndex()
         first_ok = None
@@ -333,10 +377,15 @@ class TopBar(QtWidgets.QWidget):
             self.structure.blockSignals(True)
             self.structure.setCurrentIndex(first_ok)
             self.structure.blockSignals(False)
-        # structure-specific control enables (after any auto-switch above)
+        # structure-specific option: show only the page for the chosen structure
         key = self.structure.currentData()
-        self.stages.setEnabled(is_struct and key == "tline-rlgc")   # RLGC line only
-        self.iso_r.setEnabled(is_struct and key == "wilkinson-inphase")  # in-phase WPD only
+        self.iso_r.setText("Resistive loss" if key == "branchline" else "Isolation R")
+        if is_struct and key == "tline-rlgc":               # RLGC line only
+            self.opt_box.setCurrentWidget(self.stages_box)
+        elif is_struct and key in ("wilkinson-inphase", "branchline"):
+            self.opt_box.setCurrentWidget(self.iso_r_box)   # isolation R / resistive loss
+        else:
+            self.opt_box.setCurrentWidget(self._opt_empty)
 
     def _on_change(self, *_):
         self._apply_constraints()

@@ -230,6 +230,14 @@ class _PlotPanel:
         self.ax.plot(x, y, color=s["color"], ls=s["ls"], lw=s["lw"], label=s["label"])
         self.series.append({"label": s["label"], "color": s["color"], "x": x, "y": y})
 
+    def mark_fext(self, x, y):
+        """Mark the extraction frequency on the model curve (structure modes): the
+        point the lumped value was read off, and the centre of the band-drift window."""
+        if x is None or y != y:                  # None / NaN
+            return
+        self.ax.plot([x], [y], marker="o", ms=7.0, mfc=MODEL[1], mec="white",
+                     mew=1.1, ls="none", zorder=6)
+
     def clear_axes(self):
         self.ax.clear(); self.series = []; self.markers = []
 
@@ -436,6 +444,9 @@ class PlotView(QtWidgets.QWidget):
         f = np.asarray(res.freq, dtype=float); fg = f / 1e9
         xlabel = r"$f\ \mathrm{(GHz)}$"
         self._last = {"f_Hz": f}
+        # extraction-frequency marker: structure modes only (universal has no f_ext)
+        fext = res.metrics.get("f_extract") if (res.mode == "structure" and res.metrics) else None
+        kx = int(np.argmin(np.abs(f - float(fext)))) if fext else None
         for side, combo in zip(SIDES, self.selectors):
             sel = combo.currentData()
             magp = self._panels["mag" + side]; php = self._panels["ph" + side]
@@ -463,6 +474,13 @@ class PlotView(QtWidgets.QWidget):
                 spec = res.aux_traces[sel]
                 self._plot_aux(magp, fg, xlabel, spec["top"], f"{sel}|top")
                 self._plot_aux(php, fg, xlabel, spec["bottom"], f"{sel}|bottom")
+
+        if kx is not None:                       # mark f_ext on each model curve
+            for panel in self._panels.values():
+                for s in panel.series:
+                    if s["label"] == MODEL[0] and kx < len(s["y"]):
+                        panel.mark_fext(float(s["x"][kx]), float(s["y"][kx]))
+                        break
 
         for panel in self._panels.values():
             panel.draw()

@@ -65,13 +65,22 @@ def _convert_structure(state, net, res):
     pos = net.f[net.f > 0]
     if pos.size and (state.f_extract < pos[0] or state.f_extract > pos[-1]):
         res.messages.append(
-            f"f_ext {format_eng(state.f_extract, 'Hz')} outside the data; "
+            f"ext. frequency {format_eng(state.f_extract, 'Hz')} outside the data; "
             f"extracted at {format_eng(metrics.get('f_extract'), 'Hz')}")
     _nl.clamp_ir(ir)                          # one clamped model: netlist == overlay == table
     res.ir = ir
     res.physical = True
     res.metrics = metrics
     res.value_rows = _nl.clamp_rows(rows)
+    try:                                      # per-element tolerance at f_ext
+        drift = struct.value_drift(
+            net, res.value_rows, metrics.get("f_extract", state.f_extract)) or {}
+        # drop clamped placeholders (a ~0 value gives a meaningless relative tolerance)
+        floor = {"H": 1e-17, "F": 1e-17, "Ω": 1e-11}
+        res.value_drift = {lab: drift[lab] for lab, val, unit in res.value_rows
+                           if lab in drift and abs(val) > floor.get(unit, 0.0)}
+    except Exception as exc:                          # noqa: BLE001
+        res.messages.append(f"value tolerance failed: {exc}")
     res._structure = struct                          # noqa: SLF001 (used by GUI schematic)
     # rebuild the model response from the extracted RLC for the overlay
     try:

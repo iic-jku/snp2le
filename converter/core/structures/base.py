@@ -52,3 +52,36 @@ class Structure(ABC):
         """Preferred initial plot selectors (list of 4 labels), or None to use
         the default S-parameter set."""
         return None
+
+    def value_drift(self, net, value_rows, f_extract):
+        """Per-element tolerance at the extraction frequency: {label: percent}.
+
+        Returns, per value-row label, how far the parameter the measured data implies
+        at f_ext differs from the model value (see `fext_tolerance_pct`).  Directly
+        read reciprocal terms (e.g. the series L, R) match exactly (0 %); terms the
+        model can only approximate (e.g. a shunt averaged over two asymmetric ports)
+        carry the residual.  Frequency dispersion away from f_ext is left to the
+        plots.  Default: no tolerance info (a purely synthesised model with no
+        data-side decomposition)."""
+        return {}
+
+    @staticmethod
+    def fext_tolerance_pct(curve, x0, f, f_extract):
+        """Tolerance of a data-derived parameter `curve` (over frequency) against the
+        model value `x0`, evaluated at the extraction frequency, in percent:
+
+            |curve(f_ext) - x0| / |x0| * 100
+
+        taken at the (positive) frequency sample nearest f_extract.  NaN when undefined."""
+        c = np.asarray(curve, dtype=float)
+        if not np.isfinite(x0) or x0 == 0:
+            return float("nan")
+        fa = np.asarray(f, dtype=float)
+        pos = np.where(fa > 0)[0]
+        if pos.size == 0:
+            return float("nan")
+        k = int(pos[np.argmin(np.abs(fa[pos] - float(f_extract)))])
+        val = c[k]
+        if not np.isfinite(val):
+            return float("nan")
+        return float(abs(val - x0) / abs(x0) * 100.0)

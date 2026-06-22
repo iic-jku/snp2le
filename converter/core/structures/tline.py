@@ -90,6 +90,19 @@ class TransmissionLine(Structure):
     def default_plots(self):
         return ["R' / L'", "G' / C'", "S11", "S21"]
 
+    def value_drift(self, net, value_rows, f_extract):
+        z0 = float(np.real(net.z0.flatten()[0]))
+        D = _rlgc_decomp(net.s, net.f, z0)
+        vals = {lab: v for lab, v, _ in value_rows}
+        n = max(1, int(round(vals.get("N_seg", 1))))     # per-cell = whole-line / N
+        with np.errstate(divide="ignore", invalid="ignore"):
+            Rsh = 1.0 / np.maximum(D["Gp"] / n, 1e-30)
+            Zc = np.sqrt(D["Lp"] / D["Cp"])
+        curves = {"Z_c": Zc, "R_s": D["Rp"] / n, "L_s": D["Lp"] / n,
+                  "C_sh": D["Cp"] / n, "R_sh": Rsh}
+        return {lab: self.fext_tolerance_pct(c, vals[lab], net.f, f_extract)
+                for lab, c in curves.items() if lab in vals}
+
     def freq_traces(self, net, model_s):
         """Frequency-domain trace sets for the Plot view (data vs model):
           * "R' / L'" - series resistance and inductance of the line
