@@ -47,7 +47,7 @@ unitx=1
 logx=0
 logy=1
 linewidth_mult=4}
-T {Testbench for Noise analysis - Bandpass Filter} 620 -1720 0 0 1 1 {}
+T {Ngspice Testbench for Noise analysis - Bandpass Filter} 590 -1720 0 0 1 1 {}
 N 940 -980 940 -920 {lab=vin}
 N 940 -860 940 -800 {lab=GND}
 N 860 -980 940 -980 {lab=vin}
