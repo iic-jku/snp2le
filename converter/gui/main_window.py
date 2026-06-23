@@ -108,7 +108,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_reset(self):
         """Restore the whole application to its freshly-opened state."""
         self._cancel_sim()                        # stop any running / pending simulation
-        # controls -> defaults (also unticks 'Ngspice output', clears the status)
+        # controls -> defaults (also unticks 'Show output', clears the status)
         self.top.reset_controls()
         # drop the simulation overlay and any popped-out plot window
         self.plots.reset()

@@ -290,7 +290,7 @@ class TopBar(QtWidgets.QWidget):
     def reset_controls(self):
         """Restore every control to its default, without triggering a recompute.
 
-        Also unticks 'Ngspice output' and clears the run-status label so the bar
+        Also unticks 'Show output' and clears the run-status label so the bar
         matches a freshly-opened window; the caller recomputes once."""
         widgets = (self.mode, self.structure, self.stages, self.iso_r, self.order,
                    self.passive, self.sim_output, self.simulator)
