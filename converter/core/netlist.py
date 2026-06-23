@@ -15,7 +15,7 @@ def _num(x: float) -> str:
 
 
 # Simulator element-value limits.  ngspice floors a resistance below 1e-12 ohm to
-# 1e-12 (with the "resistor too small" warning), so we clamp R to that range; this
+# 1e-12 (with the "resistor too small" warning), so we clamp R to that range. This
 # matches what the simulator does anyway, so the result is unchanged.  C/L get
 # wide safety bounds that leave every realistic value untouched (including the
 # universal macromodel's 1 F state capacitors).  V sources and controlled-source
@@ -168,7 +168,7 @@ def render_ngspice(ir: CircuitIR) -> str:
 # --------------------------------------------------------------------------- #
 # VACASK syntax matched to an Xschem-exported, VACASK-runnable testbench:
 #   * instances:  name ( nodes ) model param=value
-#   * passives reference a model (resistor/capacitor/inductor); sources are built in
+#   * passives reference a model (resistor/capacitor/inductor). Sources are built in
 # Like the ngspice subckt, the device models and their OSDI loads are NOT redeclared
 # here - the testbench / VACASK common lib provides them (OSDI path
 # /foss/pdks/ihp-sg13g2/libs.tech/vacask/osdi).
@@ -192,7 +192,9 @@ def _vc_instance(e: Element) -> str:
     if e.kind == "E":                                 # VCVS, gain in V/V
         return f"{e.name} ({n} {e.ctrl[0]} {e.ctrl[1]}) vcvs gain={_num(e.value)}"
     if e.kind == "F":                                 # CCCS (senses a vsource branch)
-        return f"{e.name} ({n}) cccs probe={e.ctrl[0]} gain={_num(e.value)}"
+        # VACASK reads probe= as an expression, so the sensed source's instance name
+        # must be a quoted string (probe="V1"), not a bare name (the Spectre form).
+        return f'{e.name} ({n}) cccs probe="{e.ctrl[0]}" gain={_num(e.value)}'
     raise KeyError(e.kind)
 
 
