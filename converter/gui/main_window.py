@@ -32,6 +32,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim_proc = None             # running xschem QProcess
         self._sim_start = 0.0             # when the current run started (for auto-import)
         self._sim_timer = None            # polls sim_data for the result after a run
+        self._sim_last_output = ""        # captured xschem/ngspice output (for diagnostics)
         example = os.path.join(self._examples_dir, "blc_ihp-sg13g2.s4p")
         try:
             self.net = io.load_touchstone(example)
@@ -90,9 +91,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_view_change(self, view):
         self.stack.setCurrentIndex(0 if view == "design" else 1)
 
-    def on_reset(self):
-        """Restore the whole application to its freshly-opened state."""
-        # stop any running / pending simulation without firing its handlers
+    def _cancel_sim(self):
+        """Stop any running / pending simulation (run or auto-import) without firing
+        its handlers, and free the Run button - e.g. so a new testbench can be run
+        while an earlier import is still pending ('Importing…')."""
         self._stop_sim_timer()
         if self._sim_proc is not None:
             try:
@@ -102,6 +104,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 pass
             self._sim_proc.kill()
         self._reset_run_button()                  # 'Run Simulation', enabled, proc None
+
+    def on_reset(self):
+        """Restore the whole application to its freshly-opened state."""
+        self._cancel_sim()                        # stop any running / pending simulation
         # controls -> defaults (also unticks 'Ngspice output', clears the status)
         self.top.reset_controls()
         # drop the simulation overlay and any popped-out plot window
@@ -205,9 +211,12 @@ class MainWindow(QtWidgets.QMainWindow):
             "Xschem schematic (*.sch);;All files (*)")
         if not path:
             return
+        self._cancel_sim()                 # free the Run button if a run/import is pending
+        self.top.clear_sim_status()        # clear the previous run's outcome label
         self._sch_path = path
         self._last_sch_dir = os.path.dirname(path)
         tb = os.path.basename(path)
+        self.top.set_simulator("vacask" if "vacask" in tb.lower() else "ngspice")
         self.top.load_sch.setToolTip(f"Testbench: {tb}")
         self.top.run_sim.setToolTip(f"Run testbench: {tb}")
 
@@ -220,12 +229,18 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._stop_sim_timer()                            # cancel any pending poll
         self.top.clear_sim_status()                       # reset the outcome label
+        sim = self.top.simulator.currentData()            # 'ngspice' | 'vacask'
+        show = self.top.sim_output.isChecked()
         prog, args, cwd = xschem.simulate_command(
-            self._sch_path, show_output=self.top.sim_output.isChecked())
+            self._sch_path, show_output=show, simulator=sim)
         os.makedirs(os.path.join(cwd, "simulations"), exist_ok=True)
         self._sim_proc = QtCore.QProcess(self)
         self._sim_proc.setWorkingDirectory(cwd)
         self._sim_proc.setProcessChannelMode(QtCore.QProcess.ProcessChannelMode.MergedChannels)
+        if sim == "vacask" and show:                      # let the postprocess show plots
+            env = QtCore.QProcessEnvironment.systemEnvironment()
+            env.insert("SHOW_PLOTS", "1")
+            self._sim_proc.setProcessEnvironment(env)
         self._sim_proc.finished.connect(self._on_sim_finished)
         self._sim_proc.errorOccurred.connect(self._on_sim_error)
         self._sim_start = time.time()                     # to locate the result file
@@ -280,6 +295,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_sim_finished(self, code, _status):
         out = bytes(self._sim_proc.readAll()).decode(errors="replace") if self._sim_proc else ""
+        self._sim_last_output = out                  # keep for the no-result diagnostic
         tb = os.path.basename(self._sch_path)
         if code != 0:
             self._reset_run_button()
@@ -320,11 +336,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._finish_sim_import(result)      # import what we have
             else:
                 self.top.set_sim_status("failed!", False)
+                log = (self._sim_last_output or "").strip()
                 QtWidgets.QMessageBox.information(
                     self, "Run simulation",
                     f"Simulation of {os.path.basename(self._sch_path)} finished, but no "
                     f"fresh result appeared in:\n{self._sim_output_dir()}\n\n"
-                    "Use 'Import simulation' to load it manually.")
+                    "Use 'Import simulation' to load it manually."
+                    + (f"\n\n--- xschem / ngspice output ---\n{log[-1500:]}" if log else ""))
 
     def _finish_sim_import(self, result):
         self._stop_sim_timer()

@@ -211,13 +211,20 @@ class TopBar(QtWidgets.QWidget):
         self.load_sch = QtWidgets.QPushButton("Load .sch")
         self.load_sch.setObjectName("primary"); self.load_sch.setFixedHeight(30)
         self.load_sch.setIcon(_load_icon()); self.load_sch.setIconSize(QtCore.QSize(16, 16))
+        # simulator used to run the loaded testbench (ngspice, or VACASK via xschem)
+        self.simulator = QtWidgets.QComboBox()
+        self.simulator.addItem("Ngspice", "ngspice")
+        self.simulator.addItem("VACASK", "vacask")
+        self.simulator.setFixedWidth(120)
+        self.simulator.setToolTip("Simulator that runs the loaded testbench.\n"
+                                  "Auto-set from the testbench name when one is loaded.")
         self.run_sim = QtWidgets.QPushButton("Run Simulation")
         self.run_sim.setFixedHeight(30)
-        # when off, the run suppresses ngspice's interactive console + plot windows
-        self.sim_output = QtWidgets.QCheckBox("Ngspice output")
+        # when off, the run suppresses the simulator's interactive console + plot windows
+        self.sim_output = QtWidgets.QCheckBox("Show output")
         self.sim_output.setChecked(False)
         self.sim_output.setToolTip(
-            "Show ngspice's interactive console and plot windows during the run.\n"
+            "Show the simulator's console and plot windows during the run.\n"
             "Uncheck to run quietly (results are still imported into the plot).")
         # 'successful!' / 'failed!' shown below the checkbox after a run
         self.sim_status = QtWidgets.QLabel("")
@@ -245,6 +252,7 @@ class TopBar(QtWidgets.QWidget):
         lay.addLayout(self._labeled("", self.exp_ng))
         lay.addLayout(self._labeled("", self.exp_va))
         lay.addLayout(self._labeled("", self.load_sch))
+        lay.addLayout(self._labeled("Simulator", self.simulator))
         lay.addLayout(self._labeled("", self.run_sim))
         # 'Ngspice output' sits at the widget row (level with 'Enforce passivity');
         # the status text drops below it, bottom-aligned with the buttons' bottom edge.
@@ -285,7 +293,7 @@ class TopBar(QtWidgets.QWidget):
         Also unticks 'Ngspice output' and clears the run-status label so the bar
         matches a freshly-opened window; the caller recomputes once."""
         widgets = (self.mode, self.structure, self.stages, self.iso_r, self.order,
-                   self.passive, self.sim_output)
+                   self.passive, self.sim_output, self.simulator)
         for w in widgets:
             w.blockSignals(True)
         self.mode.setCurrentIndex(0)                       # universal
@@ -297,11 +305,18 @@ class TopBar(QtWidgets.QWidget):
         self.order.setValue(6)
         self.passive.setChecked(True)
         self.sim_output.setChecked(False)
+        self.simulator.setCurrentIndex(0)                  # Ngspice
         for w in widgets:
             w.blockSignals(False)
         self._set_fext(10e9)                               # default extraction freq
         self.clear_sim_status()
         self._apply_constraints()
+
+    def set_simulator(self, key):
+        """Select the simulator ('ngspice' / 'vacask'), e.g. from the testbench name."""
+        i = self.simulator.findData(key)
+        if i >= 0:
+            self.simulator.setCurrentIndex(i)
 
     def set_view(self, name):
         """Select the Design (name='design') or Plot (name='plot') view."""
