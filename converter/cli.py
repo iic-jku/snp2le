@@ -21,7 +21,7 @@ import glob
 import os
 import sys
 
-from core import io, engine, units
+from core import io, engine, units, netlist
 from core.state import ConverterState
 from core.structures import structure_items
 
@@ -83,23 +83,53 @@ def _run_testbench(sch, simulator, show_output):
     stem = os.path.splitext(os.path.basename(sch))[0]
     non = {".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out",
            ".svg", ".png", ".ps", ".pdf", ".sch"}
-    for _ in range(25):                                     # let the result settle
-        cands = []
-        if os.path.isdir(sim_data):
-            for f in os.listdir(sim_data):
-                if os.path.splitext(f)[1].lower() in non or not f.startswith(stem):
-                    continue
-                p = os.path.join(sim_data, f)
-                try:
-                    if os.path.getmtime(p) >= start - 2 and os.path.getsize(p) > 0:
-                        cands.append((os.path.getmtime(p), p))
-                except OSError:
-                    continue
-        if cands:
-            return max(cands)[1]
-        time.sleep(0.2)
-    print(f"  no fresh result for '{stem}' in {sim_data}", file=sys.stderr)
-    return None
+    data_exts = {".txt", ".data", ".dat", ".csv"}
+
+    def _find():
+        """Newest file freshly written by this run: prefer one named after the
+        testbench, else any data-style file (wrdata targets vary)."""
+        if not os.path.isdir(sim_data):
+            return None
+        named, data = [], []
+        for f in os.listdir(sim_data):
+            ext = os.path.splitext(f)[1].lower()
+            if ext in non:
+                continue
+            p = os.path.join(sim_data, f)
+            try:
+                mt = os.path.getmtime(p)
+            except OSError:
+                continue
+            if mt < start - 1:                             # not (re)written this run
+                continue
+            if f.startswith(stem):
+                named.append((mt, p))
+            elif ext in data_exts:
+                data.append((mt, p))
+        pool = named or data
+        return max(pool)[1] if pool else None
+
+    # xschem launches ngspice and quits *before* the result is written, so poll until
+    # the file appears and its size settles (so we never read a half-written table).
+    # The PDK model load + AC sweep can take tens of seconds, so wait generously.
+    print(f"  waiting for the result in {sim_data} (up to 120 s) …")
+    deadline = time.time() + 120.0
+    last = None
+    while time.time() < deadline:
+        result = _find()
+        if result is not None:
+            try:
+                size = os.path.getsize(result)
+            except OSError:
+                size = -1
+            if size > 0 and last == (result, size):
+                return result                              # appeared and settled
+            last = (result, size)
+        time.sleep(0.4)
+    result = _find()
+    if result is None:
+        print(f"  no fresh result for '{stem}' in {sim_data} after 120 s", file=sys.stderr)
+    return result
 
 
 def _show_plots(res, sim, sparams):
@@ -157,8 +187,17 @@ def cmd_convert(args):
             print(f"[FAIL] {src}: {res.error}", file=sys.stderr); rc = 1; continue
         last_res = res
         for dialect in formats:
-            text = res.vacask if dialect == "vacask" else res.ngspice
             out = _out_path(src, args.output, dialect, len(paths), len(formats))
+            if res.ir is not None:
+                # name the .SUBCKT after the output file (bpf_le.spice -> bpf_le), so a
+                # testbench that instantiates that name resolves the .include - the GUI
+                # export does the same; writing the default 's_equivalent' breaks the run
+                res.ir.name = netlist.safe_subckt_name(
+                    os.path.splitext(os.path.basename(out))[0])
+                text = (netlist.render_vacask(res.ir) if dialect == "vacask"
+                        else netlist.render_ngspice(res.ir))
+            else:
+                text = res.vacask if dialect == "vacask" else res.ngspice
             with open(out, "w") as fh:
                 fh.write(text)
             if not args.quiet:
