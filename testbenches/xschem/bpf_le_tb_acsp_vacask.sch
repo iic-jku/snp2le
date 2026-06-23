@@ -32,14 +32,14 @@ only_toplevel=false
 value="
 control
   // User Constants
-  var f_min = 120G
-  var f_max = 200G
-  var f0 = 160G
+  var f_min = 120e9
+  var f_max = 200e9
+  var f0 = 160e9
 
   // AC S-parameter sweep across the BPF band.
   // Ports are (vsource, series-resistor) pairs; the 50 ohm reference impedance
   // is set by rp1 / rp2.  Output vectors are s(1,1), s(2,1), s(1,2), s(2,2).
-  analysis sp1 acsp ports=[\\"V1\\", \\"R1\\", \\"V2\\", \\"R2\\"] from=120e9 to=200e9 mode=\\"lin\\" points=1001
+  analysis sp1 acsp ports=[\\"V1\\", \\"R1\\", \\"V2\\", \\"R2\\"] from=f_min to=f_max mode=\\"lin\\" points=1001
 
   postprocess(PYTHON, \\"../bpf_le_tb_acsp_vacask_eval.py\\")
 endc
@@ -48,12 +48,15 @@ C {simulator_commands_shown.sym} 1880 -1330 0 0 {name=Libs_VACASK
 simulator=vacask
 only_toplevel=false
 value="
+// resistor + vsource models/loads are auto-emitted by the R1/R2/V1/V2 symbols;
+// only declare the device types that appear inside the included .inc.
+model capacitor capacitor
+model inductor inductor
+model vccs vccs
+model cccs cccs
+load \\"capacitor.osdi\\"
+load \\"inductor.osdi\\"
 include \\"../../../netlist/spectre/bpf_le.inc\\"
-include \\"sg13g2_vacask_common.lib\\"
-include \\"cornerMOSlv.lib\\" section=mos_tt
-include \\"cornerRES.lib\\" section=res_typ
-include \\"cornerCAP.lib\\" section=cap_typ
-include \\"cornerDIO.lib\\" section=dio_tt
 "}
 C {launcher.sym} 1620 -1330 0 0 {name=h1
 descr="Simulate VACASK"
