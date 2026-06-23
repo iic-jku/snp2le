@@ -191,7 +191,7 @@ def cmd_convert(args):
             if res.ir is not None:
                 # name the .SUBCKT after the output file (bpf_le.spice -> bpf_le), so a
                 # testbench that instantiates that name resolves the .include - the GUI
-                # export does the same; writing the default 's_equivalent' breaks the run
+                # export does the same. Writing the default 's_equivalent' breaks the run
                 res.ir.name = netlist.safe_subckt_name(
                     os.path.splitext(os.path.basename(out))[0])
                 text = (netlist.render_vacask(res.ir) if dialect == "vacask"

@@ -58,7 +58,7 @@ def _coupled_groups(ir):
 
 def rlc_sparams(ir, freq_hz, z0=50.0):
     ports = list(ir.ports)
-    # node index map; ground '0' is the reference (excluded from the matrix)
+    # node index map. Ground '0' is the reference (excluded from the matrix)
     nodes = set()
     for e in ir.elements:
         for n in e.nodes:
@@ -103,7 +103,7 @@ def rlc_sparams(ir, freq_hz, z0=50.0):
         for e in ir.elements:
             a, b = e.nodes[0], e.nodes[1]
             if e.kind == "R":
-                # R <= 0 is an ideal short (a wire); stamp a large conductance so
+                # R <= 0 is an ideal short (a wire). Stamp a large conductance so
                 # the node is tied rather than left floating
                 stamp(a, b, 1.0 / e.value if e.value > 1e-9 else 1e9)
             elif e.kind == "C":

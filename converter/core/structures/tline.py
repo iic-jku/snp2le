@@ -68,7 +68,7 @@ class TransmissionLine(Structure):
         ir = CircuitIR(name="tline_rlgc", ports=["p1", "p2"], physical=True)
         ir.comments.append(f"RLGC line, {n} L-cells, extracted at {f[k]/1e9:.2f} GHz")
         # N L-cells: series L+R, then a shunt C||G to ground after each cell.  The
-        # output port (p2) keeps its shunt; the input port has none (rlgc_from_s2p).
+        # output port (p2) keeps its shunt. The input port has none (rlgc_from_s2p).
         prev = "p1"
         for i in range(n):
             out = "p2" if i == n - 1 else f"n{i+1}"

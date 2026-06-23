@@ -35,7 +35,7 @@ class Wilkinson(Structure):
     n_ports = 3
 
     def extract(self, net, f_extract, n_segments=None, iso_r=True):   # both: unused here
-        # The quadrature divider always keeps its Rint+Lint isolation network; the
+        # The quadrature divider always keeps its Rint+Lint isolation network. The
         # iso_r toggle applies only to the in-phase model (see WilkinsonInphase).
         if net.nports != 3:
             raise ValueError("Wilkinson model needs a 3-port (.s3p)")

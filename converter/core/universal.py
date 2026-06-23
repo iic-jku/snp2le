@@ -36,8 +36,8 @@ class FitResult:
 # (rather than scraping scikit-rf's warning text) catches narrow violation bands
 # that a low count misses, while staying cheap in the common case.
 _PASSIVITY_N_SAMPLES = (200, 800)
-# An enforced/reduced model is only accepted if it stays this close to the data;
-# otherwise we keep the accurate (near-passive) fit rather than ship a wreck.
+# An enforced/reduced model is only accepted if it stays this close to the data.
+# Otherwise we keep the accurate (near-passive) fit rather than ship a wreck.
 _USABLE_RMS = 0.1
 
 

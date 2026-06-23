@@ -74,7 +74,7 @@ class DesignView(QtWidgets.QWidget):
             "At the ext. frequency (the ○ marker on the model curve), the parameter the "
             "measured data implies is compared to the model value:\n\n"
             "    tolerance = |value − model| / |model| × 100\n\n"
-            "Directly-read reciprocal terms (e.g. the series L, R) read 0 % — the model "
+            "Directly-read reciprocal terms (e.g. the series L, R) read 0 %, since the model "
             "reproduces them exactly. Terms the model must approximate (e.g. the shunt C "
             "forced equal across two slightly asymmetric ports) carry the residual it "
             "cannot fit. Frequency dispersion away from the ext. frequency is visible in "
@@ -129,7 +129,7 @@ class DesignView(QtWidgets.QWidget):
     @staticmethod
     def _tol_text(pct):
         if pct != pct:                     # NaN: not defined for this value
-            return "—", "#7d828c"
+            return "n/a", "#7d828c"
         if pct > 100.0:                    # value not stable in the operating band
             return ">100%", "#d95c4c"
         return f"±{pct:.1f}%", DesignView._tol_color(pct)

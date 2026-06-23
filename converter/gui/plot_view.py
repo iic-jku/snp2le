@@ -28,7 +28,7 @@ from core import io
 # Curve styling: JKU colours paired with distinct line styles, so the traces
 # stay readable in black-and-white and for colour-blind viewers.  `data` is the
 # loaded Touchstone, `model` the fit/extraction, `sim` an imported ngspice
-# simulation.  Each entry is (label, colour, matplotlib line style); the dash
+# simulation.  Each entry is (label, colour, matplotlib line style). The dash
 # tuples are (offset, (on, off)) in points.
 CURVE_STYLES = [
     ("data",       JKU_GRAY,  "-"),                  # solid
@@ -40,7 +40,7 @@ SIDES = ["A", "B", "C", "D"]
 DEFAULTS = ["S11", "S21", "S12", "S22"]
 
 # matplotlib named line style -> Qt pen style, for drawing matching legend
-# swatches; dash-tuple styles are converted on the fly in _qt_pen.
+# swatches. Dash-tuple styles are converted on the fly in _qt_pen.
 _QT_DASH = {
     "-": QtCore.Qt.SolidLine, "--": QtCore.Qt.DashLine,
     "-.": QtCore.Qt.DashDotLine, ":": QtCore.Qt.DotLine,
@@ -57,7 +57,7 @@ def _qt_pen(color, linestyle, width=2.0):
     if isinstance(linestyle, (tuple, list)):
         _, seq = linestyle
         pen.setStyle(QtCore.Qt.CustomDashLine)
-        # Qt dash units are multiples of the pen width; matplotlib's are points
+        # Qt dash units are multiples of the pen width. Matplotlib's are points
         pen.setDashPattern([max(0.5, v / width) for v in seq])
     else:
         pen.setStyle(_QT_DASH.get(linestyle, QtCore.Qt.SolidLine))
@@ -322,7 +322,7 @@ class PlotView(QtWidgets.QWidget):
         self.selectors = []
         for d in DEFAULTS:
             # sizes to the longest trace label ("Rseries / Rshunt") via Qt's own
-            # metrics, so it fits on any platform font; the legend after the
+            # metrics, so it fits on any platform font. The legend after the
             # selectors shifts left to match
             cb = FitComboBox("Rseries / Rshunt")
             cb.currentIndexChanged.connect(self._render)
@@ -333,7 +333,7 @@ class PlotView(QtWidgets.QWidget):
             bar.addWidget(self._hint(name)); bar.addSpacing(8)
         bar.addStretch(1)
         # universal-mode status mirrored from the Design tab (passivity + order),
-        # placed just before Export CSV; hidden in structure mode
+        # placed just before Export CSV, hidden in structure mode
         self.stats_box = QtWidgets.QWidget()
         sb = QtWidgets.QHBoxLayout(self.stats_box)
         sb.setContentsMargins(0, 0, 14, 0); sb.setSpacing(16)
@@ -405,7 +405,7 @@ class PlotView(QtWidgets.QWidget):
         # extra traces first in the dropdown, then the S-parameters
         items = [(lbl, lbl) for lbl in aux]
         items += [(f"S{i+1}{j+1}", (i, j)) for i in range(n) for j in range(n)]
-        # structures may declare preferred defaults; else extra traces then S21,
+        # structures may declare preferred defaults, else extra traces then S21,
         # else the plain S-parameter set
         dp = getattr(res, "default_plots", None)
         if dp:
@@ -415,7 +415,7 @@ class PlotView(QtWidgets.QWidget):
         else:
             defaults = list(DEFAULTS)
         # re-apply defaults when the available extra traces OR the preferred default
-        # set change (mode/structure switch); otherwise preserve the user's selections
+        # set change (mode/structure switch). Otherwise preserve the user's selections
         reset = (tuple(aux) != self._prev_aux) or (tuple(defaults) != self._prev_defaults)
         self._prev_aux = tuple(aux)
         self._prev_defaults = tuple(defaults)
@@ -502,7 +502,7 @@ class PlotView(QtWidgets.QWidget):
                            "lw": 1.6, "y": model_y})
         panel.plot_series(fg, series, xlabel, spec["ylabel"])
         panel.head.setText(spec.get("title", ""))
-        # frame the y-axis on the model curve so it fills the axis; resonance poles
+        # frame the y-axis on the model curve so it fills the axis. Resonance poles
         # in the element values and spikes in the measured data simply clip
         ylim = self._frame_ylim(model_y, data_y) or spec.get("ylim")
         if ylim:

@@ -142,7 +142,7 @@ class TopBar(QtWidgets.QWidget):
         for key, name, nports in structure_items():
             self.structure.addItem(name, key); self._struct_ports[key] = nports
 
-        # extraction frequency (structure modes); accepts eng. notation e.g. '10 GHz'
+        # extraction frequency (structure modes). Accepts eng. notation e.g. '10 GHz'
         self.f_ext = QtWidgets.QLineEdit("10 GHz"); self.f_ext.setFixedWidth(92)
         self.f_ext.setToolTip("Frequency at which the lumped element values are extracted.")
         self._f_extract_hz = 10e9
@@ -206,7 +206,7 @@ class TopBar(QtWidgets.QWidget):
         self.exp_va = QtWidgets.QPushButton("Export VACASK")
         self.exp_va.setObjectName("primary"); self.exp_va.setFixedHeight(30)
 
-        # Xschem testbench: load a .sch and simulate it; only usable if xschem
+        # Xschem testbench: load a .sch and simulate it. Only usable if xschem
         # is installed (checked once), otherwise both are greyed out
         self.load_sch = QtWidgets.QPushButton("Load .sch")
         self.load_sch.setObjectName("primary"); self.load_sch.setFixedHeight(30)
@@ -254,8 +254,8 @@ class TopBar(QtWidgets.QWidget):
         lay.addLayout(self._labeled("", self.load_sch))
         lay.addLayout(self._labeled("Simulator", self.simulator))
         lay.addLayout(self._labeled("", self.run_sim))
-        # 'Ngspice output' sits at the widget row (level with 'Enforce passivity');
-        # the status text drops below it, bottom-aligned with the buttons' bottom edge.
+        # 'Show output' sits at the widget row (level with 'Enforce passivity').
+        # The status text drops below it, bottom-aligned with the buttons' bottom edge.
         # An inner box one button tall holds both: checkbox at top, status at bottom.
         sim_box = QtWidgets.QVBoxLayout(); sim_box.setSpacing(2)
         sim_band = QtWidgets.QLabel(""); sim_band.setProperty("class", "fieldLabel")

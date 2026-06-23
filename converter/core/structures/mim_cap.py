@@ -50,7 +50,7 @@ class MimCap(Structure):
         Zs, Zsh1, Zsh2 = pi_branches(net)
 
         lo = int(np.argmin(np.abs(f - max(f[-1] / 20.0, f[f > 0][0]))))
-        # series C read off at low f; L / R / shunt C at the extraction frequency
+        # series C read off at low f, L / R / shunt C at the extraction frequency
         hi = self.nearest_index(f, f_extract)
 
         Cs = float(-1.0 / (w[lo] * Zs.imag[lo]))          # series C at low f

@@ -36,7 +36,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.resize(1500, 940)
 
         self.state = ConverterState()
-        # seed with a bundled example; fall back to the synthetic demo
+        # seed with a bundled example, or fall back to the synthetic demo
         self._examples_dir = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "examples")
         self._last_export_dir = {}        # per-dialect remembered export folder
@@ -82,7 +82,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.reset_clicked.connect(self.on_reset)
         self.design.save_clicked.connect(self.on_save_design)
         self.design.load_clicked.connect(self.on_load_design)
-        # pop the plots out -> show Design view; dock them back -> return to Plot
+        # pop the plots out -> show Design view. Dock them back -> return to Plot
         self.plots.popped_out.connect(lambda: self.top.set_view("design"))
         self.plots.docked.connect(lambda: self.top.set_view("plot"))
 
