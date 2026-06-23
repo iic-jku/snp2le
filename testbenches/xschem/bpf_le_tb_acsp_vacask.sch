@@ -48,7 +48,7 @@ C {simulator_commands_shown.sym} 1880 -1330 0 0 {name=Libs_VACASK
 simulator=vacask
 only_toplevel=false
 value="
-include \\"..\..\..\netlist/spectre/bpf_le.inc\\"
+include \\"../../../netlist/spectre/bpf_le.inc\\"
 include \\"sg13g2_vacask_common.lib\\"
 include \\"cornerMOSlv.lib\\" section=mos_tt
 include \\"cornerRES.lib\\" section=res_typ
@@ -65,6 +65,7 @@ puts $sim(spectre,0,cmd)
 
 # change the simulator to be used (#0 in spectre category is VACASK)
 set sim(spectre,default) 0
+xschem set netlist_type spectre
 
 # Create FET and BIP .save file
 mkdir -p $netlist_dir
