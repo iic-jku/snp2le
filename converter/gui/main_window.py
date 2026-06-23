@@ -20,7 +20,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("S-Parameter To Lumped Element Netlist Converter")
         from .logo import logo_icon
         self.setWindowIcon(logo_icon())
-        self.resize(1500, 940)
+        # Preferred size, but never larger than the screen: on a small laptop a fixed
+        # 1500x940 would open off-screen with clipped controls.  availableGeometry()
+        # excludes the taskbar and is in logical px (Qt already does the DPI scaling),
+        # so we clamp to ~92% of it and centre the window.
+        screen = QtWidgets.QApplication.primaryScreen()
+        avail = screen.availableGeometry() if screen else None
+        if avail is not None:
+            w = min(1500, int(avail.width() * 0.92))
+            h = min(940, int(avail.height() * 0.92))
+            self.resize(w, h)
+            self.move(avail.x() + (avail.width() - w) // 2,
+                      avail.y() + (avail.height() - h) // 2)
+        else:
+            self.resize(1500, 940)
 
         self.state = ConverterState()
         # seed with a bundled example; fall back to the synthetic demo
