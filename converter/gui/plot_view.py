@@ -344,7 +344,7 @@ class PlotView(QtWidgets.QWidget):
         self.import_btn = QtWidgets.QPushButton("Import simulation")
         self.popout_btn = QtWidgets.QPushButton("Pop out plots"); self.popout_btn.setObjectName("primary")
         self.export_btn.clicked.connect(self.export_csv)
-        self.import_btn.clicked.connect(self.import_sim)
+        self.import_btn.clicked.connect(self._on_sim_button)
         self.popout_btn.clicked.connect(self.toggle_popout)
         bar.addWidget(self.export_btn); bar.addWidget(self.import_btn)
         bar.addWidget(self.popout_btn)
@@ -572,6 +572,27 @@ class PlotView(QtWidgets.QWidget):
         d = os.path.join(repo_root, "sim_data")
         return d if os.path.isdir(d) else repo_root
 
+    def _on_sim_button(self):
+        """Import a simulation, or - if one is already loaded - clear it.  The button
+        toggles between 'Import simulation' and 'Clear simulation', so a different design
+        can be loaded and overlaid without resetting the whole GUI."""
+        if self._sim is not None:
+            self.clear_sim()
+        else:
+            self.import_sim()
+
+    def clear_sim(self):
+        """Drop the imported simulation overlay and revert the button label."""
+        if self._sim is None:
+            return
+        self._sim = None
+        self._render()
+        self._update_sim_button()
+
+    def _update_sim_button(self):
+        self.import_btn.setText("Clear simulation" if self._sim is not None
+                                else "Import simulation")
+
     def import_sim(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "Import ngspice simulation", self._sim_dir(),
@@ -587,12 +608,14 @@ class PlotView(QtWidgets.QWidget):
             self._sim = io.load_ngspice_sim(path)
         except Exception as exc:                          # noqa: BLE001
             self._sim = None
+            self._update_sim_button()
             QtWidgets.QMessageBox.warning(
                 self, "Import failed",
                 f"Could not read this simulation file:\n{exc}")
             return False
         self._last_sim_dir = os.path.dirname(path)
         self._render()
+        self._update_sim_button()
         return True
 
     def reset(self):
@@ -604,6 +627,7 @@ class PlotView(QtWidgets.QWidget):
         self._sim = None
         self._last_sim_dir = ""
         self._prev_aux = None          # force the trace selectors back to defaults
+        self._update_sim_button()      # back to 'Import simulation'
 
     def export_csv(self):
         if not self._last:
