@@ -95,10 +95,13 @@ def rescale_state_resistors(ir, target: float = 1e-9):
 
 
 def safe_subckt_name(text: str, fallback: str = "s_equivalent") -> str:
-    """Turn an arbitrary string (e.g. an export file stem) into a valid SPICE
-    subcircuit name: keep letters/digits/underscore, map the rest to '_', and
-    avoid a leading digit."""
-    name = re.sub(r"[^A-Za-z0-9_]", "_", str(text)).strip("_")
+    """Turn an arbitrary string (e.g. an export file stem) into a subcircuit name that is
+    valid in BOTH ngspice (SPICE3) and VACASK (Spectre).  Only letters, digits and '_' are
+    portable: '-' is the subtraction operator and ' ', '.', '/' etc. are separators, so a
+    name like 'two-port' becomes 'two_port' (otherwise VACASK would not parse it).  Runs of
+    such characters collapse to a single '_', leading/trailing '_' are trimmed, a leading
+    digit is prefixed, and an empty result falls back."""
+    name = re.sub(r"[^A-Za-z0-9_]+", "_", str(text)).strip("_")
     if not name:
         return fallback
     if name[0].isdigit():
@@ -192,9 +195,10 @@ def _vc_instance(e: Element) -> str:
     if e.kind == "E":                                 # VCVS, gain in V/V
         return f"{e.name} ({n} {e.ctrl[0]} {e.ctrl[1]}) vcvs gain={_num(e.value)}"
     if e.kind == "F":                                 # CCCS (senses a vsource branch)
-        # VACASK reads probe= as an expression, so the sensed source's instance name
-        # must be a quoted string (probe="V1"), not a bare name (the Spectre form).
-        return f'{e.name} ({n}) cccs probe="{e.ctrl[0]}" gain={_num(e.value)}'
+        # VACASK names the controlling instance with ctlinst (not Spectre's probe), as a
+        # quoted string: cccs ctlinst="V1" gain=...  (see VACASK test/test_ctlsrc.sim and
+        # docs/dev-builtin.md). ccvs takes the same ctlinst parameter.
+        return f'{e.name} ({n}) cccs ctlinst="{e.ctrl[0]}" gain={_num(e.value)}'
     raise KeyError(e.kind)
 
 

@@ -72,7 +72,13 @@ def simulate_command(sch_path: str, show_output: bool = True, simulator: str = "
             "xschem set netlist_type spectre; "        # generate a Spectre/VACASK netlist
             "write_data [save_params] "                # op-point .save file (as the launcher)
             "$netlist_dir/[file rootname [file tail [xschem get current_name]]].save; "
-            "xschem save; xschem netlist; simulate")
+            "xschem save; xschem netlist; "
+            # drop stale .raw output first: an aborted analysis (e.g. a singular matrix)
+            # writes none, so without this the postprocess would re-read a previous run's
+            # .raw and emit a result that imports as a false 'success'
+            "foreach d [list $netlist_dir [file dirname $netlist_dir]] {"
+            "foreach f [glob -nocomplain [file join $d *.raw]] {file delete -- $f}}; "
+            "simulate")
         args += ["--command", tcl, tb]
         return "xschem", args, cwd
 

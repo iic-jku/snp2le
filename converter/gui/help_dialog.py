@@ -70,7 +70,11 @@ shows a note instead.</li>
 <li><b>Netlist</b>: the generated text for both dialects, with export. <b>Ngspice</b>
 (Berkeley SPICE3, <tt>.spice</tt>) and <b>VACASK</b> (Spectre syntax, <tt>.inc</tt>).
 Transformer coupling is emitted as a builtin <tt>mutual</tt> instance. Device models and
-OSDI loads come from your testbench, not the exported subcircuit.</li>
+OSDI loads come from your testbench, not the exported subcircuit. The subcircuit is named
+after the export file, but only letters, digits and '_' are valid in a SPICE / Spectre
+subcircuit name: a file like <tt>two-port</tt> is exported as subckt <tt>two_port</tt>
+(since '-' is the minus operator), and a note window reports the actual name. Use '_'
+rather than '-' in the file name to keep the file and the subcircuit identical.</li>
 </ul>
 
 <h3>Plot</h3>
@@ -102,6 +106,33 @@ testbench frees the button if a run or import is still pending.</li>
 <li><b>Show output</b>: tick to show the simulator's console and plot windows during the
 run. Leave it unticked to run quietly (the result is imported either way).</li>
 </ul>
+
+<p><b>How a run's outcome is detected.</b> The two simulators report differently, so snp2le
+uses the most reliable signal for each:</p>
+<ul>
+<li><b>Ngspice</b> returns a non-zero exit code when it fails, so an error (a netlist
+problem, non-convergence, or an aborted analysis) is caught at once. A run that finishes
+and writes its result is imported as a success.</li>
+<li><b>VACASK</b> is launched through Xschem, which always exits cleanly itself, and VACASK
+keeps its <i>Completed</i> / <i>Failed</i> / <i>aborted</i> messages on its own console
+rather than passing them back. So the outcome is read from the <b>result file</b>:
+  <ul>
+  <li><b>Completed</b> (success): the analysis ran and the postprocess wrote
+  <tt>sim_data/&lt;testbench&gt;.txt</tt>, which is imported, and the button turns green
+  (<b>successful!</b>).</li>
+  <li><b>Aborted</b>: the analysis started but broke numerically (e.g. a singular matrix).
+  No result is written, but the postprocess leaves an <tt>.aborted</tt> marker, so snp2le
+  reports <b>aborted!</b>.</li>
+  <li><b>Failed</b>: VACASK could not run at all (e.g. a netlist or model error). No result
+  and no marker, so snp2le reports <b>failed!</b>.</li>
+  </ul>
+  Because VACASK is synchronous, all three are decided the instant the run returns - no
+  waiting. Either way, open VACASK's console / log for the specific cause.</li>
+</ul>
+<p>While a run is in progress the status reads <i>running…</i> (for as long as the
+simulation takes) then <i>importing…</i>, and the <b>Run Simulation</b> button becomes a
+<b>Stop</b> button you can press to cancel. A run is not killed for taking long; it is only
+stopped if it goes idle (uses no CPU for a while), i.e. it looks genuinely hung.</p>
 
 <p style="color:#7d828c"><i>Universal mode is built on scikit-rf vector fitting. The
 VACASK passive and <tt>mutual</tt>-coupling syntax follows the confirmed reference

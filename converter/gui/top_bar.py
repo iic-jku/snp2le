@@ -331,6 +331,14 @@ class TopBar(QtWidgets.QWidget):
         self.run_sim.setObjectName("runOk" if ok else "runFail")
         self._repolish(self.run_sim)
 
+    def set_sim_progress(self, text):
+        """Show a neutral in-progress status (e.g. 'running…') in grey, leaving the
+        button at its default colour - it doubles as the Stop button while a run is on."""
+        self.sim_status.setText(text)
+        self.sim_status.setStyleSheet("color:#7d828c; font-size:11px; font-weight:600;")
+        self.run_sim.setObjectName("")
+        self._repolish(self.run_sim)
+
     def clear_sim_status(self):
         self.sim_status.setText("")
         self.run_sim.setObjectName("")           # back to the default button colour

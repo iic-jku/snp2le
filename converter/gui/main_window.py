@@ -46,6 +46,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim_start = 0.0             # when the current run started (for auto-import)
         self._sim_timer = None            # polls sim_data for the result after a run
         self._sim_last_output = ""        # captured xschem/ngspice output (for diagnostics)
+        self._sim_watchdog = None         # hard cap so a stuck run can't pin the Run button
+        self._sim_simulator = ""          # 'ngspice' | 'vacask' of the current run
+        self._sim_output_buf = ""         # xschem output accumulated live during the run
+        self._sim_interactive = False     # 'Show output' run: user-driven, no idle kill
+        self._sim_idle_since = 0.0        # last time the run's process tree used CPU
+        self._sim_last_cpu = 0.0          # cumulative CPU seconds at the previous check
         example = os.path.join(self._examples_dir, "blc_ihp-sg13g2.s4p")
         try:
             self.net = io.load_touchstone(example)
@@ -113,6 +119,7 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 self._sim_proc.finished.disconnect()
                 self._sim_proc.errorOccurred.disconnect()
+                self._sim_proc.readyRead.disconnect()
             except (RuntimeError, TypeError):
                 pass
             self._sim_proc.kill()
@@ -198,16 +205,32 @@ class MainWindow(QtWidgets.QMainWindow):
         if not path:
             return
         self._last_export_dir[dialect] = os.path.dirname(path)   # remember per dialect
+        raw_stem = os.path.splitext(os.path.basename(path))[0]
+        renamed = False
         if res.ir is not None:
-            # name the .SUBCKT after the chosen file, e.g. bpf_le.spice -> bpf_le
-            res.ir.name = netlist.safe_subckt_name(
-                os.path.splitext(os.path.basename(path))[0])
+            # name the .SUBCKT after the chosen file, e.g. two_port.spice -> two_port
+            res.ir.name = netlist.safe_subckt_name(raw_stem)
+            if res.ir.name != raw_stem:                  # name had illegal chars: save the
+                path = os.path.join(os.path.dirname(path),  # FILE under the valid name too,
+                                    res.ir.name + "." + ext)  # so file = subckt = the note
+                renamed = True
             text = (netlist.render_vacask(res.ir) if dialect == "vacask"
                     else netlist.render_ngspice(res.ir))
         else:
             text = res.vacask if dialect == "vacask" else res.ngspice
         with open(path, "w") as fh:
             fh.write(text)
+        # a file name like 'two-port' is not a legal subckt identifier ('-' is the minus
+        # operator in SPICE / Spectre), so both the file and the subcircuit were saved
+        # under the sanitised name - tell the user the actual name.
+        if renamed:
+            QtWidgets.QMessageBox.information(
+                self, "Export note",
+                f"'{raw_stem}' is not a valid Ngspice / VACASK subcircuit name (for example "
+                f"'-' is the subtraction operator), so it was saved as "
+                f"'{os.path.basename(path)}' with subcircuit '{res.ir.name}'.\n\n"
+                "Instantiate it in your testbench by that name. Tip: use '_' instead of "
+                "'-' in the file name to avoid this.")
 
     # ---- Xschem testbench -------------------------------------------------
     def _xschem_tb_dir(self):
@@ -233,7 +256,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.load_sch.setToolTip(f"Testbench: {tb}")
         self.top.run_sim.setToolTip(f"Run testbench: {tb}")
 
+    def _sim_active(self):
+        return self._sim_proc is not None or self._sim_timer is not None
+
+    def _stop_sim(self):
+        """User-pressed Stop: cancel the run / pending import and mark it stopped."""
+        self._cancel_sim()                                # kills xschem, stops the poll, resets
+        self.top.set_sim_status("stopped", False)
+
     def on_run_sim(self):
+        if self._sim_active():                            # the button is 'Stop' -> cancel
+            self._stop_sim()
+            return
         if not xschem.available():
             return
         if not self._sch_path:
@@ -243,7 +277,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._stop_sim_timer()                            # cancel any pending poll
         self.top.clear_sim_status()                       # reset the outcome label
         sim = self.top.simulator.currentData()            # 'ngspice' | 'vacask'
+        self._sim_simulator = sim
         show = self.top.sim_output.isChecked()
+        self._sim_interactive = show                      # Show output: user-driven run
         prog, args, cwd = xschem.simulate_command(
             self._sch_path, show_output=show, simulator=sim)
         os.makedirs(os.path.join(cwd, "simulations"), exist_ok=True)
@@ -256,15 +292,110 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sim_proc.setProcessEnvironment(env)
         self._sim_proc.finished.connect(self._on_sim_finished)
         self._sim_proc.errorOccurred.connect(self._on_sim_error)
+        self._sim_output_buf = ""                         # capture output as it streams, so
+        self._sim_proc.readyRead.connect(self._on_sim_readyread)  # the full log is in hand
         self._sim_start = time.time()                     # to locate the result file
-        self.top.run_sim.setEnabled(False)
-        self.top.run_sim.setText("Running…")
+        self.top.run_sim.setText("Stop")                  # the run button becomes Stop
+        self.top.set_sim_progress("running…")
         self._sim_proc.start(prog, args)
+        # Activity watchdog: a real simulation keeps using CPU, while a hung xschem (e.g.
+        # stuck at an interactive prompt) goes idle.  So we cap on *inactivity*, not wall
+        # clock - a long but busy run is never killed, only a stuck one (see
+        # _check_sim_activity).  Falls back to a generous wall-clock cap where /proc is
+        # unavailable (e.g. Windows).
+        self._sim_idle_since = time.time()
+        self._sim_last_cpu = 0.0
+        self._sim_watchdog = QtCore.QTimer(self)
+        self._sim_watchdog.setInterval(5000)              # check every 5 s
+        self._sim_watchdog.timeout.connect(self._check_sim_activity)
+        self._sim_watchdog.start()
 
     def _reset_run_button(self):
+        if self._sim_watchdog is not None:                # stop the hard-cap timer
+            self._sim_watchdog.stop()
+            self._sim_watchdog = None
         self.top.run_sim.setText("Run Simulation")
         self.top.run_sim.setEnabled(True)
         self._sim_proc = None
+
+    def _check_sim_activity(self):
+        # Runs every 5 s while a run is in progress.  Kill + report failed only when the
+        # run is genuinely stuck - idle (no CPU) too long, or past a generous absolute cap
+        # - so an arbitrarily long but busy simulation is never wrongly killed.
+        if self._sim_proc is None:
+            return
+        now = time.time()
+        if self._sim_interactive:                         # Show output: user drives it, so
+            if now - self._sim_start > 3600.0:            # never idle-kill, just a 1 h cap
+                self._sim_watchdog_fire("the interactive run exceeded the 1 h limit")
+            return
+        cpu = self._sim_tree_cpu_time()
+        if cpu is None:                                   # no /proc -> wall-clock cap
+            if now - self._sim_start > 1800.0:
+                self._sim_watchdog_fire("the run exceeded the 30 min limit")
+            return
+        if cpu > self._sim_last_cpu + 0.05:               # tree used CPU since last check
+            self._sim_idle_since = now
+        self._sim_last_cpu = cpu
+        if now - self._sim_idle_since > 60.0:             # 1 min with no CPU -> hung
+            self._sim_watchdog_fire("the simulation used no CPU for 60 s (it looks hung)")
+        elif now - self._sim_start > 3600.0:              # 1 h absolute backstop
+            self._sim_watchdog_fire("the run exceeded the 1 h limit")
+
+    def _sim_tree_cpu_time(self):
+        """Cumulative CPU seconds of the xschem process and all its descendants, read
+        straight from /proc (no psutil needed).  Returns None where /proc is unavailable
+        (e.g. Windows) or on error, so the watchdog falls back to a wall-clock cap."""
+        pid = int(self._sim_proc.processId() or 0) if self._sim_proc is not None else 0
+        if not pid or not os.path.isdir("/proc"):
+            return None
+        try:
+            ticks = float(os.sysconf("SC_CLK_TCK")) or 100.0
+        except (ValueError, OSError, AttributeError):
+            ticks = 100.0
+        # snapshot every process once: pid -> (ppid, cpu_seconds)
+        info = {}
+        try:
+            live = [int(d) for d in os.listdir("/proc") if d.isdigit()]
+        except OSError:
+            return None
+        for p in live:
+            try:
+                with open(f"/proc/{p}/stat") as fh:
+                    data = fh.read()
+                fields = data[data.rfind(")") + 2:].split()   # after 'comm)': state ppid …
+                info[p] = (int(fields[1]), (int(fields[11]) + int(fields[12])) / ticks)
+            except (OSError, ValueError, IndexError):
+                continue
+        if pid not in info:
+            return None                                        # xschem already gone
+        kids = {}
+        for cp, (pp, _) in info.items():
+            kids.setdefault(pp, []).append(cp)
+        total, stack, seen = 0.0, [pid], set()
+        while stack:                                           # xschem + all descendants
+            cur = stack.pop()
+            if cur in seen or cur not in info:
+                continue
+            seen.add(cur)
+            total += info[cur][1]
+            stack.extend(kids.get(cur, ()))
+        return total
+
+    def _sim_watchdog_fire(self, reason):
+        if self._sim_proc is None:
+            return
+        try:                                              # keep whatever it printed so far
+            self._sim_last_output = bytes(self._sim_proc.readAll()).decode(errors="replace")
+        except Exception:                                 # noqa: BLE001
+            pass
+        self._cancel_sim()                                # kills xschem, stops the poll, resets
+        self.top.set_sim_status("failed!", False)
+        log = (self._sim_last_output or "").strip()
+        QtWidgets.QMessageBox.warning(
+            self, "Run simulation",
+            f"The simulation was stopped: {reason}.\n\n"
+            + (log[-1500:] if log else "(no output was captured)"))
 
     def _sim_output_dir(self):
         # the testbench writes its result here, named after the testbench
@@ -306,25 +437,80 @@ class MainWindow(QtWidgets.QMainWindow):
         pool = named or data
         return max(pool)[1] if pool else None        # newest of the matching files
 
+    def _fresh_abort_marker(self, stem):
+        """True if this run left a fresh <stem>.aborted marker (the VACASK postprocess
+        writes one when the analysis ran but produced no usable data)."""
+        p = os.path.join(self._sim_output_dir(), stem + ".aborted")
+        try:
+            return os.path.getmtime(p) >= self._sim_start - 1
+        except OSError:
+            return False
+
+    # xschem exits 0 even when the simulator it launched (ngspice / VACASK) crashes,
+    # errors, or aborts an analysis - it only prints the outcome in its output.  Catch
+    # every failure phrasing so a clearly-failed run is reported the instant its output
+    # reaches us.  This is a fast path only: xschem does not always stream its simulator
+    # console to us, so the result-file poll below is the capture-independent fallback.
+    _SIM_FAIL_MARKERS = (
+        "child process exited abnormally",   # the simulator subprocess crashed
+        "Failed: ",                          # xschem: the simulator run failed
+        "aborted.",                          # VACASK: "Analysis '...' aborted."
+        "Factorization failed",              # VACASK: singular matrix
+        "Error running ",                    # xschem: a run / postprocess command failed
+    )
+
+    def _sim_reported_failure(self, out):
+        return any(m in out for m in self._SIM_FAIL_MARKERS)
+
+    def _on_sim_readyread(self):
+        if self._sim_proc is not None:               # accumulate streamed output so the
+            self._sim_output_buf += bytes(           # full log is available at finish
+                self._sim_proc.readAll()).decode(errors="replace")
+
     def _on_sim_finished(self, code, _status):
-        out = bytes(self._sim_proc.readAll()).decode(errors="replace") if self._sim_proc else ""
+        tail = bytes(self._sim_proc.readAll()).decode(errors="replace") if self._sim_proc else ""
+        out = self._sim_output_buf + tail
         self._sim_last_output = out                  # keep for the no-result diagnostic
         tb = os.path.basename(self._sch_path)
-        if code != 0:
+        stem = os.path.splitext(tb)[0]
+
+        if self._sim_simulator == "vacask":
+            # VACASK is synchronous: its result is final the moment xschem returns.  xschem
+            # always exits 0 and keeps VACASK's Completed / Failed / aborted text on its own
+            # console, so we decide instantly from the files it left:
+            #   fresh result .txt -> success;  fresh .aborted marker -> aborted;  else fail.
+            result = self._find_sim_result(stem)
+            if result is not None:
+                self._finish_sim_import(result)
+                return
             self._reset_run_button()
-            self.top.set_sim_status("failed!", False)
+            aborted = self._fresh_abort_marker(stem)
+            self.top.set_sim_status("aborted!" if aborted else "failed!", False)
+            what = ("aborted: the analysis ran but produced no result (e.g. a singular "
+                    "matrix)") if aborted else "failed: it produced no result"
+            log = out.strip()
             QtWidgets.QMessageBox.warning(
                 self, "Run simulation",
-                f"xschem exited with code {code}.\n\n{out[-1500:]}")
+                f"The VACASK simulation of {tb} {what}.\n"
+                "See VACASK's console / log for the cause."
+                + (f"\n\n--- simulator output ---\n{log[-1500:]}" if log else ""))
             return
-        # xschem can launch ngspice in its own window and return before the result is
-        # (re)written, so the file may be absent or stale right now.  Poll sim_data
-        # until the testbench's output is freshly written, then auto-import it.
-        self._sim_poll_stem = os.path.splitext(tb)[0]
+
+        # ngspice: a non-zero exit (or a streamed error) is an immediate failure...
+        if code != 0 or self._sim_reported_failure(out):
+            self._reset_run_button()
+            self.top.set_sim_status("failed!", False)
+            head = (f"xschem exited with code {code}." if code != 0
+                    else "The simulator reported an error and did not finish.")
+            QtWidgets.QMessageBox.warning(
+                self, "Run simulation", f"{head}\n\n{out[-1500:] or '(no output)'}")
+            return
+        # ...otherwise it may run detached and write its result a little later, so poll.
+        self._sim_poll_stem = stem
         self._sim_poll_deadline = time.time() + 60.0
         self._sim_poll_last = None
-        self.top.run_sim.setText("Importing…")
-        self.top.run_sim.setEnabled(False)
+        self.top.run_sim.setText("Stop")             # still cancellable while importing
+        self.top.set_sim_progress("importing…")
         self._sim_timer = QtCore.QTimer(self)
         self._sim_timer.setInterval(300)
         self._sim_timer.timeout.connect(self._poll_sim_result)
@@ -350,12 +536,15 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self.top.set_sim_status("failed!", False)
                 log = (self._sim_last_output or "").strip()
-                QtWidgets.QMessageBox.information(
+                QtWidgets.QMessageBox.warning(
                     self, "Run simulation",
-                    f"Simulation of {os.path.basename(self._sch_path)} finished, but no "
-                    f"fresh result appeared in:\n{self._sim_output_dir()}\n\n"
-                    "Use 'Import simulation' to load it manually."
-                    + (f"\n\n--- xschem / ngspice output ---\n{log[-1500:]}" if log else ""))
+                    f"The simulation of {os.path.basename(self._sch_path)} FAILED: it "
+                    f"produced no result in\n{self._sim_output_dir()}\n\n"
+                    "The simulator most likely reported an error or the analysis was "
+                    "aborted - check its console / log for the cause.\n\n"
+                    "If you believe it actually succeeded, use 'Import simulation' to load "
+                    "the result file manually."
+                    + (f"\n\n--- simulator output ---\n{log[-1500:]}" if log else ""))
 
     def _finish_sim_import(self, result):
         self._stop_sim_timer()
