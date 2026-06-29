@@ -106,7 +106,7 @@ C {devices/code_shown.sym} 40 -1330 0 0 {name=NGSPICE
 only_toplevel=true
 lock=false
 value="
-.include ../../../netlist/spice/bpf_le.spice
+.include ../../../netlist/spice/two_port.spice
 .param temp=27
 .options savecurrents klu method=gear reltol=1e-3 abstol=1e-15 gmin=1e-15
 .control
@@ -175,7 +175,7 @@ tclcommand="xschem save; xschem netlist; xschem simulate"
 }
 C {devices/launcher.sym} 1740 -1060 0 0 {name=h1
 descr="Load waves" 
-tclcommand="xschem raw_read $netlist_dir/[file rootname [file tail [xschem get current_name]]].raw ac"
+tclcommand="xschem raw_read $netlist_dir/[file rootname [file tail [xschem get current_name]]].raw sp"
 }
 C {devices/launcher.sym} 1740 -1120 0 0 {name=h3
 descr="Annotate OP" 
@@ -193,4 +193,4 @@ value="
 "}
 C {devices/vsource.sym} 1360 -1150 0 0 {name=v2 value="dc 0 ac 1 portnum 2 z0 50"
 }
-C {bpf_le.sym} 1180 -1240 0 0 {name=x1}
+C {two_port.sym} 1180 -1240 0 0 {name=x1}

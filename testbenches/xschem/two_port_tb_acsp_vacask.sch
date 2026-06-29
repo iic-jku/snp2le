@@ -41,10 +41,10 @@ control
   // is set by rp1 / rp2.  Output vectors are s(1,1), s(2,1), s(1,2), s(2,2).
   analysis sp1 acsp ports=[\\"V1\\", \\"R1\\", \\"V2\\", \\"R2\\"] from=f_min to=f_max mode=\\"lin\\" points=1001
 
-  postprocess(PYTHON, \\"../bpf_le_tb_acsp_vacask_eval.py\\")
+  postprocess(PYTHON, \\"../two-port_tb_acsp_vacask_eval.py\\")
 endc
 "}
-C {simulator_commands_shown.sym} 1880 -1330 0 0 {name=Libs_VACASK
+C {simulator_commands_shown.sym} 1640 -1330 0 0 {name=Libs_VACASK
 simulator=vacask
 only_toplevel=false
 value="
@@ -58,7 +58,7 @@ load \\"capacitor.osdi\\"
 load \\"inductor.osdi\\"
 include \\"../../../netlist/spectre/bpf_le.inc\\"
 "}
-C {launcher.sym} 1620 -1330 0 0 {name=h1
+C {launcher.sym} 1380 -1330 0 0 {name=h1
 descr="Simulate VACASK"
 tclcommand="
 # Setup the default simulation commands if not already set up

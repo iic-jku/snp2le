@@ -1,12 +1,12 @@
-# bpf_le_tb_acsp_vacask_eval.py
+# two-port_tb_acsp_vacask_eval.py
 #
-# VACASK postprocessing script for the bpf_le acsp (AC S-parameter) testbench.
+# VACASK postprocessing script for the two-port acsp (AC S-parameter) testbench.
 # Invoked from the testbench control block via:
-#     postprocess(PYTHON, "../bpf_le_tb_acsp_vacask_eval.py")
+#     postprocess(PYTHON, "../two-port_tb_acsp_vacask_eval.py")
 #
 # It reads VACASK's raw output, then:
 #   * plots |S11|,|S21|,|S12|,|S22| in dB and their phase in degrees -> a PNG, and
-#   * writes sim_data/bpf_le_tb_acsp_vacask.txt in the same column layout the ngspice
+#   * writes sim_data/two-port_tb_acsp_vacask.txt in the same column layout the ngspice
 #     testbench produces, so snp2le's "Import simulation" / auto-import picks it up.
 #
 # VACASK ships rawfile.py on the postprocess Python path (the IIC reference scripts
@@ -16,19 +16,30 @@ import sys
 import glob
 import numpy as np
 
-import matplotlib
-if not os.environ.get("SHOW_PLOTS"):          # headless under VACASK's run loop
-    matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
 from rawfile import rawread
 
-TB = "bpf_le_tb_acsp_vacask"
+TB = "two-port_tb_acsp_vacask"
 
 try:
     HERE = os.path.dirname(os.path.abspath(__file__))
 except NameError:                              # exec'd without __file__
     HERE = os.getcwd()
+
+
+def _abort_marker():
+    repo = os.path.abspath(os.path.join(HERE, "..", ".."))
+    return os.path.join(repo, "sim_data", TB + ".aborted")
+
+
+def mark_aborted(reason):
+    """Leave a marker so snp2le's GUI can report 'aborted!' (the analysis ran but produced
+    no usable data, e.g. a singular matrix) rather than a generic 'failed!'."""
+    try:
+        os.makedirs(os.path.dirname(_abort_marker()), exist_ok=True)
+        with open(_abort_marker(), "w") as fh:
+            fh.write(reason + "\n")
+    except OSError:
+        pass
 
 
 def find_raw():
@@ -38,6 +49,7 @@ def find_raw():
         cands += glob.glob(os.path.join(d, "*.raw"))
     cands = [c for c in cands if os.path.isfile(c)]
     if not cands:
+        mark_aborted("no .raw output - the analysis aborted before writing any results")
         sys.exit("postprocess: no .raw output found (looked in cwd and ./simulations)")
     return max(cands, key=os.path.getmtime)
 
@@ -90,20 +102,35 @@ def write_table(f, dB, deg):
 
 
 def main():
+    try:                                        # only present if THIS run aborts
+        os.remove(_abort_marker())
+    except OSError:
+        pass
     raw = find_raw()
     f, S = load_acsp(raw)
+    if np.asarray(f).size < 2:                  # an aborted analysis leaves no usable
+        mark_aborted("analysis produced no sweep data")
+        sys.exit("postprocess: analysis produced no sweep data (aborted?) - "
+                 "no result table written")     # sweep -> write nothing so the GUI fails
     dB = {k: 20.0 * np.log10(np.maximum(np.abs(v), 1e-300)) for k, v in S.items()}
     deg = {k: np.unwrap(np.angle(v)) * 180.0 / np.pi for k, v in S.items()}
 
     table = write_table(f, dB, deg)
-    print(f"postprocess: wrote {table}")
+    print(f"postprocess: wrote {table}")        # write the table first - snp2le's GUI
+                                                # polls for it, so keep it ahead of the
+                                                # slow matplotlib import and plotting
+
+    import matplotlib
+    if not os.environ.get("SHOW_PLOTS"):        # headless under VACASK's run loop
+        matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
 
     fig, (axm, axp) = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
     fghz = f / 1e9
     for k in ("S11", "S21", "S12", "S22"):
         axm.plot(fghz, dB[k], label=k)
         axp.plot(fghz, deg[k], label=k)
-    axm.set_title("bpf_le - VACASK acsp S-parameters")
+    axm.set_title("two-port - VACASK acsp S-parameters")
     axm.set_ylabel("magnitude (dB)"); axm.grid(True, alpha=0.3)
     axm.legend(ncol=4, fontsize=8)
     axp.set_ylabel("phase (deg)"); axp.set_xlabel("frequency (GHz)")
