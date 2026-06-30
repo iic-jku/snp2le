@@ -161,6 +161,7 @@ only_toplevel=true
 lock=false
 value="
 .include ../../../netlist/spice/three_port.spice
+.include ../sim_range.spice
 .param temp=27
 .options savecurrents klu method=gear reltol=1e-3 abstol=1e-15 gmin=1e-15
 .control
@@ -171,9 +172,9 @@ set wr_vecnames
 set wr_singlescale
 
 * User Constants
-let f_min = 120.0e9
-let f_max = 200.0e9
-let f0 = 160.0e9
+* f_min / f_max come from ../sim_range.spice (.csparam),
+* auto-synced to the loaded Touchstone by snp2le.
+* edit that file for a standalone run.
 
 * Operating Point Analysis
 op

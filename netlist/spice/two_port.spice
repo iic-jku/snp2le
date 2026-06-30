@@ -9,168 +9,168 @@ V1 p1 s1 0
 R1 s1 0 50
 Gd1_1 0 s1 p1 0 -0.01152203666
 Fd1_1 0 s1 V1 -0.5761018332
-Gr1_1_1 0 s1 x1_a1 0 3.719249573e+11
-Gr2_re_1_1 0 s1 x2_re_a1 0 4.479773701e+11
-Gr2_im_1_1 0 s1 x2_im_a1 0 1.26654924e+12
-Gr3_re_1_1 0 s1 x3_re_a1 0 1209398275
-Gr3_im_1_1 0 s1 x3_im_a1 0 -1212419346
-Gr4_re_1_1 0 s1 x4_re_a1 0 2594373893
-Gr4_im_1_1 0 s1 x4_im_a1 0 -3607149157
-Gr5_re_1_1 0 s1 x5_re_a1 0 854409556.3
-Gr5_im_1_1 0 s1 x5_im_a1 0 -4096586271
-Gr6_re_1_1 0 s1 x6_re_a1 0 2.91482275e+10
-Gr6_im_1_1 0 s1 x6_im_a1 0 -2.484685163e+10
-Gr7_re_1_1 0 s1 x7_re_a1 0 1.762314586e+10
-Gr7_im_1_1 0 s1 x7_im_a1 0 4384342001
+Gr1_1_1 0 s1 x1_a1 0 1.802828364
+Gr2_re_1_1 0 s1 x2_re_a1 0 534726.9071
+Gr2_im_1_1 0 s1 x2_im_a1 0 1511812.879
+Gr3_re_1_1 0 s1 x3_re_a1 0 207144.116
+Gr3_im_1_1 0 s1 x3_im_a1 0 -207661.5611
+Gr4_re_1_1 0 s1 x4_re_a1 0 246604.246
+Gr4_im_1_1 0 s1 x4_im_a1 0 -342872.0511
+Gr5_re_1_1 0 s1 x5_re_a1 0 107797.5463
+Gr5_im_1_1 0 s1 x5_im_a1 0 -516850.4319
+Gr6_re_1_1 0 s1 x6_re_a1 0 612870.507
+Gr6_im_1_1 0 s1 x6_im_a1 0 -522429.7965
+Gr7_re_1_1 0 s1 x7_re_a1 0 499995.0683
+Gr7_im_1_1 0 s1 x7_im_a1 0 124390.3555
 Gd1_2 0 s1 p2 0 6.593548549e-05
 Fd1_2 0 s1 V2 0.003296774274
-Gr1_1_2 0 s1 x1_a2 0 -353051498.4
-Gr2_re_1_2 0 s1 x2_re_a2 0 -3954194807
-Gr2_im_1_2 0 s1 x2_im_a2 0 -4100348980
-Gr3_re_1_2 0 s1 x3_re_a2 0 -1157835790
-Gr3_im_1_2 0 s1 x3_im_a2 0 1240121831
-Gr4_re_1_2 0 s1 x4_re_a2 0 2569352490
-Gr4_im_1_2 0 s1 x4_im_a2 0 -3671471485
-Gr5_re_1_2 0 s1 x5_re_a2 0 -787015744.1
-Gr5_im_1_2 0 s1 x5_im_a2 0 4229918930
-Gr6_re_1_2 0 s1 x6_re_a2 0 4969128554
-Gr6_im_1_2 0 s1 x6_im_a2 0 1.192601989e+10
-Gr7_re_1_2 0 s1 x7_re_a2 0 -5518740253
-Gr7_im_1_2 0 s1 x7_im_a2 0 -1.353086241e+10
-Cx1_a1 x1_a1 0 0.002471715245
-Gx1_a1 0 x1_a1 p1 0 0.0001747766611
-Fx1_a1 0 x1_a1 V1 0.008738833053
-Rp1_a1 0 x1_a1 1e-09
-Cx2_re_a1 x2_re_a1 0 0.000628342386
-Gx2_re_a1 0 x2_re_a1 p1 0 8.886103241e-05
-Fx2_re_a1 0 x2_re_a1 V1 0.004443051621
-Rp2_re_re_a1 0 x2_re_a1 1e-09
-Gp2_re_im_a1 0 x2_re_a1 x2_im_a1 0 1073225546
-Cx2_im_a1 x2_im_a1 0 0.000628342386
-Gp2_im_re_a1 0 x2_im_a1 x2_re_a1 0 -1073225546
-Rp2_im_im_a1 0 x2_im_a1 1e-09
-Cx3_re_a1 x3_re_a1 0 0.03881034056
-Gx3_re_a1 0 x3_re_a1 p1 0 0.005488610998
-Fx3_re_a1 0 x3_re_a1 V1 0.2744305499
-Rp3_re_re_a1 0 x3_re_a1 1e-09
-Gp3_re_im_a1 0 x3_re_a1 x3_im_a1 0 3.592719925e+10
-Cx3_im_a1 x3_im_a1 0 0.03881034056
-Gp3_im_re_a1 0 x3_im_a1 x3_re_a1 0 -3.592719925e+10
-Rp3_im_im_a1 0 x3_im_a1 1e-09
-Cx4_re_a1 x4_re_a1 0 0.02816494014
-Gx4_re_a1 0 x4_re_a1 p1 0 0.003983124033
-Fx4_re_a1 0 x4_re_a1 V1 0.1991562017
-Rp4_re_re_a1 0 x4_re_a1 1e-09
-Gp4_re_im_a1 0 x4_re_a1 x4_im_a1 0 2.788510804e+10
-Cx4_im_a1 x4_im_a1 0 0.02816494014
-Gp4_im_re_a1 0 x4_im_a1 x4_re_a1 0 -2.788510804e+10
-Rp4_im_im_a1 0 x4_im_a1 1e-09
-Cx5_re_a1 x5_re_a1 0 0.02832231764
-Gx5_re_a1 0 x5_re_a1 p1 0 0.004005380572
-Fx5_re_a1 0 x5_re_a1 V1 0.2002690286
-Rp5_re_re_a1 0 x5_re_a1 1e-09
-Gp5_re_im_a1 0 x5_re_a1 x5_im_a1 0 3.026109416e+10
-Cx5_im_a1 x5_im_a1 0 0.02832231764
-Gp5_im_re_a1 0 x5_im_a1 x5_re_a1 0 -3.026109416e+10
-Rp5_im_im_a1 0 x5_im_a1 1e-09
-Cx6_re_a1 x6_re_a1 0 0.01004943133
-Gx6_re_a1 0 x6_re_a1 p1 0 0.001421204207
-Fx6_re_a1 0 x6_re_a1 V1 0.07106021037
-Rp6_re_re_a1 0 x6_re_a1 1e-09
-Gp6_re_im_a1 0 x6_re_a1 x6_im_a1 0 1.189747778e+10
-Cx6_im_a1 x6_im_a1 0 0.01004943133
-Gp6_im_re_a1 0 x6_im_a1 x6_re_a1 0 -1.189747778e+10
-Rp6_im_im_a1 0 x6_im_a1 1e-09
-Cx7_re_a1 x7_re_a1 0 0.01056929241
-Gx7_re_a1 0 x7_re_a1 p1 0 0.001494723668
-Fx7_re_a1 0 x7_re_a1 V1 0.07473618339
-Rp7_re_re_a1 0 x7_re_a1 1e-09
-Gp7_re_im_a1 0 x7_re_a1 x7_im_a1 0 1.242993984e+10
-Cx7_im_a1 x7_im_a1 0 0.01056929241
-Gp7_im_re_a1 0 x7_im_a1 x7_re_a1 0 -1.242993984e+10
-Rp7_im_im_a1 0 x7_im_a1 1e-09
+Gr1_1_2 0 s1 x1_a2 0 -0.001711295558
+Gr2_re_1_2 0 s1 x2_re_a2 0 -4726.346575
+Gr2_im_1_2 0 s1 x2_im_a2 0 -4901.04087
+Gr3_re_1_2 0 s1 x3_re_a2 0 -198422.5585
+Gr3_im_1_2 0 s1 x3_im_a2 0 212524.2185
+Gr4_re_1_2 0 s1 x4_re_a2 0 244309.9212
+Gr4_im_1_2 0 s1 x4_im_a2 0 -349106.2097
+Gr5_re_1_2 0 s1 x5_re_a2 0 -99489.26335
+Gr5_im_1_2 0 s1 x5_im_a2 0 534718.0428
+Gr6_re_1_2 0 s1 x6_re_a2 0 113173.2055
+Gr6_im_1_2 0 s1 x6_im_a2 0 271618.2294
+Gr7_re_1_2 0 s1 x7_re_a2 0 -150133.6276
+Gr7_im_1_2 0 s1 x7_im_a2 0 -368098.0379
+Cx1_a1 x1_a1 0 2.471715245e-12
+Gx1_a1 0 x1_a1 p1 0 0.03605656728
+Fx1_a1 0 x1_a1 V1 1.802828364
+Rp1_a1 0 x1_a1 1
+Cx2_re_a1 x2_re_a1 0 6.28342386e-13
+Gx2_re_a1 0 x2_re_a1 p1 0 7.44449757e-08
+Fx2_re_a1 0 x2_re_a1 V1 3.722248785e-06
+Rp2_re_re_a1 0 x2_re_a1 1
+Gp2_re_im_a1 0 x2_re_a1 x2_im_a1 0 1.073225546
+Cx2_im_a1 x2_im_a1 0 6.28342386e-13
+Gp2_im_re_a1 0 x2_im_a1 x2_re_a1 0 -1.073225546
+Rp2_im_im_a1 0 x2_im_a1 1
+Cx3_re_a1 x3_re_a1 0 3.881034056e-11
+Gx3_re_a1 0 x3_re_a1 p1 0 3.204492022e-08
+Fx3_re_a1 0 x3_re_a1 V1 1.602246011e-06
+Rp3_re_re_a1 0 x3_re_a1 1
+Gp3_re_im_a1 0 x3_re_a1 x3_im_a1 0 35.92719925
+Cx3_im_a1 x3_im_a1 0 3.881034056e-11
+Gp3_im_re_a1 0 x3_im_a1 x3_re_a1 0 -35.92719925
+Rp3_im_im_a1 0 x3_im_a1 1
+Cx4_re_a1 x4_re_a1 0 2.816494014e-11
+Gx4_re_a1 0 x4_re_a1 p1 0 4.19040352e-08
+Fx4_re_a1 0 x4_re_a1 V1 2.09520176e-06
+Rp4_re_re_a1 0 x4_re_a1 1
+Gp4_re_im_a1 0 x4_re_a1 x4_im_a1 0 27.88510804
+Cx4_im_a1 x4_im_a1 0 2.816494014e-11
+Gp4_im_re_a1 0 x4_im_a1 x4_re_a1 0 -27.88510804
+Rp4_im_im_a1 0 x4_im_a1 1
+Cx5_re_a1 x5_re_a1 0 2.832231764e-11
+Gx5_re_a1 0 x5_re_a1 p1 0 3.174687696e-08
+Fx5_re_a1 0 x5_re_a1 V1 1.587343848e-06
+Rp5_re_re_a1 0 x5_re_a1 1
+Gp5_re_im_a1 0 x5_re_a1 x5_im_a1 0 30.26109416
+Cx5_im_a1 x5_im_a1 0 2.832231764e-11
+Gp5_im_re_a1 0 x5_im_a1 x5_re_a1 0 -30.26109416
+Rp5_im_im_a1 0 x5_im_a1 1
+Cx6_re_a1 x6_re_a1 0 1.004943133e-11
+Gx6_re_a1 0 x6_re_a1 p1 0 6.759271834e-08
+Fx6_re_a1 0 x6_re_a1 V1 3.379635917e-06
+Rp6_re_re_a1 0 x6_re_a1 1
+Gp6_re_im_a1 0 x6_re_a1 x6_im_a1 0 11.89747778
+Cx6_im_a1 x6_im_a1 0 1.004943133e-11
+Gp6_im_re_a1 0 x6_im_a1 x6_re_a1 0 -11.89747778
+Rp6_im_im_a1 0 x6_im_a1 1
+Cx7_re_a1 x7_re_a1 0 1.056929241e-11
+Gx7_re_a1 0 x7_re_a1 p1 0 5.268398608e-08
+Fx7_re_a1 0 x7_re_a1 V1 2.634199304e-06
+Rp7_re_re_a1 0 x7_re_a1 1
+Gp7_re_im_a1 0 x7_re_a1 x7_im_a1 0 12.42993984
+Cx7_im_a1 x7_im_a1 0 1.056929241e-11
+Gp7_im_re_a1 0 x7_im_a1 x7_re_a1 0 -12.42993984
+Rp7_im_im_a1 0 x7_im_a1 1
 V2 p2 s2 0
 R2 s2 0 50
 Gd2_1 0 s2 p1 0 6.593548542e-05
 Fd2_1 0 s2 V1 0.003296774271
-Gr1_2_1 0 s2 x1_a1 0 -353051498.4
-Gr2_re_2_1 0 s2 x2_re_a1 0 -3954194805
-Gr2_im_2_1 0 s2 x2_im_a1 0 -4100348979
-Gr3_re_2_1 0 s2 x3_re_a1 0 -1157835790
-Gr3_im_2_1 0 s2 x3_im_a1 0 1240121831
-Gr4_re_2_1 0 s2 x4_re_a1 0 2569352490
-Gr4_im_2_1 0 s2 x4_im_a1 0 -3671471485
-Gr5_re_2_1 0 s2 x5_re_a1 0 -787015744.2
-Gr5_im_2_1 0 s2 x5_im_a1 0 4229918930
-Gr6_re_2_1 0 s2 x6_re_a1 0 4969128554
-Gr6_im_2_1 0 s2 x6_im_a1 0 1.192601989e+10
-Gr7_re_2_1 0 s2 x7_re_a1 0 -5518740253
-Gr7_im_2_1 0 s2 x7_im_a1 0 -1.353086241e+10
+Gr1_2_1 0 s2 x1_a1 0 -0.001711343223
+Gr2_re_2_1 0 s2 x2_re_a1 0 -4719.913325
+Gr2_im_2_1 0 s2 x2_im_a1 0 -4894.369837
+Gr3_re_2_1 0 s2 x3_re_a1 0 -198312.5628
+Gr3_im_2_1 0 s2 x3_im_a1 0 212406.4056
+Gr4_re_2_1 0 s2 x4_re_a1 0 244225.8747
+Gr4_im_2_1 0 s2 x4_im_a1 0 -348986.1117
+Gr5_re_2_1 0 s2 x5_re_a1 0 -99294.72988
+Gr5_im_2_1 0 s2 x5_im_a1 0 533672.4972
+Gr6_re_2_1 0 s2 x6_re_a1 0 104480.8758
+Gr6_im_2_1 0 s2 x6_im_a1 0 250756.4433
+Gr7_re_2_1 0 s2 x7_re_a1 0 -156574.9345
+Gr7_im_2_1 0 s2 x7_im_a1 0 -383890.8517
 Gd2_2 0 s2 p2 0 -0.01149510096
 Fd2_2 0 s2 V2 -0.5747550482
-Gr1_2_2 0 s2 x1_a2 0 3.719456765e+11
-Gr2_re_2_2 0 s2 x2_re_a2 0 4.459888901e+11
-Gr2_im_2_2 0 s2 x2_im_a2 0 1.265283808e+12
-Gr3_re_2_2 0 s2 x3_re_a2 0 1206718781
-Gr3_im_2_2 0 s2 x3_im_a2 0 -1220021643
-Gr4_re_2_2 0 s2 x4_re_a2 0 2590805714
-Gr4_im_2_2 0 s2 x4_im_a2 0 -3642619207
-Gr5_re_2_2 0 s2 x5_re_a2 0 847746550
-Gr5_im_2_2 0 s2 x5_im_a2 0 -4164045934
-Gr6_re_2_2 0 s2 x6_re_a2 0 2.6172233e+10
-Gr6_im_2_2 0 s2 x6_im_a2 0 -2.010089934e+10
-Gr7_re_2_2 0 s2 x7_re_a2 0 2.084781176e+10
-Gr7_im_2_2 0 s2 x7_im_a2 0 -151423645.6
-Cx1_a2 x1_a2 0 0.002471715245
-Gx1_a2 0 x1_a2 p2 0 0.0001747766611
-Fx1_a2 0 x1_a2 V2 0.008738833053
-Rp1_a2 0 x1_a2 1e-09
-Cx2_re_a2 x2_re_a2 0 0.000628342386
-Gx2_re_a2 0 x2_re_a2 p2 0 8.886103241e-05
-Fx2_re_a2 0 x2_re_a2 V2 0.004443051621
-Rp2_re_re_a2 0 x2_re_a2 1e-09
-Gp2_re_im_a2 0 x2_re_a2 x2_im_a2 0 1073225546
-Cx2_im_a2 x2_im_a2 0 0.000628342386
-Gp2_im_re_a2 0 x2_im_a2 x2_re_a2 0 -1073225546
-Rp2_im_im_a2 0 x2_im_a2 1e-09
-Cx3_re_a2 x3_re_a2 0 0.03881034056
-Gx3_re_a2 0 x3_re_a2 p2 0 0.005488610998
-Fx3_re_a2 0 x3_re_a2 V2 0.2744305499
-Rp3_re_re_a2 0 x3_re_a2 1e-09
-Gp3_re_im_a2 0 x3_re_a2 x3_im_a2 0 3.592719925e+10
-Cx3_im_a2 x3_im_a2 0 0.03881034056
-Gp3_im_re_a2 0 x3_im_a2 x3_re_a2 0 -3.592719925e+10
-Rp3_im_im_a2 0 x3_im_a2 1e-09
-Cx4_re_a2 x4_re_a2 0 0.02816494014
-Gx4_re_a2 0 x4_re_a2 p2 0 0.003983124033
-Fx4_re_a2 0 x4_re_a2 V2 0.1991562017
-Rp4_re_re_a2 0 x4_re_a2 1e-09
-Gp4_re_im_a2 0 x4_re_a2 x4_im_a2 0 2.788510804e+10
-Cx4_im_a2 x4_im_a2 0 0.02816494014
-Gp4_im_re_a2 0 x4_im_a2 x4_re_a2 0 -2.788510804e+10
-Rp4_im_im_a2 0 x4_im_a2 1e-09
-Cx5_re_a2 x5_re_a2 0 0.02832231764
-Gx5_re_a2 0 x5_re_a2 p2 0 0.004005380572
-Fx5_re_a2 0 x5_re_a2 V2 0.2002690286
-Rp5_re_re_a2 0 x5_re_a2 1e-09
-Gp5_re_im_a2 0 x5_re_a2 x5_im_a2 0 3.026109416e+10
-Cx5_im_a2 x5_im_a2 0 0.02832231764
-Gp5_im_re_a2 0 x5_im_a2 x5_re_a2 0 -3.026109416e+10
-Rp5_im_im_a2 0 x5_im_a2 1e-09
-Cx6_re_a2 x6_re_a2 0 0.01004943133
-Gx6_re_a2 0 x6_re_a2 p2 0 0.001421204207
-Fx6_re_a2 0 x6_re_a2 V2 0.07106021037
-Rp6_re_re_a2 0 x6_re_a2 1e-09
-Gp6_re_im_a2 0 x6_re_a2 x6_im_a2 0 1.189747778e+10
-Cx6_im_a2 x6_im_a2 0 0.01004943133
-Gp6_im_re_a2 0 x6_im_a2 x6_re_a2 0 -1.189747778e+10
-Rp6_im_im_a2 0 x6_im_a2 1e-09
-Cx7_re_a2 x7_re_a2 0 0.01056929241
-Gx7_re_a2 0 x7_re_a2 p2 0 0.001494723668
-Fx7_re_a2 0 x7_re_a2 V2 0.07473618339
-Rp7_re_re_a2 0 x7_re_a2 1e-09
-Gp7_re_im_a2 0 x7_re_a2 x7_im_a2 0 1.242993984e+10
-Cx7_im_a2 x7_im_a2 0 0.01056929241
-Gp7_im_re_a2 0 x7_im_a2 x7_re_a2 0 -1.242993984e+10
-Rp7_im_im_a2 0 x7_im_a2 1e-09
+Gr1_2_2 0 s2 x1_a2 0 1.802878579
+Gr2_re_2_2 0 s2 x2_re_a2 0 533078.962
+Gr2_im_2_2 0 s2 x2_im_a2 0 1512360.945
+Gr3_re_2_2 0 s2 x3_re_a2 0 206799.8156
+Gr3_im_2_2 0 s2 x3_im_a2 0 -209079.5757
+Gr4_re_2_2 0 s2 x4_re_a2 0 246349.8264
+Gr4_im_2_2 0 s2 x4_im_a2 0 -346362.7568
+Gr5_re_2_2 0 s2 x5_re_a2 0 107166.4454
+Gr5_im_2_2 0 s2 x5_im_a2 0 -526390.8195
+Gr6_re_2_2 0 s2 x6_re_a2 0 596079.4678
+Gr6_im_2_2 0 s2 x6_im_a2 0 -457803.252
+Gr7_re_2_2 0 s2 x7_re_a2 0 567150.7381
+Gr7_im_2_2 0 s2 x7_im_a2 0 -4119.378733
+Cx1_a2 x1_a2 0 2.471715245e-12
+Gx1_a2 0 x1_a2 p2 0 0.03605757159
+Fx1_a2 0 x1_a2 V2 1.802878579
+Rp1_a2 0 x1_a2 1
+Cx2_re_a2 x2_re_a2 0 6.28342386e-13
+Gx2_re_a2 0 x2_re_a2 p2 0 7.434364522e-08
+Fx2_re_a2 0 x2_re_a2 V2 3.717182261e-06
+Rp2_re_re_a2 0 x2_re_a2 1
+Gp2_re_im_a2 0 x2_re_a2 x2_im_a2 0 1.073225546
+Cx2_im_a2 x2_im_a2 0 6.28342386e-13
+Gp2_im_re_a2 0 x2_im_a2 x2_re_a2 0 -1.073225546
+Rp2_im_im_a2 0 x2_im_a2 1
+Cx3_re_a2 x3_re_a2 0 3.881034056e-11
+Gx3_re_a2 0 x3_re_a2 p2 0 3.20271561e-08
+Fx3_re_a2 0 x3_re_a2 V2 1.601357805e-06
+Rp3_re_re_a2 0 x3_re_a2 1
+Gp3_re_im_a2 0 x3_re_a2 x3_im_a2 0 35.92719925
+Cx3_im_a2 x3_im_a2 0 3.881034056e-11
+Gp3_im_re_a2 0 x3_im_a2 x3_re_a2 0 -35.92719925
+Rp3_im_im_a2 0 x3_im_a2 1
+Cx4_re_a2 x4_re_a2 0 2.816494014e-11
+Gx4_re_a2 0 x4_re_a2 p2 0 4.188961956e-08
+Fx4_re_a2 0 x4_re_a2 V2 2.094480978e-06
+Rp4_re_re_a2 0 x4_re_a2 1
+Gp4_re_im_a2 0 x4_re_a2 x4_im_a2 0 27.88510804
+Cx4_im_a2 x4_im_a2 0 2.816494014e-11
+Gp4_im_re_a2 0 x4_im_a2 x4_re_a2 0 -27.88510804
+Rp4_im_im_a2 0 x4_im_a2 1
+Cx5_re_a2 x5_re_a2 0 2.832231764e-11
+Gx5_re_a2 0 x5_re_a2 p2 0 3.168480161e-08
+Fx5_re_a2 0 x5_re_a2 V2 1.584240081e-06
+Rp5_re_re_a2 0 x5_re_a2 1
+Gp5_re_im_a2 0 x5_re_a2 x5_im_a2 0 30.26109416
+Cx5_im_a2 x5_im_a2 0 2.832231764e-11
+Gp5_im_re_a2 0 x5_im_a2 x5_re_a2 0 -30.26109416
+Rp5_im_im_a2 0 x5_im_a2 1
+Cx6_re_a2 x6_re_a2 0 1.004943133e-11
+Gx6_re_a2 0 x6_re_a2 p2 0 6.240122278e-08
+Fx6_re_a2 0 x6_re_a2 V2 3.120061139e-06
+Rp6_re_re_a2 0 x6_re_a2 1
+Gp6_re_im_a2 0 x6_re_a2 x6_im_a2 0 11.89747778
+Cx6_im_a2 x6_im_a2 0 1.004943133e-11
+Gp6_im_re_a2 0 x6_im_a2 x6_re_a2 0 -11.89747778
+Rp6_im_im_a2 0 x6_im_a2 1
+Cx7_re_a2 x7_re_a2 0 1.056929241e-11
+Gx7_re_a2 0 x7_re_a2 p2 0 5.494433061e-08
+Fx7_re_a2 0 x7_re_a2 V2 2.74721653e-06
+Rp7_re_re_a2 0 x7_re_a2 1
+Gp7_re_im_a2 0 x7_re_a2 x7_im_a2 0 12.42993984
+Cx7_im_a2 x7_im_a2 0 1.056929241e-11
+Gp7_im_re_a2 0 x7_im_a2 x7_re_a2 0 -12.42993984
+Rp7_im_im_a2 0 x7_im_a2 1
 .ENDS two_port

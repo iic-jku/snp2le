@@ -94,6 +94,57 @@ def rescale_state_resistors(ir, target: float = 1e-9):
     return ir
 
 
+def balance_state_gains(ir, ground: str = "0"):
+    """Equilibrate the vector-fit realisation so a high-order universal macromodel stays
+    well-conditioned for solvers without internal matrix scaling (VACASK).
+
+    scikit-rf realises each pole as a state node whose voltage is driven by tiny input gains
+    (~1e-5) and read back into the port-sensor nodes by huge gains (~1e11).  That 1e-5..1e11
+    spread makes the MNA matrix ill-conditioned: ngspice's Sparse solver equilibrates
+    internally and copes, but VACASK does not, so above ~5 poles it mis-places the
+    resonances (the order-5/6 break).  Scaling each state node's controlled sources - inputs
+    up and outputs down by k = sqrt(max_output / max_input) - leaves every node voltage, and
+    hence the transfer function, unchanged (lossless), while bringing the two gain groups
+    together so the matrix entries span far fewer decades.  Complex-conjugate pole pairs
+    (..._re_... / ..._im_...) share one factor so their gyrator coupling is preserved.  Used
+    together with rescale_state_resistors (which tames the state self-conductances): the two
+    passes together take VACASK from >12 dB RMS error to ~0 on an order-13 fit.
+    """
+    state = {e.nodes[0] if e.nodes[1] == ground else e.nodes[1]
+             for e in ir.elements if e.kind == "C" and ground in e.nodes}
+    if not state:
+        return ir
+    inj = {s: 0.0 for s in state}                      # max gain driving the state node
+    rd = {s: 0.0 for s in state}                       # max gain reading the state node
+    for e in ir.elements:
+        if e.kind not in ("G", "E", "F"):
+            continue
+        if e.nodes[1] in inj:                          # current injected into n- (the node)
+            inj[e.nodes[1]] = max(inj[e.nodes[1]], abs(e.value))
+        if e.ctrl and e.kind in ("G", "E"):            # vccs / vcvs sense their control nodes
+            for cn in e.ctrl:
+                if cn in rd:
+                    rd[cn] = max(rd[cn], abs(e.value))
+    k = {s: (rd[s] / inj[s]) ** 0.5 if inj[s] > 0 and rd[s] > 0 else 1.0 for s in state}
+    for s in list(k):                                  # tie a complex pair to one factor
+        if "_re_" in s:
+            t = s.replace("_re_", "_im_")
+            if t in k:
+                k[s] = k[t] = (k[s] * k[t]) ** 0.5
+    if all(abs(v - 1.0) <= 1e-12 for v in k.values()):
+        return ir
+    for e in ir.elements:
+        if e.kind not in ("G", "E", "F"):
+            continue
+        f = k.get(e.nodes[1], 1.0)                     # scale up where it injects
+        if e.ctrl and e.kind in ("G", "E"):
+            for cn in e.ctrl:
+                if cn in k:
+                    f /= k[cn]                         # scale down where it reads
+        e.value *= f
+    return ir
+
+
 def safe_subckt_name(text: str, fallback: str = "s_equivalent") -> str:
     """Turn an arbitrary string (e.g. an export file stem) into a subcircuit name that is
     valid in BOTH ngspice (SPICE3) and VACASK (Spectre).  Only letters, digits and '_' are

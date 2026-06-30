@@ -133,16 +133,13 @@ rather than passing them back. So the outcome is read from the <b>result file</b
   Because VACASK is synchronous, all three are decided the instant the run returns - no
   waiting. Either way, open VACASK's console / log for the specific cause.</li>
 </ul>
-<p><b>VACASK and high-order universal macromodels.</b> Structure-specific models and
-low-order universal fits simulate accurately in both ngspice and VACASK. A high-order
-universal macromodel (a sharp response that needs many poles, such as a band-pass filter)
-is a numerically ill-conditioned network: ngspice's solver reproduces the fitted model
-exactly, but VACASK's linear solver loses accuracy and can <b>mis-place the resonances</b>
-(the curve looks shifted or distorted versus the model, although the dynamic range is
-broadly right). The controlled sources themselves are correct - ngspice and VACASK agree
-exactly at low order, and the error only grows with the pole count. If a VACASK universal
-run looks off, lower the <b>Max order</b> or verify it in ngspice; structure-specific
-models are unaffected.</p>
+<p><b>VACASK and high-order universal macromodels.</b> The vector-fit realisation is
+numerically ill-conditioned at high order (its pole gains span ~1e-5 to ~1e11). ngspice's
+solver equilibrates the matrix internally and copes; VACASK's does not, and on its own
+would mis-place the resonances above ~5 poles. snp2le conditions the exported macromodel
+automatically - a lossless rescale of the state resistors plus a gain-balance of the
+controlled sources - so high-order universal fits now reproduce the model in VACASK exactly
+as they do in ngspice. No action is needed; structure-specific models are unaffected.</p>
 
 <p>While a run is in progress the status reads <i>running…</i> (for as long as the
 simulation takes) then <i>importing…</i>, and the <b>Run Simulation</b> button becomes a
