@@ -6,8 +6,8 @@ S {}
 F {}
 E {}
 B 2 820 -1000 1620 -600 {flags=graph
-y1=1.4
-y2=7.6
+y1=-7.2
+y2=-0.66
 ypos1=0
 ypos2=2
 divy=5
@@ -93,15 +93,15 @@ unitx=1
 logx=0
 logy=0
 linewidth_mult=4}
-T {Ngspice Testbench for AC S-parameter analysis - Bandpass Filter} 370 -1720 0 0 1 1 {}
-N 1000 -1240 1000 -1180 {lab=vin}
+T {Ngspice Testbench for AC S-parameter analysis - Two-Port} 480 -1720 0 0 1 1 {}
+N 1000 -1240 1000 -1180 {lab=v1}
 N 1000 -1120 1000 -1060 {lab=GND}
-N 920 -1240 1000 -1240 {lab=vin}
-N 1280 -1240 1360 -1240 {lab=vout}
+N 920 -1240 1000 -1240 {lab=v1}
+N 1280 -1240 1360 -1240 {lab=v2}
 N 1360 -1120 1360 -1060 {lab=GND}
-N 1360 -1240 1360 -1180 {lab=vout}
-N 1360 -1240 1440 -1240 {lab=vout}
-N 1000 -1240 1080 -1240 {lab=vin}
+N 1360 -1240 1360 -1180 {lab=v2}
+N 1360 -1240 1440 -1240 {lab=v2}
+N 1000 -1240 1080 -1240 {lab=v1}
 C {devices/code_shown.sym} 40 -1330 0 0 {name=NGSPICE
 only_toplevel=true
 lock=false
@@ -134,7 +134,7 @@ write @schname\\\\.raw
 set appendwrite
 
 * Calculating S-Parameters
-let s11_dB = db(s_1_1)
+let s11_dB = db(S_1_1)
 let s21_dB = db(S_2_1)
 let s12_dB = db(S_1_2)
 let s22_dB = db(S_2_2)
@@ -162,8 +162,8 @@ wrdata ../../../sim_data/@schname\\\\.txt
 .endc
 "}
 C {title-3.sym} 0 0 0 0 {name=l2 author="Simon Dorrer" rev=1.0 lock=true}
-C {lab_pin.sym} 1440 -1240 0 1 {name=p3 sig_type=std_logic lab=vout}
-C {devices/lab_pin.sym} 920 -1240 0 0 {name=l19 sig_type=std_logic lab=vin
+C {lab_pin.sym} 1440 -1240 0 1 {name=p3 sig_type=std_logic lab=v2}
+C {devices/lab_pin.sym} 920 -1240 0 0 {name=l19 sig_type=std_logic lab=v1
 }
 C {devices/gnd.sym} 1000 -1060 0 0 {name=l39 lab=GND}
 C {devices/vsource.sym} 1000 -1150 0 1 {name=v1 value="dc 0 ac 1 portnum 1 z0 50"
@@ -193,4 +193,5 @@ value="
 "}
 C {devices/vsource.sym} 1360 -1150 0 0 {name=v2 value="dc 0 ac 1 portnum 2 z0 50"
 }
-C {two_port.sym} 1180 -1240 0 0 {name=x1}
+C {two_port.sym} 1180 -1240 0 0 {name=x1
+}
