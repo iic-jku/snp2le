@@ -18,12 +18,22 @@ import numpy as np
 
 from rawfile import rawread
 
-TB = "two-port_tb_acsp_vacask"
-
+# Testbench name (used for the sim_data/<TB>.txt result and the <TB>.aborted marker).
+# Derived from this file's own name (<TB>_eval.py) so it stays in sync with the testbench
+# even after a rename; falls back to the spectre netlist VACASK is running.
 try:
     HERE = os.path.dirname(os.path.abspath(__file__))
+    _stem = os.path.splitext(os.path.basename(__file__))[0]      # '<TB>_eval'
+    TB = _stem[:-5] if _stem.endswith("_eval") else (_stem or "")
 except NameError:                              # exec'd without __file__
     HERE = os.getcwd()
+    TB = ""
+if not TB:
+    import glob as _glob
+    _spec = (_glob.glob(os.path.join(os.getcwd(), "*.spectre"))
+             or _glob.glob(os.path.join(HERE, "simulations", "*.spectre")))
+    TB = (os.path.splitext(os.path.basename(max(_spec, key=os.path.getmtime)))[0]
+          if _spec else "two_port_tb_acsp_vacask")
 
 
 def _abort_marker():

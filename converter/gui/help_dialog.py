@@ -70,7 +70,11 @@ shows a note instead.</li>
 <li><b>Netlist</b>: the generated text for both dialects, with export. <b>Ngspice</b>
 (Berkeley SPICE3, <tt>.spice</tt>) and <b>VACASK</b> (Spectre syntax, <tt>.inc</tt>).
 Transformer coupling is emitted as a builtin <tt>mutual</tt> instance. Device models and
-OSDI loads come from your testbench, not the exported subcircuit. The subcircuit is named
+OSDI loads come from your testbench, not the exported subcircuit. In VACASK the
+subcircuit's ground is node <tt>GND</tt>: Spectre has no implicit node-0 ground the way
+SPICE does, so your testbench must declare <tt>ground&nbsp;GND</tt> (Xschem's spectre
+netlist does this automatically). A subcircuit grounded to a bare <tt>0</tt> would float
+and give a flat / wrong result. ngspice keeps node <tt>0</tt>. The subcircuit is named
 after the export file, but only letters, digits and '_' are valid in a SPICE / Spectre
 subcircuit name: a file like <tt>two-port</tt> is exported as subckt <tt>two_port</tt>
 (since '-' is the minus operator), and a note window reports the actual name. Use '_'
@@ -129,15 +133,26 @@ rather than passing them back. So the outcome is read from the <b>result file</b
   Because VACASK is synchronous, all three are decided the instant the run returns - no
   waiting. Either way, open VACASK's console / log for the specific cause.</li>
 </ul>
+<p><b>VACASK and high-order universal macromodels.</b> Structure-specific models and
+low-order universal fits simulate accurately in both ngspice and VACASK. A high-order
+universal macromodel (a sharp response that needs many poles, such as a band-pass filter)
+is a numerically ill-conditioned network: ngspice's solver reproduces the fitted model
+exactly, but VACASK's linear solver loses accuracy and can <b>mis-place the resonances</b>
+(the curve looks shifted or distorted versus the model, although the dynamic range is
+broadly right). The controlled sources themselves are correct - ngspice and VACASK agree
+exactly at low order, and the error only grows with the pole count. If a VACASK universal
+run looks off, lower the <b>Max order</b> or verify it in ngspice; structure-specific
+models are unaffected.</p>
+
 <p>While a run is in progress the status reads <i>running…</i> (for as long as the
 simulation takes) then <i>importing…</i>, and the <b>Run Simulation</b> button becomes a
 <b>Stop</b> button you can press to cancel. A run is not killed for taking long; it is only
 stopped if it goes idle (uses no CPU for a while), i.e. it looks genuinely hung.</p>
 
-<p style="color:#7d828c"><i>Universal mode is built on scikit-rf vector fitting. The
-VACASK passive and <tt>mutual</tt>-coupling syntax follows the confirmed reference
-netlists. The universal controlled-source syntax (vccs, vcvs, cccs) should still be
-checked against your VACASK build.</i></p>"""
+<p style="color:#7d828c"><i>Universal mode is built on scikit-rf vector fitting. The VACASK
+passive, controlled-source (vccs, cccs) and ground (<tt>GND</tt>) handling are confirmed
+against VACASK; the <tt>mutual</tt>-coupling syntax used by the transformer models is not
+yet hardware-verified.</i></p>"""
 
 
 class HelpDialog(QtWidgets.QDialog):

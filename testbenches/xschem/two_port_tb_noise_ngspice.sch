@@ -133,7 +133,7 @@ value="
 .lib cornerCAP.lib cap_typ
 .lib cornerDIO.lib dio_tt
 "}
-C {bpf_le.sym} 1120 -980 0 0 {name=x1}
+C {two_port.sym} 1120 -980 0 0 {name=x1}
 C {devices/vsource.sym} 940 -890 0 1 {name=vin value="dc 0 ac 1"
 }
 C {res.sym} 1300 -890 0 0 {name=R1

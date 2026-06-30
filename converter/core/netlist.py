@@ -179,21 +179,35 @@ _VC_PASSIVE = {"R": ("resistor", "r"), "C": ("capacitor", "c"), "L": ("inductor"
 _VC_SOURCE = {"V": "vsource", "G": "vccs", "E": "vcvs", "F": "cccs"}
 
 
+# Ground node.  Unlike SPICE (where node "0" is always ground), Spectre / VACASK has no
+# implicit ground - the testbench must declare one, and Xschem's spectre netlister declares
+# it as `ground GND`, not `ground 0`.  A subckt that uses "0" therefore leaves those
+# terminals floating (which silently collapses the universal macromodel to a flat / wrong
+# response), so map the IR's ground node "0" to GND on the VACASK side.  ngspice keeps "0".
+_VC_GROUND = "GND"
+
+
+def _vc_node(n: str) -> str:
+    return _VC_GROUND if n == "0" else n
+
+
 def _vc_model(e: Element) -> str:
     return _VC_PASSIVE[e.kind][0] if e.kind in _VC_PASSIVE else _VC_SOURCE[e.kind]
 
 
 def _vc_instance(e: Element) -> str:
-    n = " ".join(e.nodes)                             # no spaces inside the ( ) node list
+    n = " ".join(_vc_node(x) for x in e.nodes)        # no spaces inside the ( ) node list
     if e.kind in _VC_PASSIVE:
         model, p = _VC_PASSIVE[e.kind]
         return f"{e.name} ({n}) {model} {p}={_num(e.value)}"
     if e.kind == "V":
         return f"{e.name} ({n}) vsource dc={_num(e.value)}"
     if e.kind == "G":                                 # VCCS, transconductance in A/V
-        return f"{e.name} ({n} {e.ctrl[0]} {e.ctrl[1]}) vccs gain={_num(e.value)}"
+        return (f"{e.name} ({n} {_vc_node(e.ctrl[0])} {_vc_node(e.ctrl[1])}) "
+                f"vccs gain={_num(e.value)}")
     if e.kind == "E":                                 # VCVS, gain in V/V
-        return f"{e.name} ({n} {e.ctrl[0]} {e.ctrl[1]}) vcvs gain={_num(e.value)}"
+        return (f"{e.name} ({n} {_vc_node(e.ctrl[0])} {_vc_node(e.ctrl[1])}) "
+                f"vcvs gain={_num(e.value)}")
     if e.kind == "F":                                 # CCCS (senses a vsource branch)
         # VACASK names the controlling instance with ctlinst (not Spectre's probe), as a
         # quoted string: cccs ctlinst="V1" gain=...  (see VACASK test/test_ctlsrc.sim and
@@ -213,9 +227,9 @@ def render_vacask(ir: CircuitIR) -> str:
     if models:                                        # models are declared by the testbench
         L.append("// device models needed (declared by your testbench): "
                  + ", ".join(sorted(models)))
-    if any(k in kinds for k in ("G", "E", "F")):
-        L.append("// NOTE: controlled sources (universal macromodel) - verify "
-                 "vccs / vcvs / cccs against your VACASK build")
+    L.append(f"// NOTE: ground is '{_VC_GROUND}' - your testbench MUST declare it as the "
+             "ground (Xschem's spectre netlist does this with `ground GND`); otherwise the "
+             "circuit floats and the result is wrong.")
     L.append(f"subckt {ir.name} ({' '.join(ir.ports)})")
     for e in ir.elements:
         L.append("  " + _vc_instance(e))

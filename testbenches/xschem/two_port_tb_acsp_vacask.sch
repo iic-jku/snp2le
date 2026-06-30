@@ -7,7 +7,7 @@ F {}
 E {}
 B 4 960 -880 1100 -700 {fill = false}
 B 4 1380 -880 1520 -700 {fill = false}
-T {VACASK Testbench for AC S-parameter analysis - Bandpass Filter} 420 -1715 0 0 1 1 {}
+T {VACASK Testbench for AC S-parameter analysis - Two-Port} 420 -1715 0 0 1 1 {}
 T {Port 1} 965 -875 0 0 0.3 0.3 {}
 T {Port 2} 1515 -875 0 1 0.3 0.3 {}
 N 1060 -900 1140 -900 {lab=v1}
@@ -20,7 +20,7 @@ N 1420 -720 1420 -680 {lab=GND}
 N 1420 -900 1420 -860 {lab=v2}
 N 1340 -900 1420 -900 {lab=v2}
 N 1420 -900 1500 -900 {lab=v2}
-C {bpf_le.sym} 1240 -900 0 0 {name=x1}
+C {two_port.sym} 1240 -900 0 0 {name=x1}
 C {devices/lab_pin.sym} 980 -900 0 0 {name=lvin sig_type=std_logic lab=v1}
 C {devices/lab_pin.sym} 1500 -900 0 1 {name=lvout sig_type=std_logic lab=v2}
 C {devices/res.sym} 1060 -830 0 1 {name=R1 value=50}
@@ -32,23 +32,24 @@ only_toplevel=false
 value="
 control
   // User Constants
-  var f_min = 120e9
-  var f_max = 200e9
-  var f0 = 160e9
+  // f_min / f_max are auto-synced to the loaded Touchstone by snp2le (sim_range.inc).
+  // edit that file (or this include) for a standalone run.
+  include \\"../sim_range.inc\\"
 
   // AC S-parameter sweep across the BPF band.
-  // Ports are (vsource, series-resistor) pairs; the 50 ohm reference impedance
-  // is set by rp1 / rp2.  Output vectors are s(1,1), s(2,1), s(1,2), s(2,2).
+  // Ports are (vsource, series-resistor) pairs. 
+  // The 50 ohm reference impedance is set by rp1 / rp2.
+  // Output vectors are s(1,1), s(2,1), s(1,2), s(2,2).
   analysis sp1 acsp ports=[\\"V1\\", \\"R1\\", \\"V2\\", \\"R2\\"] from=f_min to=f_max mode=\\"lin\\" points=1001
 
-  postprocess(PYTHON, \\"../two-port_tb_acsp_vacask_eval.py\\")
+  postprocess(PYTHON, \\"../two_port_tb_acsp_vacask_eval.py\\")
 endc
 "}
 C {simulator_commands_shown.sym} 1640 -1330 0 0 {name=Libs_VACASK
 simulator=vacask
 only_toplevel=false
 value="
-// resistor + vsource models/loads are auto-emitted by the R1/R2/V1/V2 symbols;
+// resistor + vsource models/loads are auto-emitted by the R1/R2/V1/V2 symbols.
 // only declare the device types that appear inside the included .inc.
 model capacitor capacitor
 model inductor inductor
@@ -56,7 +57,7 @@ model vccs vccs
 model cccs cccs
 load \\"capacitor.osdi\\"
 load \\"inductor.osdi\\"
-include \\"../../../netlist/spectre/bpf_le.inc\\"
+include \\"../../../netlist/spectre/two_port.inc\\"
 "}
 C {launcher.sym} 1380 -1330 0 0 {name=h1
 descr="Simulate VACASK"
