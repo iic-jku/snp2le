@@ -46,6 +46,7 @@ def convert(state, net) -> Results:
 
 
 def _convert_universal(state, net, res):
+    from . import dc as _dc
     fit = _uni.fit_universal(net, max_order=state.max_order,
                              enforce_passivity=state.enforce_passivity)
     res.ir = fit.ir
@@ -55,6 +56,13 @@ def _convert_universal(state, net, res):
     res.rms_error = fit.rms_error
     res.messages = fit.messages
     res.model_s = _uni.model_sparams(fit.vf, net.f)
+    try:                                            # flag a singular DC operating point
+        z0 = float(np.real(np.asarray(net.z0).flatten()[0])) or 50.0
+    except (TypeError, ValueError, IndexError):
+        z0 = 50.0
+    res.dc = _dc.dc_check(res.ir, z0=z0)
+    if not res.dc.ok:
+        res.messages.append(res.dc.message)
 
 
 def _convert_structure(state, net, res):

@@ -42,6 +42,7 @@ class Results:
 
     n_poles: int = 0
     passive: bool = False
+    dc: object = None                     # DCHealth: DC operating-point check (universal mode)
     rms_error: float = float("nan")
     metrics: dict = field(default_factory=dict)
     value_rows: list = field(default_factory=list)   # (name, value, unit)

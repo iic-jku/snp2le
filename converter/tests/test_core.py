@@ -65,6 +65,25 @@ def test_universal_high_order_resistors_above_ngspice_floor():
     assert rvals and min(rvals) >= 1e-10        # clamp would leave one at 1e-12
 
 
+def test_dc_operating_point_check():
+    """A well-posed universal macromodel passes the DC operating-point check; a network
+    with a floating internal node (no DC path to ground) is flagged singular."""
+    from core import dc, universal
+    net = inductor_2port()
+    res = engine.convert(ConverterState(mode="universal", max_order=10), net)
+    assert res.dc is not None and res.dc.ok            # healthy fit -> well-posed
+    assert res.dc.margin > 1e-9
+
+    fit = universal.fit_universal(net, max_order=10, enforce_passivity=False)
+    cap_nodes = {e.nodes[0] if e.nodes[1] == "0" else e.nodes[1]
+                 for e in fit.ir.elements if e.kind == "C" and "0" in e.nodes}
+    fit.ir.elements = [e for e in fit.ir.elements       # strip self-resistors -> nodes float
+                       if not (e.kind == "R" and "0" in e.nodes
+                               and (e.nodes[0] in cap_nodes or e.nodes[1] in cap_nodes))]
+    health = dc.dc_check(fit.ir)
+    assert not health.ok and health.margin < 1e-12
+
+
 # ---------------------------------------------------------------- structures
 def _example(name):
     return io.load_touchstone(os.path.join(

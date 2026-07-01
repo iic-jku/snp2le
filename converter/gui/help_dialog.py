@@ -54,7 +54,11 @@ whether to make the model strictly passive for a stable transient run.</li>
 <h3>Design &amp; Schematic</h3>
 <ul>
 <li><b>Result</b>: fit/extraction quality. RMS error against the data, passivity,
-and the model order (universal) or the extraction frequency (structure).</li>
+and the model order (universal) or the extraction frequency (structure). For a universal
+macromodel it also reports a <b>DC operating point</b> check: the model is linear, so its
+DC solve only fails if the network is singular (typically an internal node with no DC path
+to ground). A solvable model is marked; a singular one is flagged - with a hint to lower
+the order or enable passivity - <i>before</i> you hand the netlist to a simulator.</li>
 <li><b>Element values</b>: the extracted components (e.g. L<sub>s</sub>, R<sub>s</sub>,
 C, k, M&hellip;) for a physical model, or a summary of the synthesised network for the
 universal macromodel. The schematic draws component <i>names</i> only. The numeric values

@@ -167,6 +167,16 @@ class DesignView(QtWidgets.QWidget):
                 "Electrically exact, not physically interpretable.")
             note.setStyleSheet("color:#7d828c;font-size:11px;"); note.setWordWrap(True)
             self.values_host.addWidget(note)
+            dc = getattr(res, "dc", None)                 # DC operating-point health
+            if dc is not None:
+                mark = "✓" if dc.ok else "⚠"
+                color = "#3a8a5c" if dc.ok else "#d95c4c"
+                state = "solvable" if dc.ok else "may be SINGULAR"
+                dc_lbl = QtWidgets.QLabel(
+                    f"{mark}  DC operating point {state}  (margin {dc.margin:.0e})")
+                dc_lbl.setStyleSheet(f"color:{color};font-size:11px;")
+                dc_lbl.setWordWrap(True)
+                self.values_host.addWidget(dc_lbl)
 
         # ---- Tolerances: per-element band drift around f_ext (structures) ----
         self._clear(self.tol_host)
