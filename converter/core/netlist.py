@@ -105,10 +105,12 @@ def balance_state_gains(ir, ground: str = "0"):
     resonances (the order-5/6 break).  Scaling each state node's controlled sources - inputs
     up and outputs down by k = sqrt(max_output / max_input) - leaves every node voltage, and
     hence the transfer function, unchanged (lossless), while bringing the two gain groups
-    together so the matrix entries span far fewer decades.  Complex-conjugate pole pairs
-    (..._re_... / ..._im_...) share one factor so their gyrator coupling is preserved.  Used
-    together with rescale_state_resistors (which tames the state self-conductances): the two
-    passes together take VACASK from >12 dB RMS error to ~0 on an order-13 fit.
+    together so the matrix entries span far fewer decades.  The scaling is lossless for ANY
+    per-node factor, so tying complex-conjugate pole pairs (..._re_... / ..._im_...) to one
+    factor only keeps their coupling symmetric - a conditioning nicety, not a correctness
+    requirement (with or without it the result is identical in testing).  Used together with
+    rescale_state_resistors (which tames the state self-conductances): the two passes take
+    VACASK from >12 dB RMS error to ~0 on an order-13 fit, matching the analytic model.
     """
     state = {e.nodes[0] if e.nodes[1] == ground else e.nodes[1]
              for e in ir.elements if e.kind == "C" and ground in e.nodes}
