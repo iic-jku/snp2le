@@ -121,10 +121,10 @@ class DesignView(QtWidgets.QWidget):
     @staticmethod
     def _tol_color(pct):
         if pct < 2.0:
-            return "#2e7d32"               # green - model fits this value at f_ext
+            return "#2e7d32"               # green: model fits this value at f_ext
         if pct < 10.0:
-            return "#b8860b"               # amber - moderate residual
-        return "#d95c4c"                   # red - the model cannot fit this term
+            return "#b8860b"               # amber: moderate residual
+        return "#d95c4c"                   # red: the model cannot fit this term
 
     @staticmethod
     def _tol_text(pct):

@@ -3,7 +3,7 @@
 Classic on-chip inductor equivalent: a series R-L branch between the two ports
 and, at each port, a shunt branch to ground made of a capacitor in *series* with
 a substrate resistor (C_ox in series with R_sub).  Branches are split from the
-Y-parameters via the averaged mutual term ymn=(y12+y21)/2; the shunt C and R come
+Y-parameters via the averaged mutual term ymn=(y12+y21)/2.  The shunt C and R come
 from the shunt impedance Zshunt = 1/(y+ymn) (series R-C), and values are taken at
 the frequency of peak quality factor (below self-resonance).  Topology and
 extraction follow Volker Muehlhaus' pi_from_s2p
@@ -122,9 +122,9 @@ class InductorPi(Structure):
         """Frequency-domain trace sets for the Plot view (data vs model).
 
         Three options:
-          * 'Ldiff / Q'        - effective inductance + Q across the device
-          * 'Lseries / Cshunt' - pi-model series L and shunt C over frequency
-          * 'Rseries / Rshunt' - pi-model series R and shunt R over frequency
+          * 'Ldiff / Q',        effective inductance + Q across the device
+          * 'Lseries / Cshunt', pi-model series L and shunt C over frequency
+          * 'Rseries / Rshunt', pi-model series R and shunt R over frequency
         """
         f = net.f
         z0 = float(np.real(net.z0.flatten()[0]))

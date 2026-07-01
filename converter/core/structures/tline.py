@@ -21,7 +21,7 @@ N_SEGMENTS = 2          # default number of L-cells in the ladder
 def _rlgc_decomp(s, f, z0):
     """Distributed line parameters over frequency from S-parameters: series R'
     and L', shunt G' and C'.  Because the physical length is not supplied these
-    are the whole-line values (R'l, L'l, G'l, C'l); gamma*l is unwrapped so they
+    are the whole-line values (R'l, L'l, G'l, C'l).  gamma*l is unwrapped so they
     stay continuous past the first electrical half-wave.
     """
     import skrf
@@ -105,8 +105,8 @@ class TransmissionLine(Structure):
 
     def freq_traces(self, net, model_s):
         """Frequency-domain trace sets for the Plot view (data vs model):
-          * "R' / L'" - series resistance and inductance of the line
-          * "G' / C'" - shunt conductance and capacitance of the line
+          * "R' / L'", series resistance and inductance of the line
+          * "G' / C'", shunt conductance and capacitance of the line
         """
         f = net.f
         z0 = float(np.real(net.z0.flatten()[0]))

@@ -35,8 +35,8 @@ def available() -> bool:
 
 
 # VACASK is launched detached by xschem, which then quits (-q), so VACASK's console never
-# reaches a terminal.  The run redirects it to this file inside the netlist dir; the GUI
-# reads it back for "Show output" and for the failure / abort diagnostics.
+# reaches a terminal.  The run redirects it to this file inside the netlist dir, and the GUI
+# reads it back for "Show output" and for the failure or abort diagnostics.
 VACASK_LOG = "vacask.log"
 
 
@@ -82,9 +82,9 @@ def simulate_command(sch_path: str, show_output: bool = True, simulator: str = "
             "set_sim_defaults; "                       # populate the sim() command table
             "set sim(spectre,default) 0; "             # #0 in the spectre category = VACASK
             # capture VACASK's console (banner, analysis progress, Completed/Failed/aborted,
-            # postprocess messages): xschem runs it detached and then quits, so without this
-            # the output is lost.  Tcl exec `>&` redirects stdout+stderr; the run cd's into
-            # the netlist dir, so a bare name lands there.
+            # postprocess messages). xschem runs it detached and then quits, so without this
+            # the output is lost.  Tcl exec `>&` redirects stdout+stderr, and the run cd's
+            # into the netlist dir, so a bare name lands there.
             f'set sim(spectre,0,cmd) {{vacask "$N" >& {VACASK_LOG}}}; '
             "xschem set netlist_type spectre; "        # generate a Spectre/VACASK netlist
             "write_data [save_params] "                # op-point .save file (as the launcher)

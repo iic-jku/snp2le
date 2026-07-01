@@ -84,7 +84,7 @@ def eng_mathtext(value, unit: str = "") -> str:
 def comp_label(sym: str, value=None, unit: str = "", sep: str = "\n") -> str:
     """A schematic label in mathtext: the component *name* only (e.g. '$C_{\\mathrm{p1}}$').
 
-    Component values are intentionally omitted so the drawings stay uncluttered - the
+    Component values are intentionally omitted so the drawings stay uncluttered. The
     numeric values are listed in the values table beside the schematic.  `value`,
     `unit` and `sep` are accepted for call-site compatibility but ignored."""
     return f"${sym_mathtext(sym)}$"

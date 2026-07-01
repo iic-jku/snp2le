@@ -12,7 +12,7 @@
     snp2le convert bpf.s2p --mode universal --order 13 -o bpf_le.spice \\
         --simulate testbenches/xschem/bpf_le_tb_acsp_ngspice.sch --plot
 
-Globs are expanded; with --format both, two files are written per input.  Exit
+Globs are expanded. With --format both, two files are written per input.  Exit
 code is non-zero if any conversion (or a requested simulation) fails.
 """
 from __future__ import annotations
@@ -58,12 +58,12 @@ def _default_sparams(n):
 
 
 def _run_testbench(sch, simulator, show_output):
-    """Run an Xschem testbench with `simulator`; return the result file in sim_data."""
+    """Run an Xschem testbench with `simulator`. Return the result file in sim_data."""
     import subprocess
     import time
     from core import xschem
     if not xschem.available():
-        print("xschem not found on PATH - cannot run a testbench", file=sys.stderr)
+        print("xschem not found on PATH, cannot run a testbench", file=sys.stderr)
         return None
     sch = os.path.abspath(sch)
     if not os.path.isfile(sch):
@@ -190,7 +190,7 @@ def cmd_convert(args):
             out = _out_path(src, args.output, dialect, len(paths), len(formats))
             if res.ir is not None:
                 # name the .SUBCKT after the output file (bpf_le.spice -> bpf_le), so a
-                # testbench that instantiates that name resolves the .include - the GUI
+                # testbench that instantiates that name resolves the .include. The GUI
                 # export does the same. Writing the default 's_equivalent' breaks the run
                 res.ir.name = netlist.safe_subckt_name(
                     os.path.splitext(os.path.basename(out))[0])

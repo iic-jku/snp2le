@@ -2,17 +2,17 @@
 
 A universal (vector-fit) macromodel is a *linear* network, so its DC operating point is a
 single linear solve with no excitation (the port sensors are 0 V sources).  The solution
-is trivially zero - but only if the DC MNA matrix is non-singular.  A rank-deficient matrix
+is trivially zero, but only when the DC MNA matrix is non-singular.  A rank-deficient matrix
 is exactly what makes a simulator report a "singular matrix" or fail to find the operating
 point, and it happens when an internal node has no DC path to ground (its state capacitor is
 open at DC) or a controlled-source loop is degenerate.
 
 This builds that DC matrix (capacitors open, ports terminated in z0 to mimic a testbench)
 and reports how far it is from singular, so the GUI can warn *before* the netlist is handed
-to Ngspice / VACASK.  The macromodel being linear, only true singularity matters here - not
-conditioning: a well-posed but ill-conditioned matrix still yields the (zero) DC solution.
+to Ngspice or VACASK.  Because the macromodel is linear, only true singularity matters, not
+conditioning: an ill-conditioned but non-singular matrix still yields the (zero) DC solution.
 
-Calibration (BPF and inductor fits, orders 4-24): healthy fits sit at margin >= ~6e-8, a
+Calibration (BPF and inductor fits, orders 4 to 24): healthy fits sit at margin >= ~6e-8, a
 genuinely singular network at ~1e-17, so 1e-12 splits them with many decades of headroom.
 """
 from __future__ import annotations
@@ -94,7 +94,7 @@ def _dc_mna(ir, z0: float, ground: str):
                 for c, sc in zip(ctl, (1.0, -1.0)):
                     if c is not None:
                         A[r, c] += sr * sc * e.value
-        elif e.kind in ("V", "E", "L"):     # branch current unknown; V=0 (L/sensor) or dc
+        elif e.kind in ("V", "E", "L"):     # branch-current unknown, V=0 (L/sensor) or dc
             k = bi[e.name]
             ia, ib = ni.get(e.nodes[0]), ni.get(e.nodes[1])
             if ia is not None:

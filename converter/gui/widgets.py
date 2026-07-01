@@ -62,7 +62,7 @@ class FitComboBox(QtWidgets.QComboBox):
     real font, DPI, style and stylesheet padding on any platform (no hard-coded
     pixel chrome, which is what made earlier fixed-width attempts clip on Linux).
     With AdjustToContents the base hint is `chrome + width(widest item)`, so
-    adding `width(ref) - width(widest item)` yields `chrome + width(ref)` - the
+    adding `width(ref) - width(widest item)` yields `chrome + width(ref)`, the
     tightest width that still fits `ref`, constant across selections and items.
     """
 

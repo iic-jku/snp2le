@@ -2,7 +2,7 @@
 copyright (right), matching the filter designer.
 
 Logos are pre-rasterised PNGs (transparent background, black artwork) loaded with
-QPixmap - reliable across platforms, unlike rendering the Inkscape SVGs through
+QPixmap, reliable across platforms, unlike rendering the Inkscape SVGs through
 QtSvg.  Regenerate them from the SVGs with tools/make_logos.py if they change.
 """
 from __future__ import annotations

@@ -2,13 +2,13 @@
 
 Two selectable models:
 
-  * Wilkinson (quadrature) - the full circuit of Fig. 1 of Kawai et al.: a parallel
+  * Wilkinson (quadrature), the full circuit of Fig. 1 of Kawai et al.: a parallel
     LC-ladder divider (shunt L1, a series C1 into each arm), a series Rint+Lint
     isolation network, and +/-45 deg phase shifters on the outputs (a T-network
     series C2 / shunt L2 / series C2 to port 2, a Pi-network shunt C3 / series L3 /
     shunt C3 to port 3) -> |S21|=|S31|=-3 dB with 90 deg between the outputs.
 
-  * Wilkinson (in-phase) - the classic divider: each quarter-wave arm is a lumped
+  * Wilkinson (in-phase), the classic divider: each quarter-wave arm is a lumped
     pi-section (shunt C, series L, shunt C) of Zc = sqrt(2)*Z0, the two outputs
     bridged by a 2*Z0 isolation resistor -> |S21|=|S31|=-3 dB *in phase* (both at
     -90 deg at f0, matching a real quarter-wave Wilkinson).
@@ -200,7 +200,7 @@ class WilkinsonInphase(Structure):
 
         def arm(up):
             """One pi-section arm: shunt C, series L, shunt C, then the run out to
-            the output port.  Shunt caps point away from the centre; the series-L
+            the output port.  Shunt caps point away from the centre, and the series-L
             label sits on the inner side so it stays clear of the cap labels.  A
             junction node is only drawn when the isolation resistor connects there."""
             (elm.Line().up() if up else elm.Line().down()).length(2.0)

@@ -118,7 +118,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _cancel_sim(self):
         """Stop any running / pending simulation (run or auto-import) without firing
-        its handlers, and free the Run button - e.g. so a new testbench can be run
+        its handlers, and free the Run button, e.g. so a new testbench can be run
         while an earlier import is still pending ('Importing…')."""
         active = self._sim_proc is not None or self._sim_timer is not None
         self._stop_sim_timer()
@@ -130,7 +130,7 @@ class MainWindow(QtWidgets.QMainWindow):
             except (RuntimeError, TypeError):
                 pass
             self._sim_proc.kill()
-        if active and self._sim_simulator == "vacask":   # xschem already exited; the real
+        if active and self._sim_simulator == "vacask":   # xschem already exited. The real
             self._kill_vacask()                          # vacask runs detached, so kill it
         self._reset_run_button()                  # 'Run Simulation', enabled, proc None
 
@@ -231,7 +231,7 @@ class MainWindow(QtWidgets.QMainWindow):
             fh.write(text)
         # a file name like 'two-port' is not a legal subckt identifier ('-' is the minus
         # operator in SPICE / Spectre), so both the file and the subcircuit were saved
-        # under the sanitised name - tell the user the actual name.
+        # under the sanitised name, so tell the user the actual name.
         if renamed:
             QtWidgets.QMessageBox.information(
                 self, "Export note",
@@ -281,7 +281,7 @@ class MainWindow(QtWidgets.QMainWindow):
         file (VACASK `include "../sim_range.inc"`, ngspice `.include ../sim_range.spice`),
         so the f_min/f_max sweep bounds always follow the loaded data, yet the testbench
         still runs standalone in Xschem with the last-written range.  f0 stays in the
-        testbench - it is a design point, not a sweep bound.  Both `../` includes resolve
+        testbench, since it is a design point rather than a sweep bound.  Both `../` includes resolve
         from the netlist dir (cwd/simulations) to cwd, where these files are written."""
         net = getattr(self, "net", None)
         if net is None:
@@ -345,7 +345,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim_proc.start(prog, args)
         # Activity watchdog: a real simulation keeps using CPU, while a hung xschem (e.g.
         # stuck at an interactive prompt) goes idle.  So we cap on *inactivity*, not wall
-        # clock - a long but busy run is never killed, only a stuck one (see
+        # clock. A long but busy run is never killed, only a stuck one (see
         # _check_sim_activity).  Falls back to a generous wall-clock cap where /proc is
         # unavailable (e.g. Windows).
         self._sim_idle_since = time.time()
@@ -403,8 +403,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _check_sim_activity(self):
         # Runs every 5 s while a run is in progress.  Kill + report failed only when the
-        # run is genuinely stuck - idle (no CPU) too long, or past a generous absolute cap
-        # - so an arbitrarily long but busy simulation is never wrongly killed.
+        # run is genuinely stuck (idle with no CPU too long, or past a generous absolute
+        # cap), so an arbitrarily long but busy simulation is never wrongly killed.
         if self._sim_proc is None:
             return
         now = time.time()
@@ -495,7 +495,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         The testbench writes its result there named after itself.  Prefer a file
         written during this run (newer than the run start) whose name starts with the
-        testbench stem - accepting any data-style extension, since `wrdata` targets
+        testbench stem, accepting any data-style extension, since `wrdata` targets
         vary (.txt / .data / no extension).  Falls back to the newest fresh data file
         if the naming differs."""
         d = self._sim_output_dir()
@@ -530,7 +530,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return False
 
     # xschem exits 0 even when the simulator it launched (ngspice / VACASK) crashes,
-    # errors, or aborts an analysis - it only prints the outcome in its output.  Catch
+    # errors, or aborts an analysis. It only prints the outcome in its output.  Catch
     # every failure phrasing so a clearly-failed run is reported the instant its output
     # reaches us.  This is a fast path only: xschem does not always stream its simulator
     # console to us, so the result-file poll below is the capture-independent fallback.

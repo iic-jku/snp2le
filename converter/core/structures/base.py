@@ -22,8 +22,8 @@ class Structure(ABC):
     def extract(self, net, f_extract, n_segments=None, iso_r=True):
         """Return (CircuitIR, metrics, rows) with the lumped values read off near
         `f_extract` [Hz].  `n_segments` sets the ladder stage count for structures
-        that use one (the RLGC line); `iso_r` toggles the isolation resistor for the
-        Wilkinson dividers; other structures ignore them.  Raises ValueError if not
+        that use one (the RLGC line).  `iso_r` toggles the isolation resistor for the
+        Wilkinson dividers.  Other structures ignore them.  Raises ValueError if not
         applicable."""
 
     @staticmethod
@@ -58,7 +58,7 @@ class Structure(ABC):
 
         Returns, per value-row label, how far the parameter the measured data implies
         at f_ext differs from the model value (see `fext_tolerance_pct`).  Directly
-        read reciprocal terms (e.g. the series L, R) match exactly (0 %); terms the
+        read reciprocal terms (e.g. the series L, R) match exactly (0 %).  Terms the
         model can only approximate (e.g. a shunt averaged over two asymmetric ports)
         carry the residual.  Frequency dispersion away from f_ext is left to the
         plots.  Default: no tolerance info (a purely synthesised model with no

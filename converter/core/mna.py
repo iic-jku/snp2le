@@ -14,8 +14,8 @@ def _coupled_groups(ir):
     """Group magnetically coupled inductors and return, per group, the inverse
     inductance matrix Gamma = L^-1 and the (node+, node-) of each member branch.
 
-    Coupled inductor branches no longer have an independent admittance 1/(jwL);
-    the group obeys V = jw L I with off-diagonal mutuals M_ij = k_ij*sqrt(Li*Lj),
+    Coupled inductor branches no longer have an independent admittance 1/(jwL).
+    The group obeys V = jw L I with off-diagonal mutuals M_ij = k_ij*sqrt(Li*Lj),
     so the branch admittance block is Gamma/(jw).  Returns (groups, coupled_names)
     where coupled_names are the inductors handled here (the rest stamp normally).
     """

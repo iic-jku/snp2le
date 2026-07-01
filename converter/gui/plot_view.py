@@ -1,7 +1,7 @@
 """plot_view.py - the "Plot" page.
 
 Four S-parameters are shown side by side.  Each column shows magnitude (dB, top)
-and phase (deg, bottom) of one selected S_ij; the four selectors default to the
+and phase (deg, bottom) of one selected S_ij.  The four selectors default to the
 2-port set S11/S21/S12/S22.  Each panel overlays the loaded data (solid grey),
 the fitted/extracted model (blue long dashes) and, once imported, an ngspice
 simulation table (red dash-dot, drawn thicker on top) on its own frequency grid.
@@ -517,7 +517,7 @@ class PlotView(QtWidgets.QWidget):
 
         The element-value curves (L, C, R, Q) can diverge near resonances and the
         measured data can carry large spikes.  A robust body is taken from the 5-95
-        percentile band; the axis extends to the true extremum only when it is within
+        percentile band.  The axis extends to the true extremum only when it is within
         a few body-widths (so a bounded feature such as the Q peak is kept whole),
         otherwise a runaway pole / spike is clipped.  Falls back to the data when no
         model curve is present."""
@@ -536,8 +536,8 @@ class PlotView(QtWidgets.QWidget):
             return lo, hi
 
         r = frame(model_y)
-        # a (near-)constant model carries no vertical information to frame on - its
-        # tiny numerical span would collapse the axis to an unreadable offset range -
+        # a (near-)constant model carries no vertical information to frame on. Its
+        # tiny numerical span would collapse the axis to an unreadable offset range,
         # so frame on the data instead (e.g. a flat transformer L vs its rising data)
         if r is not None and (r[1] - r[0]) <= 1e-3 * max(abs(r[0]), abs(r[1]), 1.0):
             r = frame(data_y) or r
@@ -573,7 +573,7 @@ class PlotView(QtWidgets.QWidget):
         return d if os.path.isdir(d) else repo_root
 
     def _on_sim_button(self):
-        """Import a simulation, or - if one is already loaded - clear it.  The button
+        """Import a simulation, or clear it if one is already loaded.  The button
         toggles between 'Import simulation' and 'Clear simulation', so a different design
         can be loaded and overlaid without resetting the whole GUI."""
         if self._sim is not None:
@@ -601,7 +601,7 @@ class PlotView(QtWidgets.QWidget):
             self.import_sim_file(path)
 
     def import_sim_file(self, path):
-        """Load an ngspice S-parameter table from `path` and overlay it; returns
+        """Load an ngspice S-parameter table from `path` and overlay it.  Returns
         True on success.  Shared by the Import button and by auto-import after a
         successful Xschem run."""
         try:

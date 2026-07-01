@@ -68,10 +68,10 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True) -> F
             os.unlink(tmp)
         except OSError:
             pass
-    # Condition the realisation (both passes are lossless - the transfer function and the
+    # Condition the realisation (both passes are lossless, so the transfer function and the
     # ngspice result are unchanged).  rescale_state_resistors lifts the sub-1e-12 state
     # self-resistors to O(1) ohms (clamping them instead corrupts S11/S22 at higher orders),
-    # and balance_state_gains equilibrates the tiny-input / huge-output controlled sources.
+    # and balance_state_gains equilibrates the tiny input and huge output controlled sources.
     # Together they keep VACASK (which has no internal matrix scaling) accurate well past the
     # order-5 point where the raw realisation otherwise mis-places the resonances.
     res.ir = _nl.balance_state_gains(_nl.rescale_state_resistors(

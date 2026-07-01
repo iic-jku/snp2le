@@ -10,9 +10,9 @@ b = (0,0,1,-1):
     M  = Im(Zps)/w,  k = M/sqrt(Lp*Ls),  n = sqrt(Lp/Ls)
 
 Each winding is then split into two equal halves about a (floating) centre tap and
-the same-side halves are magnetically coupled with k - exactly the reference
+the same-side halves are magnetically coupled with k, exactly the reference
 sym_balun model (each half L = Lp/2, series R = Rp/2, K1: L5<->L9, K2: L7<->L8).
-The extraction follows extract_balun_lumped.py; the netlist matches balun.spice.
+The extraction follows extract_balun_lumped.py.  The netlist matches balun.spice.
 """
 from __future__ import annotations
 import numpy as np
@@ -110,10 +110,10 @@ class Balun(Structure):
 
     def freq_traces(self, net, model_s):
         """Frequency-domain trace sets for the Plot view (data vs model):
-          * 'Lp / Rp' - primary differential inductance and resistance
-          * 'Ls / Rs' - secondary differential inductance and resistance
-          * 'Qp / Qs' - primary and secondary quality factors
-          * 'k / M'   - coupling factor and mutual inductance
+          * 'Lp / Rp', primary differential inductance and resistance
+          * 'Ls / Rs', secondary differential inductance and resistance
+          * 'Qp / Qs', primary and secondary quality factors
+          * 'k / M',   coupling factor and mutual inductance
         """
         f = net.f
         z0 = float(np.real(net.z0.flatten()[0]))

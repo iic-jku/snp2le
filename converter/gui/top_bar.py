@@ -291,7 +291,7 @@ class TopBar(QtWidgets.QWidget):
         """Restore every control to its default, without triggering a recompute.
 
         Also unticks 'Show output' and clears the run-status label so the bar
-        matches a freshly-opened window; the caller recomputes once."""
+        matches a freshly-opened window. The caller recomputes once."""
         widgets = (self.mode, self.structure, self.stages, self.iso_r, self.order,
                    self.passive, self.sim_output, self.simulator)
         for w in widgets:
@@ -333,7 +333,7 @@ class TopBar(QtWidgets.QWidget):
 
     def set_sim_progress(self, text):
         """Show a neutral in-progress status (e.g. 'running…') in grey, leaving the
-        button at its default colour - it doubles as the Stop button while a run is on."""
+        button at its default colour. It doubles as the Stop button while a run is on."""
         self.sim_status.setText(text)
         self.sim_status.setStyleSheet("color:#7d828c; font-size:11px; font-weight:600;")
         self.run_sim.setObjectName("")
@@ -352,7 +352,7 @@ class TopBar(QtWidgets.QWidget):
     def set_values(self, state):
         """Apply a ConverterState to the controls (e.g. after loading a design).
 
-        Signals are blocked so this does not trigger a recompute; the caller
+        Signals are blocked so this does not trigger a recompute. The caller
         recomputes once afterwards.
         """
         widgets = (self.mode, self.structure, self.stages, self.iso_r, self.order,
@@ -428,7 +428,7 @@ class TopBar(QtWidgets.QWidget):
             self._set_fext(hz)
 
     def _on_fext(self):
-        """Parse the field on edit; recompute only on a valid, changed value."""
+        """Parse the field on edit, recompute only on a valid, changed value."""
         try:
             v = parse_eng(self.f_ext.text())
             if not v > 0:

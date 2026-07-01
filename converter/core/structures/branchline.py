@@ -1,8 +1,8 @@
 """structures/branchline.py - 4-port lumped-element branch-line (quadrature) coupler.
 
 The classic pi-LP-pi-LP parallel-branch design: the distributed branch-line hybrid
-is a square of four quarter-wave lines - two series (main-line) arms of Zc = Z0/sqrt2
-and two shunt (branch) arms of Zc = Z0 - each replaced by a lumped low-pass pi-section
+is a square of four quarter-wave lines (two series (main-line) arms of Zc = Z0/sqrt2
+and two shunt (branch) arms of Zc = Z0), each replaced by a lumped low-pass pi-section
 (shunt C, series L, shunt C).  The corner shunt capacitors of the two arms meeting at
 each port merge, leaving one capacitor per corner:
 
@@ -19,11 +19,11 @@ match) and the port impedance Z0.
 With `iso_r` (the "arm loss" option) the ideal lossless arms get a series resistance
 R = w0*L/Q, with a single arm quality factor Q fitted so the model dissipates the
 same power as the device at f0.  This lifts the reflection terms off the ideal null
-toward the measured values; the residual finite isolation/directivity is asymmetry,
+toward the measured values.  The residual finite isolation/directivity is asymmetry,
 not loss, and is left to the ideal model.
 
 Reference: R. Knoechel and W. Taute, "Characteristics of Lumped Element Branch Line
-Couplers," (Christian-Albrechts-Universitaet zu Kiel) - the pi-LP-pi-LP parallel
+Couplers," (Christian-Albrechts-Universitaet zu Kiel).  The pi-LP-pi-LP parallel
 branch design of Table I.
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ from .base import Structure
 from ..ir import CircuitIR, Element
 from ..units import comp_label, port_label
 
-# square arms: (node a, node b, tag) - series 1-2 & 4-3, shunt 1-4 & 2-3
+# square arms: (node a, node b, tag), series 1-2 & 4-3, shunt 1-4 & 2-3
 _ARMS = (("p1", "p2", "se"), ("p4", "p3", "se"),
          ("p1", "p4", "sh"), ("p2", "p3", "sh"))
 
@@ -45,7 +45,7 @@ class BranchLineCoupler(Structure):
 
     @staticmethod
     def _build_ir(L_se, L_sh, R_se, R_sh, C):
-        """Assemble the coupler IR; each arm is a series L (+ series R when lossy)."""
+        """Assemble the coupler IR.  Each arm is a series L (+ series R when lossy)."""
         ir = CircuitIR(name="branchline", ports=["p1", "p2", "p3", "p4"], physical=True)
         LR = {"se": (L_se, R_se), "sh": (L_sh, R_sh)}
         for i, (a, b, tag) in enumerate(_ARMS):

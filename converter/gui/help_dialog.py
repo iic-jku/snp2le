@@ -57,8 +57,8 @@ whether to make the model strictly passive for a stable transient run.</li>
 and the model order (universal) or the extraction frequency (structure). For a universal
 macromodel it also reports a <b>DC operating point</b> check: the model is linear, so its
 DC solve only fails if the network is singular (typically an internal node with no DC path
-to ground). A solvable model is marked; a singular one is flagged - with a hint to lower
-the order or enable passivity - <i>before</i> you hand the netlist to a simulator.</li>
+to ground). A solvable model is marked. A singular one is flagged, with a hint to lower
+the order or enable passivity, before you hand the netlist to a simulator.</li>
 <li><b>Element values</b>: the extracted components (e.g. L<sub>s</sub>, R<sub>s</sub>,
 C, k, M&hellip;) for a physical model, or a summary of the synthesised network for the
 universal macromodel. The schematic draws component <i>names</i> only. The numeric values
@@ -115,8 +115,8 @@ testbench frees the button if a run or import is still pending.</li>
 run. For ngspice these are its own console and plot windows. VACASK is launched detached,
 so instead a live <b>VACASK output</b> window tails its captured log (banner, analysis
 progress, <i>Completed</i> / <i>Failed</i> / <i>aborted</i> messages, postprocess lines).
-Leave it unticked to run quietly - the result is imported either way, and VACASK's captured
-log is still shown in the dialog if a run fails or aborts.</li>
+Leave it unticked to run quietly. The result is imported either way, and VACASK's captured
+log still appears in the dialog if a run fails or aborts.</li>
 </ul>
 
 <p><b>How a run's outcome is detected.</b> The two simulators report differently, so snp2le
@@ -138,25 +138,26 @@ rather than passing them back. So the outcome is read from the <b>result file</b
   <li><b>Failed</b>: VACASK could not run at all (e.g. a netlist or model error). No result
   and no marker, so snp2le reports <b>failed!</b>.</li>
   </ul>
-  Because VACASK is synchronous, all three are decided the instant the run returns - no
-  waiting. Either way, open VACASK's console / log for the specific cause.</li>
+  VACASK runs detached, so snp2le watches for the result file and the abort marker and
+  reports the outcome as soon as VACASK finishes. Either way, open VACASK's console or log
+  for the specific cause.</li>
 </ul>
 <p><b>VACASK and high-order universal macromodels.</b> The vector-fit realisation is
 numerically ill-conditioned at high order (its pole gains span ~1e-5 to ~1e11). ngspice's
-solver equilibrates the matrix internally and copes; VACASK's does not, and on its own
+solver equilibrates the matrix internally and copes. VACASK's does not, and on its own
 would mis-place the resonances above ~5 poles. snp2le conditions the exported macromodel
-automatically - a lossless rescale of the state resistors plus a gain-balance of the
-controlled sources - so high-order universal fits now reproduce the model in VACASK exactly
-as they do in ngspice. No action is needed; structure-specific models are unaffected.</p>
+automatically (a lossless rescale of the state resistors plus a gain-balance of the
+controlled sources), so high-order universal fits now reproduce the model in VACASK exactly
+as they do in ngspice. No action is needed, and structure-specific models are unaffected.</p>
 
 <p>While a run is in progress the status reads <i>running…</i> (for as long as the
 simulation takes) then <i>importing…</i>, and the <b>Run Simulation</b> button becomes a
-<b>Stop</b> button you can press to cancel. A run is not killed for taking long; it is only
-stopped if it goes idle (uses no CPU for a while), i.e. it looks genuinely hung.</p>
+<b>Stop</b> button you can press to cancel. A run is not killed for taking long. It is
+stopped only if it goes idle (uses no CPU for a while) and looks genuinely hung.</p>
 
 <p style="color:#7d828c"><i>Universal mode is built on scikit-rf vector fitting. The VACASK
 passive, controlled-source (vccs, cccs) and ground (<tt>GND</tt>) handling are confirmed
-against VACASK; the <tt>mutual</tt>-coupling syntax used by the transformer models is not
+against VACASK. The <tt>mutual</tt>-coupling syntax used by the transformer models is not
 yet hardware-verified.</i></p>"""
 
 

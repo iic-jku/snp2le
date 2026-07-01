@@ -56,14 +56,14 @@ def rescale_state_resistors(ir, target: float = 1e-9):
     least `target` ohms, keeping the transfer function *exactly* the same.
 
     scikit-rf realises each pole with a 1 F state capacitor and a self-resistor
-    R = 1/Re(pole); fast poles give R below ngspice's 1e-12 resistor floor.  Both
+    R = 1/Re(pole), and fast poles give R below ngspice's 1e-12 resistor floor.  Both
     ngspice and a plain clamp would round that to 1e-12 and corrupt the pole,
     which badly distorts the reflection terms (S11/S22) while barely touching
     transmission (this is the order >= 13 bug).  Scaling a state node's capacitor
     by 1/K, its self-resistor by K and every source feeding that node (its n-
-    terminal) by 1/K leaves the node voltage - hence every port response -
+    terminal) by 1/K leaves the node voltage (hence every port response)
     unchanged, so the rescaling is lossless.  Only the universal macromodel uses
-    this; physical structure models keep clamp_ir (their near-zero resistors are
+    this.  Physical structure models keep clamp_ir (their near-zero resistors are
     genuine shorts).
     """
     cap_nodes = set()
@@ -102,13 +102,13 @@ def balance_state_gains(ir, ground: str = "0"):
     (~1e-5) and read back into the port-sensor nodes by huge gains (~1e11).  That 1e-5..1e11
     spread makes the MNA matrix ill-conditioned: ngspice's Sparse solver equilibrates
     internally and copes, but VACASK does not, so above ~5 poles it mis-places the
-    resonances (the order-5/6 break).  Scaling each state node's controlled sources - inputs
-    up and outputs down by k = sqrt(max_output / max_input) - leaves every node voltage, and
+    resonances (the order-5/6 break).  Scaling each state node's controlled sources (inputs
+    up and outputs down by k = sqrt(max_output / max_input)) leaves every node voltage, and
     hence the transfer function, unchanged (lossless), while bringing the two gain groups
     together so the matrix entries span far fewer decades.  The scaling is lossless for ANY
     per-node factor, so tying complex-conjugate pole pairs (..._re_... / ..._im_...) to one
-    factor only keeps their coupling symmetric - a conditioning nicety, not a correctness
-    requirement (with or without it the result is identical in testing).  Used together with
+    factor only keeps their coupling symmetric, a conditioning nicety rather than a
+    correctness requirement (with or without it the result is identical in testing).  Used with
     rescale_state_resistors (which tames the state self-conductances): the two passes take
     VACASK from >12 dB RMS error to ~0 on an order-13 fit, matching the analytic model.
     """
@@ -226,16 +226,16 @@ def render_ngspice(ir: CircuitIR) -> str:
 #   * instances:  name ( nodes ) model param=value
 #   * passives reference a model (resistor/capacitor/inductor). Sources are built in
 # Like the ngspice subckt, the device models and their OSDI loads are NOT redeclared
-# here - the testbench / VACASK common lib provides them (OSDI path
+# here.  The testbench or VACASK common lib provides them (OSDI path
 # /foss/pdks/ihp-sg13g2/libs.tech/vacask/osdi).
 _VC_PASSIVE = {"R": ("resistor", "r"), "C": ("capacitor", "c"), "L": ("inductor", "l")}
 _VC_SOURCE = {"V": "vsource", "G": "vccs", "E": "vcvs", "F": "cccs"}
 
 
 # Ground node.  Unlike SPICE (where node "0" is always ground), Spectre / VACASK has no
-# implicit ground - the testbench must declare one, and Xschem's spectre netlister declares
+# implicit ground, so the testbench must declare one, and Xschem's spectre netlister declares
 # it as `ground GND`, not `ground 0`.  A subckt that uses "0" therefore leaves those
-# terminals floating (which silently collapses the universal macromodel to a flat / wrong
+# terminals floating (which silently collapses the universal macromodel to a flat, wrong
 # response), so map the IR's ground node "0" to GND on the VACASK side.  ngspice keeps "0".
 _VC_GROUND = "GND"
 
@@ -280,8 +280,8 @@ def render_vacask(ir: CircuitIR) -> str:
     if models:                                        # models are declared by the testbench
         L.append("// device models needed (declared by your testbench): "
                  + ", ".join(sorted(models)))
-    L.append(f"// NOTE: ground is '{_VC_GROUND}' - your testbench MUST declare it as the "
-             "ground (Xschem's spectre netlist does this with `ground GND`); otherwise the "
+    L.append(f"// NOTE: ground is '{_VC_GROUND}'. Your testbench must declare it as the "
+             "ground (Xschem's spectre netlist does this with `ground GND`), otherwise the "
              "circuit floats and the result is wrong.")
     L.append(f"subckt {ir.name} ({' '.join(ir.ports)})")
     for e in ir.elements:

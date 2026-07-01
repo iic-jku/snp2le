@@ -1,8 +1,8 @@
 """structures/mim_cap.py - 2-port MIM capacitor model extraction.
 
-Series path: a main capacitor C_s with a small parasitic series L_s and loss R_s;
-shunt path: a plate-to-substrate C at each port.  C_s is taken at low frequency
-(where the series L has negligible effect); L_s/R_s at a higher frequency
+Series path: a main capacitor C_s with a small parasitic series L_s and loss R_s.
+Shunt path: a plate-to-substrate C at each port.  C_s is taken at low frequency
+(where the series L has negligible effect), L_s/R_s at a higher frequency
 (standard network-theory extraction, in the spirit of mim_from_s2p).
 """
 from __future__ import annotations
@@ -91,8 +91,8 @@ class MimCap(Structure):
 
     def freq_traces(self, net, model_s):
         """Frequency-domain trace sets for the Plot view (data vs model):
-          * 'Cseries / Cshunt' - effective series C and shunt C over frequency
-          * 'Rseries / Lseries' - series R and parasitic series L over frequency
+          * 'Cseries / Cshunt', effective series C and shunt C over frequency
+          * 'Rseries / Lseries', series R and parasitic series L over frequency
         """
         f = net.f
         z0 = float(np.real(net.z0.flatten()[0]))

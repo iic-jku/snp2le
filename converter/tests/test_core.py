@@ -54,7 +54,7 @@ def test_universal_fits_and_renders():
 
 def test_universal_high_order_resistors_above_ngspice_floor():
     """Regression: scikit-rf's fast-pole state resistors can fall below ngspice's
-    1e-12 floor at higher orders; rounding them up corrupts S11/S22.  They must be
+    1e-12 floor at higher orders. Rounding them up corrupts S11/S22.  They must be
     rescaled (not clamped) so the exported netlist has no near-floor resistors."""
     bpf = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        "examples", "bpf_ihp-sg13g2.s2p")
@@ -66,7 +66,7 @@ def test_universal_high_order_resistors_above_ngspice_floor():
 
 
 def test_dc_operating_point_check():
-    """A well-posed universal macromodel passes the DC operating-point check; a network
+    """A well-posed universal macromodel passes the DC operating-point check. A network
     with a floating internal node (no DC path to ground) is flagged singular."""
     from core import dc, universal
     net = inductor_2port()
@@ -124,7 +124,7 @@ def test_wilkinson_synthesises_quadrature_divider():
 
 def test_wilkinson_inphase_is_quarter_wave():
     """In-phase Wilkinson: matched, -3 dB equal split, and both outputs at -90 deg
-    (in phase) at the centre frequency - the lumped quarter-wave divider."""
+    (in phase) at the centre frequency, the lumped quarter-wave divider."""
     net = _example("wpd_ihp-sg13g2.s3p")
     res = engine.convert(ConverterState(mode="structure",
                                         structure_key="wilkinson-inphase"), net)
@@ -161,7 +161,7 @@ def test_wilkinson_isolation_resistor_toggle():
 
 def test_value_tolerance_at_fext():
     """Per-element tolerance is taken at f_ext: directly-read reciprocal terms match
-    exactly (0 %); a symmetrised shunt carries the small port-asymmetry residual."""
+    exactly (0 %). A symmetrised shunt carries the small port-asymmetry residual."""
     net = _example("sample_inductor_ihp-sg13g2.s2p")
     res = engine.convert(ConverterState(mode="structure", structure_key="inductor-pi",
                                         f_extract=10e9), net)
@@ -225,7 +225,7 @@ def test_balun_extracts_transformer():
 
 def test_branchline_synthesises_quadrature_coupler():
     """Branch-line coupler: the canonical pi-LP design synthesises a 3 dB quadrature
-    hybrid - matched input, isolated port 4, equal through/coupled split 90 deg apart."""
+    hybrid: matched input, isolated port 4, equal through/coupled split 90 deg apart."""
     net = _example("blc_ihp-sg13g2.s4p")
     res = engine.convert(ConverterState(mode="structure", structure_key="branchline",
                                         iso_resistor=False), net)    # ideal lossless
