@@ -4,7 +4,7 @@
 // 
 // 
 // device models needed (declared by your testbench): capacitor, cccs, resistor, vccs, vsource
-// NOTE: ground is 'GND' - your testbench MUST declare it as the ground (Xschem's spectre netlist does this with `ground GND`); otherwise the circuit floats and the result is wrong.
+// NOTE: ground is 'GND'. Your testbench must declare it as the ground (Xschem's spectre netlist does this with `ground GND`), otherwise the circuit floats and the result is wrong.
 subckt two_port (p1 p2)
   V1 (p1 s1) vsource dc=0
   R1 (s1 GND) resistor r=50
