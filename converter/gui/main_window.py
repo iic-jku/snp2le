@@ -11,6 +11,7 @@ from .top_bar import TopBar
 from .design_view import DesignView
 from .plot_view import PlotView
 from .help_dialog import HelpDialog
+from .log_dialog import LogWindow
 from .footer import Footer
 
 
@@ -54,6 +55,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim_last_cpu = 0.0          # cumulative CPU seconds at the previous check
         self._sim_vacask_seen = False     # a detached vacask process was observed running
         self._sim_vacask_gone_at = 0.0    # when that vacask process disappeared (0 = no)
+        self._sim_log_path = None         # VACASK console log (its output is redirected here)
+        self._log_win = None              # 'Show output' window that tails the VACASK log
+        self._log_timer = None            # refreshes that window while the run is in progress
         example = os.path.join(self._examples_dir, "blc_ihp-sg13g2.s4p")
         try:
             self.net = io.load_touchstone(example)
@@ -316,13 +320,21 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sch_path, show_output=show, simulator=sim)
         self._write_sim_range(cwd)                        # sync testbench sweep to the data
         os.makedirs(os.path.join(cwd, "simulations"), exist_ok=True)
+        self._sim_log_path = None
+        if sim == "vacask":                               # its console is redirected to a log
+            self._sim_log_path = xschem.vacask_log_path(self._sch_path)
+            try:
+                os.remove(self._sim_log_path)             # drop the previous run's log
+            except OSError:
+                pass
         self._sim_proc = QtCore.QProcess(self)
         self._sim_proc.setWorkingDirectory(cwd)
         self._sim_proc.setProcessChannelMode(QtCore.QProcess.ProcessChannelMode.MergedChannels)
-        if sim == "vacask" and show:                      # let the postprocess show plots
+        if sim == "vacask" and show:                      # Show output: tail the console log
             env = QtCore.QProcessEnvironment.systemEnvironment()
-            env.insert("SHOW_PLOTS", "1")
+            env.insert("SHOW_PLOTS", "1")                 # and let the postprocess pop its plot
             self._sim_proc.setProcessEnvironment(env)
+            self._start_log_tail()
         self._sim_proc.finished.connect(self._on_sim_finished)
         self._sim_proc.errorOccurred.connect(self._on_sim_error)
         self._sim_output_buf = ""                         # capture output as it streams, so
@@ -344,12 +356,50 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim_watchdog.start()
 
     def _reset_run_button(self):
+        self._stop_log_tail()                             # final log read, stop tailing
         if self._sim_watchdog is not None:                # stop the hard-cap timer
             self._sim_watchdog.stop()
             self._sim_watchdog = None
         self.top.run_sim.setText("Run Simulation")
         self.top.run_sim.setEnabled(True)
         self._sim_proc = None
+
+    def _read_vacask_log(self) -> str:
+        """The captured VACASK console for this run, or '' if none was written."""
+        p = self._sim_log_path
+        if p and os.path.exists(p):
+            try:
+                with open(p, errors="replace") as fh:
+                    return fh.read().strip()
+            except OSError:
+                pass
+        return ""
+
+    def _start_log_tail(self):
+        """Open the 'Show output' window and refresh it from the VACASK log as it runs."""
+        if self._log_win is None:
+            self._log_win = LogWindow(self, "VACASK output")
+        self._log_win.set_text("(waiting for VACASK to start…)")
+        self._log_win.show()
+        self._log_win.raise_()
+        if self._log_timer is None:
+            self._log_timer = QtCore.QTimer(self)
+            self._log_timer.setInterval(300)
+            self._log_timer.timeout.connect(self._update_log_window)
+        self._log_timer.start()
+
+    def _update_log_window(self):
+        if self._log_win is None:
+            return
+        txt = self._read_vacask_log()
+        if txt:
+            self._log_win.set_text(txt)
+
+    def _stop_log_tail(self):
+        if self._log_timer is not None:
+            self._log_timer.stop()
+        if self._log_win is not None and self._log_win.isVisible():
+            self._update_log_window()                     # show whatever landed last
 
     def _check_sim_activity(self):
         # Runs every 5 s while a run is in progress.  Kill + report failed only when the
@@ -601,7 +651,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._stop_sim_timer()
         self._reset_run_button()
         self.top.set_sim_status(status, False)
-        log = (self._sim_last_output or "").strip()
+        log = self._read_vacask_log() or (self._sim_last_output or "").strip()
         what = ("aborted: the analysis ran but produced no result (e.g. a singular matrix)"
                 if aborted else "failed: it produced no result")
         QtWidgets.QMessageBox.warning(

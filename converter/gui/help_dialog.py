@@ -108,7 +108,11 @@ overlaid on the plots automatically.</li>
 or red (failed). If no result appears, the dialog shows the simulator log. Loading another
 testbench frees the button if a run or import is still pending.</li>
 <li><b>Show output</b>: tick to show the simulator's console and plot windows during the
-run. Leave it unticked to run quietly (the result is imported either way).</li>
+run. For ngspice these are its own console and plot windows. VACASK is launched detached,
+so instead a live <b>VACASK output</b> window tails its captured log (banner, analysis
+progress, <i>Completed</i> / <i>Failed</i> / <i>aborted</i> messages, postprocess lines).
+Leave it unticked to run quietly - the result is imported either way, and VACASK's captured
+log is still shown in the dialog if a run fails or aborts.</li>
 </ul>
 
 <p><b>How a run's outcome is detected.</b> The two simulators report differently, so snp2le
