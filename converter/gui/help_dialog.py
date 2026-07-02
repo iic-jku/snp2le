@@ -41,7 +41,7 @@ vector fit may use (more poles track sharp resonances but enlarge the netlist), 
 whether to make the model strictly passive for a stable transient run.</li>
 <li><b>Model option</b> (shown only for the structure it belongs to):
   <ul>
-  <li><b>Stages</b>: number of RLGC ladder cells for the transmission line.</li>
+  <li><b>Stages</b>: number of RLGC ladder cells for the transmission line (1 to 10).</li>
   <li><b>Isolation R</b>: include the in-phase Wilkinson's
   2&middot;Z<sub>0</sub> isolation resistor (untick to model a divider without it).</li>
   <li><b>Resistive loss</b>: add fitted series resistance to the branch-line

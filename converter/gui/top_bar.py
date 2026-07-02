@@ -148,9 +148,9 @@ class TopBar(QtWidgets.QWidget):
         self._f_extract_hz = 10e9
 
         # RLGC ladder stage count (transmission-line model only)
-        self.stages = QtWidgets.QSpinBox(); self.stages.setRange(1, 20); self.stages.setValue(2)
+        self.stages = QtWidgets.QSpinBox(); self.stages.setRange(1, 10); self.stages.setValue(2)
         self.stages.setFixedWidth(70)
-        self.stages.setToolTip("Number of RLGC ladder stages (transmission-line model).")
+        self.stages.setToolTip("Number of RLGC ladder stages, 1 to 10 (transmission-line model).")
 
         # Wilkinson isolation resistor / branch-line resistive loss (model-specific)
         self.iso_r = QtWidgets.QCheckBox("Isolation R"); self.iso_r.setChecked(True)

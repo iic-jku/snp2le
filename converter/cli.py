@@ -45,6 +45,17 @@ def _freq(text):
         raise argparse.ArgumentTypeError(f"invalid frequency '{text}' (e.g. 7GHz, 2.4e9)")
 
 
+def _stages(text):
+    """argparse type for the RLGC ladder stage count (an integer from 1 to 10)."""
+    try:
+        n = int(text)
+    except Exception:                                       # noqa: BLE001
+        raise argparse.ArgumentTypeError(f"invalid stage count '{text}' (an integer 1..10)")
+    if not 1 <= n <= 10:
+        raise argparse.ArgumentTypeError(f"--stages must be between 1 and 10 (got {n})")
+    return n
+
+
 def _out_path(src, explicit, dialect, n_inputs, n_formats):
     ext = "inc" if dialect == "vacask" else "spice"          # VACASK writes .inc
     if explicit and n_inputs == 1:
@@ -404,7 +415,8 @@ def build_parser():
     # structure-mode options
     c.add_argument("--fext", type=_freq, default=10e9, metavar="FREQ",
                    help="extraction frequency, e.g. 7GHz (structure)")
-    c.add_argument("--stages", type=int, default=2, help="RLGC ladder cells (tline-rlgc)")
+    c.add_argument("--stages", type=_stages, default=2,
+                   help="RLGC ladder cells, 1 to 10 (tline-rlgc)")
     c.add_argument("--iso-r", dest="iso_r", action="store_true", default=True,
                    help="include the Wilkinson isolation R or branch-line arm loss")
     c.add_argument("--no-iso-r", dest="iso_r", action="store_false")

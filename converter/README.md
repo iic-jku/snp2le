@@ -151,8 +151,8 @@ pyinstaller snp2le.spec            # output in dist/snp2le/
   The model is still usable. The status is reported honestly ("near-passive").
 * A 0 Hz (DC) sample is dropped automatically, since it breaks the
   Y-/ABCD-parameter extraction and the MNA rebuild.
-* The transmission-line ladder uses 4 π-cells by default (`N_SEGMENTS` in
-  `core/structures/tline.py`).
+* The transmission-line ladder uses 2 π-cells by default (`N_SEGMENTS` in
+  `core/structures/tline.py`) and can be set from 1 to 10 stages.
 
 ---
 

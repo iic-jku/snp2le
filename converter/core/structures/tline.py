@@ -58,7 +58,7 @@ class TransmissionLine(Structure):
         # equally over N L-cells: each cell is series R+L then shunt C||G
         Ztot = gl * Zc                                      # R_tot + j w L_tot
         Ytot = gl / Zc                                      # G_tot + j w C_tot
-        n = max(1, int(n_segments))
+        n = max(1, min(10, int(n_segments)))               # ladder stages are capped at 1..10
         R_seg = float(abs(Ztot.real)) / n
         L_seg = float(abs(Ztot.imag / wk)) / n
         G_seg = float(abs(Ytot.real)) / n
