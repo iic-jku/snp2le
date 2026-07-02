@@ -135,6 +135,8 @@ class MimCap(Structure):
         d = sd.Drawing(show=False); d.config(unit=2.0, fontsize=12)
         with d:
             elm.Dot(open=True).label(port_label(1), loc="left")
+            elm.Line().right().length(1.0)      # P1 lead, same length as the P2 lead
+            elm.Dot()
             d.push()
             elm.Capacitor().down().label(comp_label("C_p1", v.get("C1"), "F"))
             elm.Ground()
@@ -142,6 +144,7 @@ class MimCap(Structure):
             elm.Capacitor().right().label(comp_label("C_s", v.get("Cs"), "F", sep="  "))
             elm.Inductor2().right().label(comp_label("L_s", v.get("Ls"), "H", sep="  "))
             elm.Resistor().right().label(comp_label("R_s", v.get("Rs"), "\u03a9", sep="  "))
+            elm.Line().right().length(0.33)     # match node<->R_s gap to the node<->C_s gap
             elm.Dot()
             d.push()
             elm.Capacitor().down().label(comp_label("C_p2", v.get("C2"), "F"))

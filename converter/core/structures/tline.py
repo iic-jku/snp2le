@@ -142,25 +142,30 @@ class TransmissionLine(Structure):
         sd.use("matplotlib")
         n = len([e for e in ir.elements if e.name.startswith("Ls")])     # L-cells
         d = sd.Drawing(show=False); d.config(unit=1.5, fontsize=11)
-
         def cell():
-            """One L-cell: series L+R, then a shunt R_sh||C_sh to ground."""
+            """One L-cell: series L+R, then a shunt R_sh || C_sh to ground.  R_s stays on the
+            L_s rail; only its label is nudged up to line up with the higher inductor label."""
             elm.Inductor2().right().label(comp_label("L_s"))
-            elm.Resistor().right().label(comp_label("R_s"))
+            elm.Resistor().right().label(comp_label("R_s"), ofst=(0, 0.10))
             elm.Dot()
-            d.push()                              # shunt below the rail
-            elm.Line().down().length(0.4)
+            d.push()                              # shunt below the rail: R_sh || C_sh,
+            elm.Line().down().length(0.4)         # spread symmetrically so they do not overlap
             d.push()
+            elm.Line().left().length(0.5)
             elm.Resistor().down().label(comp_label("R_sh"))
             elm.Ground()
             d.pop()
-            elm.Line().right().length(0.8)
-            elm.Capacitor().down().label(comp_label("C_sh"))
+            elm.Line().right().length(0.65)       # C_sh sits a little further right of the node
+            cap = elm.Capacitor().down()
             elm.Ground()
+            # +0.1 in y cancels elm.Label's built-in downward offset, so the C_sh label lines
+            # up with R_sh's centred label rather than sitting slightly below it
+            elm.Label().at((cap.center[0] + 0.55, cap.center[1] + 0.1)).label(comp_label("C_sh"))
             d.pop()
 
         with d:
             elm.Dot(open=True).label(port_label(1), loc="left")
+            elm.Line().right().length(0.6)        # P1 input lead
             if n <= 4:                            # small ladder: draw every stage
                 for _ in range(n):
                     cell()
@@ -168,6 +173,6 @@ class TransmissionLine(Structure):
                 cell(); cell()
                 elm.Line().right().length(0.6).label(r"$\cdots$")
                 cell()                            # last cell keeps the output shunt
-            elm.Line().right().length(0.4)
+            elm.Line().right().length(1.2)        # output trace to P2 (twice the P1 input lead)
             elm.Dot(open=True).label(port_label(2), loc="right")
         return d

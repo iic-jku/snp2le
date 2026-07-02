@@ -166,17 +166,22 @@ class Balun(Structure):
             T = elm.Transformer(t1=4, t2=4, loop=False).label(comp_label("k"), loc="top")
             # primary leads (left): port1 - R_p - top, bottom - R_p - port2
             elm.Resistor().at(T.p1).left().label(comp_label("R_p", Rp, "Ω", sep="  "))
+            elm.Line().left().length(0.4)
             elm.Dot(open=True).label(port_label(1), loc="left")
             elm.Resistor().at(T.p2).left().label(comp_label("R_p", Rp, "Ω", sep="  "))
+            elm.Line().left().length(0.4)
             elm.Dot(open=True).label(port_label(2), loc="left")
             # secondary leads (right): top - R_s - port3, bottom - R_s - port4
             elm.Resistor().at(T.s1).right().label(comp_label("R_s", Rs, "Ω", sep="  "))
+            elm.Line().right().length(0.4)
             elm.Dot(open=True).label(port_label(3), loc="right")
             elm.Resistor().at(T.s2).right().label(comp_label("R_s", Rs, "Ω", sep="  "))
+            elm.Line().right().length(0.4)
             elm.Dot(open=True).label(port_label(4), loc="right")
-            # winding inductances, at each coil's mid-height, set outward
+            # winding inductances, next to each coil (L_p toward it from the left, L_s from
+            # the right), so the labels sit close to the windings rather than out in the leads
             pmid = ((T.p1[0] + T.p2[0]) / 2.0, (T.p1[1] + T.p2[1]) / 2.0)
             smid = ((T.s1[0] + T.s2[0]) / 2.0, (T.s1[1] + T.s2[1]) / 2.0)
-            elm.Label().at(pmid).label(comp_label("L_p", Lp, "H"), ofst=(-0.55, 0))
-            elm.Label().at(smid).label(comp_label("L_s", Ls, "H"), ofst=(0.55, 0))
+            elm.Label().at(pmid).label(comp_label("L_p", Lp, "H"), ofst=(-0.36, 0))
+            elm.Label().at(smid).label(comp_label("L_s", Ls, "H"), ofst=(0.22, 0))
         return d

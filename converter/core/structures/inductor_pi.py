@@ -184,6 +184,8 @@ class InductorPi(Structure):
         d = sd.Drawing(show=False); d.config(unit=2.0, fontsize=13)
         with d:
             elm.Dot(open=True).label(port_label(1), loc="left")
+            elm.Line().right().length(1.0)      # P1 lead, same length as the P2 lead
+            elm.Dot()
             d.push()
             elm.Capacitor().down().label(comp_label("C_p1", v.get("C1"), "F"))
             if "R1" in v:                       # substrate R in series with C
@@ -191,7 +193,10 @@ class InductorPi(Structure):
             elm.Ground()
             d.pop()
             elm.Inductor2().right().label(comp_label("L_s", v.get("Ls"), "H", sep="  "))
-            elm.Resistor().right().label(comp_label("R_s", v.get("Rs"), "Ω", sep="  "))
+            # R_s stays on the L_s rail; nudge only its label up so it lines up with the
+            # inductor label, which sits higher because the coil humps up
+            elm.Resistor().right().label(comp_label("R_s", v.get("Rs"), "Ω", sep="  "),
+                                         ofst=(0, 0.13))
             elm.Dot()
             d.push()
             elm.Capacitor().down().label(comp_label("C_p2", v.get("C2"), "F"))

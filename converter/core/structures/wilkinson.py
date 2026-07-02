@@ -122,11 +122,13 @@ class Wilkinson(Structure):
             elm.Line().down().length(2.4)
             elm.Capacitor().right().label(comp_label("C_1", v["C1b"], "F"))
             nB = elm.Dot()
+            elm.Line().right().length(0.75)     # centre L3 under the shunt L2 of the top arm
+            elm.Dot()
             shunt(elm.Capacitor, v["C3a"], "C_3")
             elm.Inductor2().right().label(comp_label("L_3", v["L3"], "H"))
             elm.Dot()
             shunt(elm.Capacitor, v["C3b"], "C_3")
-            elm.Line().right().length(0.5)
+            elm.Line().right().length(1.25)     # P3 stays put: the Pi moved left, so this grew
             elm.Dot(open=True).label(port_label(3), loc="right")
             # ---- Rint + Lint isolation between nA (top) and nB (bottom) ----
             if "Rint" in v:
@@ -191,11 +193,17 @@ class WilkinsonInphase(Structure):
         d = sd.Drawing(show=False); d.config(unit=1.5, fontsize=10)
 
         def cap(up):
-            """Shunt C to ground, pointing away from the centre rail."""
+            """Shunt C to ground, pointing away from the centre rail.  The ground is pulled
+            up against the cap end so the cap-to-ground gap matches the node-to-cap gap; the
+            top ground is rotated 180 deg so it sits above the cap instead of below it."""
             d.push()
             (elm.Capacitor().up() if up else elm.Capacitor().down()).label(
                 Cl, loc="top" if up else "bottom")
-            elm.Ground()
+            p = d.here; ex, ey = float(p[0]), float(p[1])       # cap far end
+            if up:
+                elm.Ground().theta(180).at((ex, ey - 0.4))
+            else:
+                elm.Ground().at((ex, ey + 0.4))
             d.pop()
 
         def arm(up):
@@ -203,7 +211,7 @@ class WilkinsonInphase(Structure):
             the output port.  Shunt caps point away from the centre, and the series-L
             label sits on the inner side so it stays clear of the cap labels.  A
             junction node is only drawn when the isolation resistor connects there."""
-            (elm.Line().up() if up else elm.Line().down()).length(2.0)
+            (elm.Line().up() if up else elm.Line().down()).length(1.3)
             elm.Dot(); cap(up)                          # input-side shunt C (at p1)
             elm.Inductor2().right().length(2.0).label(Ll, loc="bottom" if up else "top")
             elm.Dot(); cap(up)                          # output-side shunt C
@@ -226,8 +234,11 @@ class WilkinsonInphase(Structure):
             nB = arm(False)                             # bottom arm -> P3
             elm.Dot(open=True).label(port_label(3), loc="right")
             if R is not None:                           # optional isolation resistor
-                elm.Resistor().endpoints(nA.center, nB.center).label(
-                    comp_label("R_iso", R, "Ω"), loc="right")
+                elm.Resistor().endpoints(nA.center, nB.center)
+                mid = ((nA.center[0] + nB.center[0]) / 2.0,
+                       (nA.center[1] + nB.center[1]) / 2.0)
+                elm.Label().at((mid[0] + 0.45, mid[1])).label(   # label beside the resistor
+                    comp_label("R_iso", R, "Ω"))
         return d
 
 

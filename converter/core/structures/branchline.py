@@ -153,12 +153,21 @@ class BranchLineCoupler(Structure):
                 elm.Label().at((a[0] + xs, (a[1] + b[1]) / 2)).label(Ll)
 
         def corner(pt, up, side, n):
+            elm.Dot().at(pt)                                    # node dot where the two arms cross
             d.push()
             cap = elm.Capacitor().at(pt)
             (cap.up() if up else cap.down()).label(Cl)
-            elm.Ground()
+            p = d.here; ex, ey = float(p[0]), float(p[1])       # cap far end
+            if up:                                              # pull the ground up against the
+                elm.Ground().theta(180).at((ex, ey - 0.43))     # cap end so cap->GND == node->cap
+            else:
+                elm.Ground().at((ex, ey + 0.43))
             d.pop()
-            elm.Dot(open=True).at(pt).label(port_label(n), loc=side)
+            d.push()                                            # lead out to the port
+            lead = elm.Line().at(pt)
+            (lead.left() if side == "left" else lead.right()).length(0.8)
+            elm.Dot(open=True).label(port_label(n), loc=side)
+            d.pop()
 
         with d:
             harm(p1, p2, Lse, Rse, "top")       # top series arm
