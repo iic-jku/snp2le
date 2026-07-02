@@ -194,7 +194,7 @@ class WilkinsonInphase(Structure):
 
         def cap(up):
             """Shunt C to ground, pointing away from the centre rail.  The ground is pulled
-            up against the cap end so the cap-to-ground gap matches the node-to-cap gap; the
+            up against the cap end so the cap-to-ground gap matches the node-to-cap gap.  The
             top ground is rotated 180 deg so it sits above the cap instead of below it."""
             d.push()
             (elm.Capacitor().up() if up else elm.Capacitor().down()).label(

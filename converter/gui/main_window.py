@@ -119,7 +119,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _cancel_sim(self):
         """Stop any running / pending simulation (run or auto-import) without firing
         its handlers, and free the Run button, e.g. so a new testbench can be run
-        while an earlier import is still pending ('Importing…')."""
+        while an earlier import is still pending ('Importing...')."""
         active = self._sim_proc is not None or self._sim_timer is not None
         self._stop_sim_timer()
         if self._sim_proc is not None:
@@ -202,6 +202,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_export(self, dialect):
         res = engine.convert(self.state, self.net)
+        if not res.ok:                                    # no usable netlist to write
+            QtWidgets.QMessageBox.warning(
+                self, "Export netlist",
+                "The current conversion did not succeed, so there is nothing to export:\n"
+                f"{res.error}")
+            return
         ext = "inc" if dialect == "vacask" else "spice"   # VACASK include file (.inc)
         # default name: <source>_le, falling back to the subcircuit's own name
         src = os.path.splitext(os.path.basename(self.state.source_path))[0] \
@@ -227,7 +233,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     else netlist.render_ngspice(res.ir))
         else:
             text = res.vacask if dialect == "vacask" else res.ngspice
-        with open(path, "w") as fh:
+        with open(path, "w", encoding="utf-8") as fh:
             fh.write(text)
         # a file name like 'two-port' is not a legal subckt identifier ('-' is the minus
         # operator in SPICE / Spectre), so both the file and the subcircuit were saved
@@ -332,7 +338,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim_proc.readyRead.connect(self._on_sim_readyread)  # the full log is in hand
         self._sim_start = time.time()                     # to locate the result file
         self.top.run_sim.setText("Stop")                  # the run button becomes Stop
-        self.top.set_sim_progress("running…")
+        self.top.set_sim_progress("running...")
         self._sim_proc.start(prog, args)
         # Activity watchdog: a real simulation keeps using CPU, while a hung xschem (e.g.
         # stuck at an interactive prompt) goes idle.  So we cap on *inactivity*, not wall
@@ -353,6 +359,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sim_watchdog = None
         self.top.run_sim.setText("Run Simulation")
         self.top.run_sim.setEnabled(True)
+        if self._sim_proc is not None:                    # don't accumulate finished
+            self._sim_proc.deleteLater()                  # QProcess objects over a session
         self._sim_proc = None
 
     def _read_vacask_log(self) -> str:
@@ -360,7 +368,7 @@ class MainWindow(QtWidgets.QMainWindow):
         p = self._sim_log_path
         if p and os.path.exists(p):
             try:
-                with open(p, errors="replace") as fh:
+                with open(p, encoding="utf-8", errors="replace") as fh:
                     return fh.read().strip()
             except OSError:
                 pass
@@ -370,7 +378,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Open the 'Show output' window and refresh it from the VACASK log as it runs."""
         if self._log_win is None:
             self._log_win = LogWindow(self, "VACASK output")
-        self._log_win.set_text("(waiting for VACASK to start…)")
+        self._log_win.set_text("(waiting for VACASK to start...)")
         self._log_win.show()
         self._log_win.raise_()
         if self._log_timer is None:
@@ -437,7 +445,7 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 with open(f"/proc/{p}/stat") as fh:
                     data = fh.read()
-                fields = data[data.rfind(")") + 2:].split()   # after 'comm)': state ppid …
+                fields = data[data.rfind(")") + 2:].split()   # after 'comm)': state ppid ...
                 info[p] = (int(fields[1]), (int(fields[11]) + int(fields[12])) / ticks)
             except (OSError, ValueError, IndexError):
                 continue
@@ -563,7 +571,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sim_vacask_gone_at = 0.0
             self._sim_poll_deadline = time.time() + 3600.0    # absolute backstop only
             self.top.run_sim.setText("Stop")
-            self.top.set_sim_progress("running…")
+            self.top.set_sim_progress("running...")
             self._sim_timer = QtCore.QTimer(self)
             self._sim_timer.setInterval(300)
             self._sim_timer.timeout.connect(self._poll_sim_result)
@@ -585,7 +593,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim_poll_deadline = time.time() + 60.0
         self._sim_poll_last = None
         self.top.run_sim.setText("Stop")             # still cancellable while importing
-        self.top.set_sim_progress("importing…")
+        self.top.set_sim_progress("importing...")
         self._sim_timer = QtCore.QTimer(self)
         self._sim_timer.setInterval(300)
         self._sim_timer.timeout.connect(self._poll_sim_result)
@@ -712,7 +720,7 @@ class MainWindow(QtWidgets.QMainWindow):
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, "Save conversion settings", "snp2le.json", "JSON (*.json)")
         if path:
-            with open(path, "w") as fh:
+            with open(path, "w", encoding="utf-8") as fh:
                 fh.write(self.state.to_json())
 
     def on_load_design(self):
@@ -721,7 +729,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not path:
             return
         try:
-            with open(path) as fh:
+            with open(path, encoding="utf-8") as fh:
                 self.state = ConverterState.from_json(fh.read())
         except Exception as exc:                          # noqa: BLE001
             QtWidgets.QMessageBox.warning(self, "Load failed", str(exc))
@@ -734,6 +742,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 pass
         self.top.set_values(self.state)        # sync the controls to the loaded design
         self.recompute()
+
+    def closeEvent(self, event):
+        """Stop any running simulation and its timers before the window closes, so a
+        detached VACASK process or a polling timer cannot outlive the UI."""
+        try:
+            self._timer.stop()                            # the recompute debounce
+            self._cancel_sim()                            # run/import timers + detached VACASK
+        except Exception:                                 # noqa: BLE001
+            pass
+        super().closeEvent(event)
 
     # ---- the pipeline ----------------------------------------------------
     def recompute(self):

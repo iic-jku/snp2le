@@ -637,7 +637,7 @@ class PlotView(QtWidgets.QWidget):
         if not path:
             return
         cols = list(self._last.keys())
-        with open(path, "w", newline="") as fh:
+        with open(path, "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh); w.writerow(cols)
             w.writerows(zip(*[self._last[c] for c in cols]))
 

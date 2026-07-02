@@ -17,6 +17,14 @@ DARK = "#1b1f24"
 PANEL_BORDER = "#d4dae2"
 FIELD_BORDER = "#c4ccd6"
 LIGHT_BG = "#eef1f5"
+DISABLED_FG = "#aab2bd"        # greyed-out text (inputs, disabled combo items)
+
+# Status-text colours, tuned to read as small text on the light panels.  The JKU
+# fills above (e.g. JKU_GREEN) are too light for text, so these status shades run
+# darker while keeping the same red as JKU_RED.
+STATUS_GREEN = "#2e7d32"
+STATUS_AMBER = "#b8860b"
+STATUS_RED = JKU_RED
 
 
 def build_stylesheet() -> str:

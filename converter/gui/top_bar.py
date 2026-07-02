@@ -12,10 +12,10 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from core.structures import structure_items
 from core import xschem
 from core.units import parse_eng, format_eng
-from .style import JKU_BLUE, JKU_GREEN, JKU_RED
+from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN, JKU_RED, PANEL_BORDER, DISABLED_FG
 from .widgets import FitComboBox
 
-_DISABLED_GREY = QtGui.QColor("#9aa0aa")
+_DISABLED_GREY = QtGui.QColor(DISABLED_FG)     # greyed-out dropdown items
 
 
 def _reset_icon(color=JKU_BLUE):
@@ -196,7 +196,7 @@ class TopBar(QtWidgets.QWidget):
 
         # fixed vertical divider between the conversion controls and the action buttons
         self.sep = QtWidgets.QFrame(); self.sep.setFixedWidth(1)
-        self.sep.setStyleSheet("background-color:#d4d6db;")
+        self.sep.setStyleSheet(f"background-color:{PANEL_BORDER};")
         self.sep.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
 
         # export buttons live here (not in the netlist panel) so they are reachable
@@ -332,10 +332,10 @@ class TopBar(QtWidgets.QWidget):
         self._repolish(self.run_sim)
 
     def set_sim_progress(self, text):
-        """Show a neutral in-progress status (e.g. 'running…') in grey, leaving the
+        """Show a neutral in-progress status (e.g. 'running...') in grey, leaving the
         button at its default colour. It doubles as the Stop button while a run is on."""
         self.sim_status.setText(text)
-        self.sim_status.setStyleSheet("color:#7d828c; font-size:11px; font-weight:600;")
+        self.sim_status.setStyleSheet(f"color:{JKU_GRAY}; font-size:11px; font-weight:600;")
         self.run_sim.setObjectName("")
         self._repolish(self.run_sim)
 

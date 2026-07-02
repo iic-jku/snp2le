@@ -107,7 +107,7 @@ def _enforce_passivity(vf, net):
     3. Last resort: one lower-order refit (a smaller model is often easier to
        make passive, at some accuracy cost).
     A candidate is kept only if it is passive *and* still resembles the data
-    (`rms < _USABLE_RMS`); otherwise the accurate near-passive fit is returned.
+    (`rms < _USABLE_RMS`).  Otherwise the accurate near-passive fit is returned.
 
     Strategy adapted from the COBRA project (https://github.com/DI-PASSIONATE/COBRA).
 

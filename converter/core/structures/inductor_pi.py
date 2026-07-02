@@ -193,7 +193,7 @@ class InductorPi(Structure):
             elm.Ground()
             d.pop()
             elm.Inductor2().right().label(comp_label("L_s", v.get("Ls"), "H", sep="  "))
-            # R_s stays on the L_s rail; nudge only its label up so it lines up with the
+            # R_s stays on the L_s rail.  Nudge only its label up so it lines up with the
             # inductor label, which sits higher because the coil humps up
             elm.Resistor().right().label(comp_label("R_s", v.get("Rs"), "Ω", sep="  "),
                                          ofst=(0, 0.13))

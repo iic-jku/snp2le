@@ -60,7 +60,7 @@ DC solve only fails if the network is singular (typically an internal node with 
 to ground). A solvable model is marked. A singular one is flagged, with a hint to lower
 the order or enable passivity, before you hand the netlist to a simulator.</li>
 <li><b>Element values</b>: the extracted components (e.g. L<sub>s</sub>, R<sub>s</sub>,
-C, k, M&hellip;) for a physical model, or a summary of the synthesised network for the
+C, k, M) for a physical model, or a summary of the synthesised network for the
 universal macromodel. The schematic draws component <i>names</i> only. The numeric values
 live here.</li>
 <li><b>Tolerances</b> (structure models): the per-element agreement at the extraction
@@ -111,6 +111,10 @@ overlaid on the plots automatically.</li>
 <li><b>Run Simulation</b>: runs the loaded testbench. The button turns green (successful)
 or red (failed). If no result appears, the dialog shows the simulator log. Loading another
 testbench frees the button if a run or import is still pending.</li>
+<li><b>Frequency range</b>: each run writes the loaded file's frequency span into the
+testbench sweep (through an included <tt>sim_range</tt> file), so the simulated overlay
+covers the same band as the data. The design point <tt>f0</tt> stays in the testbench, and
+the testbench still runs standalone in Xschem with the last-written range.</li>
 <li><b>Show output</b>: tick to show the simulator's console and plot windows during the
 run. For ngspice these are its own console and plot windows. VACASK is launched detached,
 so instead a live <b>VACASK output</b> window tails its captured log (banner, analysis
@@ -150,8 +154,8 @@ automatically (a lossless rescale of the state resistors plus a gain-balance of 
 controlled sources), so high-order universal fits now reproduce the model in VACASK exactly
 as they do in ngspice. No action is needed, and structure-specific models are unaffected.</p>
 
-<p>While a run is in progress the status reads <i>running…</i> (for as long as the
-simulation takes) then <i>importing…</i>, and the <b>Run Simulation</b> button becomes a
+<p>While a run is in progress the status reads <i>running...</i> (for as long as the
+simulation takes) then <i>importing...</i>, and the <b>Run Simulation</b> button becomes a
 <b>Stop</b> button you can press to cancel. A run is not killed for taking long. It is
 stopped only if it goes idle (uses no CPU for a while) and looks genuinely hung.</p>
 

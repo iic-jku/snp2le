@@ -45,7 +45,7 @@ def combobox_qss(accent=ACCENT_ARROW, disabled=DISABLED_ARROW):
     return f"""
 QComboBox {{
     background: #ffffff; color: #000000;
-    border: 1px solid #c2cad4; border-radius: 6px;
+    border: 1px solid #c4ccd6; border-radius: 6px;
     padding: 3px 6px; padding-right: 18px;
     font-size: 12px; font-weight: 600;
 }}
@@ -64,7 +64,7 @@ QComboBox::down-arrow:on {{ top: 1px; }}   /* nudge while popup is open */
 /* the popup list */
 QComboBox QAbstractItemView {{
     background: #ffffff; outline: none;
-    border: 1px solid #c2cad4; border-radius: 6px;
+    border: 1px solid #c4ccd6; border-radius: 6px;
     selection-background-color: #e9f5fb; selection-color: #000000;
 }}
 """

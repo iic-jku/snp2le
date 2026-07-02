@@ -144,7 +144,7 @@ class TransmissionLine(Structure):
         d = sd.Drawing(show=False); d.config(unit=1.5, fontsize=11)
         def cell():
             """One L-cell: series L+R, then a shunt R_sh || C_sh to ground.  R_s stays on the
-            L_s rail; only its label is nudged up to line up with the higher inductor label."""
+            L_s rail.  Only its label is nudged up to line up with the higher inductor label."""
             elm.Inductor2().right().label(comp_label("L_s"))
             elm.Resistor().right().label(comp_label("R_s"), ofst=(0, 0.10))
             elm.Dot()

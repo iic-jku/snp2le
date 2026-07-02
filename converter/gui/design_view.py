@@ -9,6 +9,7 @@ from __future__ import annotations
 from PySide6 import QtCore, QtWidgets
 
 from core.units import format_eng
+from .style import JKU_GRAY, STATUS_GREEN, STATUS_AMBER, STATUS_RED
 from .widgets import OutputField, section_title, MathLabel, passivity_text
 from .schematic_widget import SchematicWidget
 
@@ -67,13 +68,13 @@ class DesignView(QtWidgets.QWidget):
         left.addWidget(self.tol_title)
         self.tol_caption = QtWidgets.QLabel(
             "± tolerance at the ext. frequency (the ○ marker on the model curve): "
-            "|data − model| / model.")
-        self.tol_caption.setStyleSheet("color:#7d828c;font-size:10px;")
+            "|data - model| / model.")
+        self.tol_caption.setStyleSheet(f"color:{JKU_GRAY};font-size:10px;")
         self.tol_caption.setWordWrap(True)
         self.tol_caption.setToolTip(
             "At the ext. frequency (the ○ marker on the model curve), the parameter the "
             "measured data implies is compared to the model value:\n\n"
-            "    tolerance = |value − model| / |model| × 100\n\n"
+            "    tolerance = |value - model| / |model| * 100\n\n"
             "Directly-read reciprocal terms (e.g. the series L, R) read 0 %, since the model "
             "reproduces them exactly. Terms the model must approximate (e.g. the shunt C "
             "forced equal across two slightly asymmetric ports) carry the residual it "
@@ -84,7 +85,7 @@ class DesignView(QtWidgets.QWidget):
         left.addLayout(self.tol_host)
 
         self.msg_lbl = QtWidgets.QLabel("")
-        self.msg_lbl.setStyleSheet("color:#7d828c;font-size:10px;"); self.msg_lbl.setWordWrap(True)
+        self.msg_lbl.setStyleSheet(f"color:{JKU_GRAY};font-size:10px;"); self.msg_lbl.setWordWrap(True)
         left.addWidget(self.msg_lbl)
         left.addStretch(1)
         root.addWidget(self.left_frame)
@@ -121,17 +122,17 @@ class DesignView(QtWidgets.QWidget):
     @staticmethod
     def _tol_color(pct):
         if pct < 2.0:
-            return "#2e7d32"               # green: model fits this value at f_ext
+            return STATUS_GREEN            # model fits this value at f_ext
         if pct < 10.0:
-            return "#b8860b"               # amber: moderate residual
-        return "#d95c4c"                   # red: the model cannot fit this term
+            return STATUS_AMBER            # moderate residual
+        return STATUS_RED                  # the model cannot fit this term
 
     @staticmethod
     def _tol_text(pct):
         if pct != pct:                     # NaN: not defined for this value
-            return "n/a", "#7d828c"
+            return "n/a", JKU_GRAY
         if pct > 100.0:                    # value not stable in the operating band
-            return ">100%", "#d95c4c"
+            return ">100%", STATUS_RED
         return f"±{pct:.1f}%", DesignView._tol_color(pct)
 
     def update_results(self, res):
@@ -153,7 +154,7 @@ class DesignView(QtWidgets.QWidget):
         self._clear(self.values_host)
         if not res.ok:
             lab = QtWidgets.QLabel(res.error)
-            lab.setStyleSheet("color:#d95c4c;"); lab.setWordWrap(True)
+            lab.setStyleSheet(f"color:{STATUS_RED};"); lab.setWordWrap(True)
             self.values_host.addWidget(lab)
         elif res.physical and res.value_rows:
             for label, val, unit in res.value_rows:
@@ -165,12 +166,12 @@ class DesignView(QtWidgets.QWidget):
             note = QtWidgets.QLabel(
                 f"macromodel: {n_el} elements (R / C + controlled sources).\n"
                 "Electrically exact, not physically interpretable.")
-            note.setStyleSheet("color:#7d828c;font-size:11px;"); note.setWordWrap(True)
+            note.setStyleSheet(f"color:{JKU_GRAY};font-size:11px;"); note.setWordWrap(True)
             self.values_host.addWidget(note)
             dc = getattr(res, "dc", None)                 # DC operating-point health
             if dc is not None:
                 mark = "✓" if dc.ok else "⚠"
-                color = "#3a8a5c" if dc.ok else "#d95c4c"
+                color = STATUS_GREEN if dc.ok else STATUS_RED
                 state = "solvable" if dc.ok else "may be SINGULAR"
                 dc_lbl = QtWidgets.QLabel(
                     f"{mark}  DC operating point {state}  (margin {dc.margin:.0e})")
