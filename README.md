@@ -240,9 +240,7 @@ To Lumped Element Netlist Converter. https://github.com/iic-jku/snp2le
 - Vector fitting is provided by [scikit-rf](https://scikit-rf.org).
 
 <p align="center">
-  <img src="converter/gui/assets/jku.svg" alt="Johannes Kepler University Linz" height="56">
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="converter/gui/assets/iicqc.svg" alt="Institute for Integrated Circuits and Quantum Computing" height="56">
+  <img src="converter/gui/assets/iicqc_official.svg" alt="Institute for Integrated Circuits and Quantum Computing" height="100">
 </p>
 
 ---
