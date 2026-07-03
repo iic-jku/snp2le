@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="converter/gui/assets/snp2le_logo.svg" alt="snp2le logo" width="140">
+  <img src="snp2le/gui/assets/snp2le_logo.svg" alt="snp2le logo" width="140">
 </p>
 
 <h1 align="center">snp2le: S-Parameter To Lumped Element Netlist Converter</h1>
@@ -34,7 +34,7 @@ It offers two conversion philosophies:
 - **Universal (any N-port).** Vector-fits the S-parameters with [scikit-rf](https://scikit-rf.org) `VectorFitting`, optionally enforces passivity, and synthesises a passive macromodel of R, C and controlled sources. It works for any structure and port count, and is electrically exact but not physically interpretable.
 - **Structure-specific.** Fits a known physical topology, so every component maps to reality (series L, shunt C, coupling k, and so on) at a chosen **extraction frequency**. See [Available structures](#available-structures).
 
-A single dialect-agnostic **Circuit IR** drives both netlist backends and the on-screen schematic, so the outputs always agree. The code is split into a pure-Python, Qt-free `core/` (fully unit-tested) and a thin PySide6 `gui/`, both driven by one entry point, `engine.convert(state, net)`.
+A single dialect-agnostic **Circuit IR** drives both netlist backends and the on-screen schematic, so the outputs always agree. The code is split into a pure-Python, Qt-free `snp2le.core` (fully unit-tested) and a thin PySide6 `snp2le.gui`, both driven by one entry point, `engine.convert(state, net)`.
 
 <!-- Add screenshots under doc/img/ (export them from the GUI). The BPF example below is a good default. -->
 
@@ -52,14 +52,15 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 
 ## Directory Structure
 
-- 📁 **converter/** the snp2le application (Python)
-  - 📄 `app.py` GUI entry point
-  - 📄 `cli.py` command-line entry point
-  - 📄 `snp2le.spec` [PyInstaller](https://pyinstaller.org) recipe for a standalone `.exe`
-  - 📄 `requirements.txt`
+- 📄 **pyproject.toml** packaging metadata, dependencies and the `snp2le` entry point
+- 📄 **snp2le.spec** [PyInstaller](https://pyinstaller.org) recipe for a standalone `.exe`
+- 📁 **snp2le/** the application package (pip-installable)
+  - 📄 `__main__.py` single entry point (`snp2le` opens the GUI, `snp2le -b` runs the CLI)
+  - 📄 `app.py` GUI launcher
+  - 📄 `cli.py` command-line interface
   - 📁 **core/** pure Python, Qt-free, all the maths
     - 📄 `engine.py` `convert(state, net)` returns `Results`, the single entry point
-    - 📄 `io.py` load Touchstone (scikit-rf), parse ngspice result tables
+    - 📄 `io.py` load Touchstone (scikit-rf), parse Ngspice result tables
     - 📄 `units.py` engineering-notation parse and format
     - 📄 `ir.py` dialect-agnostic Circuit IR (element list and couplings)
     - 📄 `netlist.py` render the IR to Ngspice (SPICE3) and VACASK (Spectre)
@@ -79,8 +80,9 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
     - 📄 `help_dialog.py`, `style.py`, `widgets.py`, and more
     - 📁 **assets/** logos (svg and png), `snp2le.ico`
   - 📁 **examples/** Touchstone `.sNp` sample files (BPF, inductor, balun, BLC, WPD, and more)
-  - 📁 **tests/** pytest suite (`test_core.py`)
-  - 📁 **tools/** dev helpers (`make_logos.py`, `make_icon.py`)
+- 📁 **tests/** pytest suite (`test_core.py`)
+- 📁 **tools/** dev helpers (`make_logos.py`, `make_icon.py`)
+- 📁 **doc/** architecture notes (`architecture.md`) and screenshots
 - 📁 **testbenches/xschem/** BPF testbenches (Ngspice and VACASK) plus postprocess eval scripts
 - 📁 **netlist/** exported lumped-element netlists
   - 📁 **spice/** Ngspice (`.spice`)
@@ -95,24 +97,40 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 
 ### Install
 
+From PyPI:
+
+```bash
+pip install snp2le
+# or, for an isolated install with its own command on PATH:
+pipx install snp2le
+```
+
+From source (for development), an editable install pulls in every dependency:
+
 ```bash
 git clone https://github.com/iic-jku/snp2le.git
-cd snp2le/converter
+cd snp2le
 
 python -m venv .venv
 # Windows:        .venv\Scripts\activate
 # macOS / Linux:  source .venv/bin/activate
 
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### Run the GUI
 
 ```bash
-python app.py
+snp2le              # after installing (pip / pipx)
+python -m snp2le    # from the repo root of a source checkout, no install needed
 ```
 
-A bundled example is preloaded on first run. More live in `examples/`.
+A bundled example is preloaded on first run. More live in `snp2le/examples/`.
+
+> [!NOTE]
+> Start it as a module (`python -m snp2le`), not `python snp2le/app.py`. The launcher
+> imports the `snp2le` package, which Python only finds when it is run as a module from
+> the repo root (or after `pip install`).
 
 ### Typical workflow
 
@@ -139,14 +157,14 @@ Drop the exported subcircuit into an Xschem testbench, then run it from the GUI:
 ### Run the tests
 
 ```bash
-pytest -q            # from converter/   (or: python tests/test_core.py)
+pytest               # from the repo root
 ```
 
 ### Build a standalone executable (optional)
 
 ```bash
 pip install pyinstaller cairosvg pillow
-python tools/make_icon.py     # optional: build gui/assets/snp2le.ico
+python tools/make_icon.py     # optional: build snp2le/gui/assets/snp2le.ico
 pyinstaller snp2le.spec       # output in dist/snp2le/
 ```
 
@@ -156,12 +174,14 @@ This builds `dist/snp2le/snp2le(.exe)`, a folder you can zip and run on a machin
 
 ## CLI Overview
 
-The same engine is available headlessly for Makefiles and batch use. Run it from the repo root (Python puts the script's folder on the path, so no `PYTHONPATH` is needed):
+The same engine is available headlessly for Makefiles and batch use, through the `-b` (batch) flag:
 
 ```bash
-python converter/cli.py list-structures
-python converter/cli.py convert <file.sNp> [options]
+snp2le -b list-structures
+snp2le -b convert <file.sNp> [options]
 ```
+
+From a source checkout without installing, use `python -m snp2le -b ...` in place of `snp2le -b`.
 
 ### `convert` options
 
@@ -189,14 +209,14 @@ python converter/cli.py convert <file.sNp> [options]
 
 ```bash
 # universal macromodel to an Ngspice netlist
-python converter/cli.py convert coupler.s4p --mode universal --order 12 -o coupler.spice
+snp2le -b convert coupler.s4p --mode universal --order 12 -o coupler.spice
 
 # structure extraction at 7 GHz, both dialects, print values and tolerances
-python converter/cli.py convert ind.s2p --mode structure --structure inductor-pi \
+snp2le -b convert ind.s2p --mode structure --structure inductor-pi \
     --fext 7GHz --format both --values --tolerances
 
 # convert the BPF, run its Xschem testbench, and show data vs model vs sim plots
-python converter/cli.py convert converter/examples/bpf_ihp-sg13g2.s2p \
+snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \
     --mode universal --order 13 -o netlist/spice/bpf_le.spice \
     --simulate testbenches/xschem/bpf_le_tb_acsp_ngspice.sch --plot
 ```
@@ -218,7 +238,7 @@ python converter/cli.py convert converter/examples/bpf_ihp-sg13g2.s2p \
 | `balun` | Balun (transformer) | 4 | coupled inductors (k, M, n), Qp and Qs |
 | `branchline` | Branch-line coupler | 4 | optional fitted arm loss (`--iso-r`) |
 
-New structures plug in by subclassing `core/structures/base.Structure` and registering them in `core/structures/__init__.py`. They then appear in the GUI dropdown and the CLI automatically.
+New structures plug in by subclassing `snp2le.core.structures.base.Structure` and registering them in `snp2le/core/structures/__init__.py`. They then appear in the GUI dropdown and the CLI automatically.
 
 ---
 
@@ -240,7 +260,7 @@ To Lumped Element Netlist Converter. https://github.com/iic-jku/snp2le
 - Vector fitting is provided by [scikit-rf](https://scikit-rf.org).
 
 <p align="center">
-  <img src="converter/gui/assets/iicqc_official.svg" alt="Institute for Integrated Circuits and Quantum Computing" height="100">
+  <img src="snp2le/gui/assets/iicqc_official.svg" alt="Institute for Integrated Circuits and Quantum Computing" height="100">
 </p>
 
 ---

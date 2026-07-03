@@ -63,7 +63,7 @@ def without_dc(net: skrf.Network) -> skrf.Network:
 
 
 def load_ngspice_sim(path: str) -> dict:
-    """Parse an ngspice S-parameter table into a plain dict for the plot overlay.
+    """Parse an Ngspice S-parameter table into a plain dict for the plot overlay.
 
     The file is a whitespace-separated table whose first row names the columns,
     e.g.::

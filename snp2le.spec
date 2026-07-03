@@ -20,14 +20,16 @@ datas = []
 datas += collect_data_files("skrf")
 datas += collect_data_files("schemdraw")
 datas += collect_data_files("matplotlib")
-datas += [("gui/assets", "gui/assets")]          # logos (svg + png) + snp2le logo
+datas += [("snp2le/gui/assets", "snp2le/gui/assets")]   # logos (svg + png) + snp2le logo
+datas += [("snp2le/examples", "snp2le/examples")]       # bundled Touchstone examples
 
 hiddenimports = []
 hiddenimports += collect_submodules("skrf")
 hiddenimports += collect_submodules("scipy")
+hiddenimports += collect_submodules("snp2le")            # follow dynamic structure imports
 
 a = Analysis(
-    ["app.py"],
+    ["snp2le/app.py"],
     pathex=["."],
     binaries=[],
     datas=datas,
@@ -41,7 +43,7 @@ pyz = PYZ(a.pure)
 
 # optional Windows icon (generate with: python tools/make_icon.py)
 import os
-_icon = "gui/assets/snp2le.ico"
+_icon = "snp2le/gui/assets/snp2le.ico"
 icon = _icon if os.path.exists(_icon) else None
 
 if ONEFILE:

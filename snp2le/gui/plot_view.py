@@ -3,13 +3,13 @@
 Four S-parameters are shown side by side.  Each column shows magnitude (dB, top)
 and phase (deg, bottom) of one selected S_ij.  The four selectors default to the
 2-port set S11/S21/S12/S22.  Each panel overlays the loaded data (solid grey),
-the fitted/extracted model (blue long dashes) and, once imported, an ngspice
+the fitted/extracted model (blue long dashes) and, once imported, an Ngspice
 simulation table (red dash-dot, drawn thicker on top) on its own frequency grid.
 
 Each panel has a live mouse read-out and a "marker mode": with it on, clicking a
 curve drops a labelled data-point marker (up to three per panel), clicking a
 marker removes it, and right-clicking clears them all.  Plots pop out, export to
-CSV, and can import an ngspice simulation to overlay.
+CSV, and can import an Ngspice simulation to overlay.
 """
 from __future__ import annotations
 import csv
@@ -23,11 +23,11 @@ from matplotlib.backend_bases import _Mode
 
 from .style import JKU_BLUE, JKU_GRAY, JKU_RED
 from .widgets import passivity_text, FitComboBox
-from core import io
+from snp2le.core import io
 
 # Curve styling: JKU colours paired with distinct line styles, so the traces
 # stay readable in black-and-white and for colour-blind viewers.  `data` is the
-# loaded Touchstone, `model` the fit/extraction, `sim` an imported ngspice
+# loaded Touchstone, `model` the fit/extraction, `sim` an imported Ngspice
 # simulation.  Each entry is (label, colour, matplotlib line style). The dash
 # tuples are (offset, (on, off)) in points.
 CURVE_STYLES = [
@@ -372,7 +372,7 @@ class PlotView(QtWidgets.QWidget):
         self._last = None
         self._prev_aux = ()           # aux-trace labels available last update
         self._prev_defaults = ()      # preferred default plot set last update
-        self._sim = None              # imported ngspice simulation overlay
+        self._sim = None              # imported Ngspice simulation overlay
         self._last_sim_dir = ""       # remembered import folder
 
     def _hint(self, text):
@@ -595,13 +595,13 @@ class PlotView(QtWidgets.QWidget):
 
     def import_sim(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Import ngspice simulation", self._sim_dir(),
-            "ngspice output (*.txt);;All files (*)")
+            self, "Import Ngspice simulation", self._sim_dir(),
+            "Ngspice output (*.txt);;All files (*)")
         if path:
             self.import_sim_file(path)
 
     def import_sim_file(self, path):
-        """Load an ngspice S-parameter table from `path` and overlay it.  Returns
+        """Load an Ngspice S-parameter table from `path` and overlay it.  Returns
         True on success.  Shared by the Import button and by auto-import after a
         successful Xschem run."""
         try:

@@ -3,12 +3,12 @@
 Left: a "Conversion" panel with the loaded-file header, the fit/extraction result
 (RMS, passivity, order/Q), and the element-values table.  Right: the schematic
 panel (drawn for physical models, a note for the universal macromodel) above the
-netlist panel (ngspice / VACASK tabs with export buttons).
+netlist panel (Ngspice / VACASK tabs with export buttons).
 """
 from __future__ import annotations
 from PySide6 import QtCore, QtWidgets
 
-from core.units import format_eng
+from snp2le.core.units import format_eng
 from .style import JKU_GRAY, STATUS_GREEN, STATUS_AMBER, STATUS_RED
 from .widgets import OutputField, section_title, MathLabel, passivity_text
 from .schematic_widget import SchematicWidget

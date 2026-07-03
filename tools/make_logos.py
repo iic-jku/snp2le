@@ -14,7 +14,7 @@ import os
 import cairosvg
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ASSETS = os.path.join(HERE, "gui", "assets")
+ASSETS = os.path.join(HERE, "snp2le", "gui", "assets")
 
 JOBS = [("jku.svg", "jku.png", 96), ("iicqc.svg", "iicqc.png", 78)]
 

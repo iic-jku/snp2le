@@ -14,8 +14,8 @@ import cairosvg
 from PIL import Image
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SVG = os.path.join(HERE, "gui", "assets", "snp2le_logo.svg")
-OUT = os.path.join(HERE, "gui", "assets", "snp2le.ico")
+SVG = os.path.join(HERE, "snp2le", "gui", "assets", "snp2le_logo.svg")
+OUT = os.path.join(HERE, "snp2le", "gui", "assets", "snp2le.ico")
 
 
 def main():

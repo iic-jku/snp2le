@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """cli.py - command-line interface for batch and scripted use.
 
-    # universal macromodel to an ngspice netlist
-    python converter/cli.py convert coupler.s4p --mode universal --order 12 -o coupler.spice
+    # universal macromodel to an Ngspice netlist
+    snp2le -b convert coupler.s4p --mode universal --order 12 -o coupler.spice
 
     # structure extraction at 7 GHz, both dialects, print values and tolerances
-    python converter/cli.py convert ind.s2p --mode structure --structure inductor-pi \\
+    snp2le -b convert ind.s2p --mode structure --structure inductor-pi \\
         --fext 7GHz --format both --values --tolerances
 
     # convert, run an Xschem testbench, and show data-vs-model-vs-sim plots
-    python converter/cli.py convert bpf.s2p --mode universal --order 13 \\
+    snp2le -b convert bpf.s2p --mode universal --order 13 \\
         -o netlist/spice/bpf_le.spice \\
         --simulate testbenches/xschem/bpf_le_tb_acsp_ngspice.sch --plot
 
@@ -23,9 +23,9 @@ import os
 import re
 import sys
 
-from core import io, engine, units, netlist
-from core.state import ConverterState
-from core.structures import structure_items
+from snp2le.core import io, engine, units, netlist
+from snp2le.core.state import ConverterState
+from snp2le.core.structures import structure_items
 
 # extensions in sim_data that are never a result table
 _NON_DATA = {".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out", ".svg", ".png",
@@ -118,7 +118,7 @@ def _tail_log(path, header):
 
 def _find_result(sim_data, stem, start):
     """Newest result file freshly written by this run: prefer one named after the testbench,
-    else any data-style file (ngspice wrdata targets vary)."""
+    else any data-style file (Ngspice wrdata targets vary)."""
     if not os.path.isdir(sim_data):
         return None
     named, data = [], []
@@ -141,14 +141,14 @@ def _find_result(sim_data, stem, start):
 def _run_testbench(sch, simulator, show_output, net, timeout):
     """Run an Xschem testbench with `simulator` and return the imported result path, or None.
 
-    Both ngspice and VACASK are launched detached by xschem (which returns at once with an
+    Both Ngspice and VACASK are launched detached by xschem (which returns at once with an
     empty console), so the outcome is read the same way for both: sync the sweep to the loaded
     data, then poll for the result while the simulator process is alive.  When the process has
     exited with no result the run failed, and VACASK's captured log and .aborted marker give
     the specific cause."""
     import subprocess
     import time
-    from core import xschem
+    from snp2le.core import xschem
     if not xschem.available():
         print("xschem not found on PATH, cannot run a testbench", file=sys.stderr)
         return None
@@ -212,7 +212,7 @@ def _run_testbench(sch, simulator, show_output, net, timeout):
         print("  " + msg, file=sys.stderr)
         _tail_log(log, "VACASK console")
         if simulator != "vacask":
-            print("  ngspice keeps no log here; run the testbench directly or open it in "
+            print("  Ngspice keeps no log here; run the testbench directly or open it in "
                   "xschem to see the error", file=sys.stderr)
         return None
 

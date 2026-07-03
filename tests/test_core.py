@@ -11,10 +11,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
 import skrf
 
-from core import io, engine
-from core.state import ConverterState
-from core.units import parse_eng, format_eng
-from core.structures import structure_items, get_structure
+from snp2le.core import io, engine
+from snp2le.core.state import ConverterState
+from snp2le.core.units import parse_eng, format_eng
+from snp2le.core.structures import structure_items, get_structure
 
 
 # ---------------------------------------------------------------- fixtures
@@ -57,7 +57,7 @@ def test_universal_high_order_resistors_above_ngspice_floor():
     1e-12 floor at higher orders. Rounding them up corrupts S11/S22.  They must be
     rescaled (not clamped) so the exported netlist has no near-floor resistors."""
     bpf = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                       "examples", "bpf_ihp-sg13g2.s2p")
+                       "snp2le", "examples", "bpf_ihp-sg13g2.s2p")
     net = io.load_touchstone(bpf)
     res = engine.convert(ConverterState(mode="universal", max_order=14), net)
     assert res.ok
@@ -68,7 +68,7 @@ def test_universal_high_order_resistors_above_ngspice_floor():
 def test_dc_operating_point_check():
     """A well-posed universal macromodel passes the DC operating-point check. A network
     with a floating internal node (no DC path to ground) is flagged singular."""
-    from core import dc, universal
+    from snp2le.core import dc, universal
     net = inductor_2port()
     res = engine.convert(ConverterState(mode="universal", max_order=10), net)
     assert res.dc is not None and res.dc.ok            # healthy fit -> well-posed
@@ -87,7 +87,7 @@ def test_dc_operating_point_check():
 # ---------------------------------------------------------------- structures
 def _example(name):
     return io.load_touchstone(os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "examples", name))
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "snp2le", "examples", name))
 
 
 def test_all_structures_extract():
@@ -162,7 +162,7 @@ def test_wilkinson_isolation_resistor_toggle():
 def test_value_tolerance_at_fext():
     """Per-element tolerance is taken at f_ext: directly-read reciprocal terms match
     exactly (0 %). A symmetrised shunt carries the small port-asymmetry residual."""
-    net = _example("sample_inductor_ihp-sg13g2.s2p")
+    net = _example("ind_d20_w7_sp3_nw1_r10_ihp-sg13g2.s2p")
     res = engine.convert(ConverterState(mode="structure", structure_key="inductor-pi",
                                         f_extract=10e9), net)
     tol = res.value_drift
@@ -184,8 +184,8 @@ def test_value_tolerance_at_fext():
 def test_mna_coupled_inductors_match_mutual_impedance():
     """Two magnetically coupled inductors to ground form a 2-port whose Z-matrix is
     the textbook [[jwL1, jwM],[jwM, jwL2]] with M = k*sqrt(L1*L2)."""
-    from core.ir import CircuitIR, Element
-    from core import mna
+    from snp2le.core.ir import CircuitIR, Element
+    from snp2le.core import mna
     L1, L2, k = 2e-9, 8e-9, 0.6
     ir = CircuitIR(name="xfmr", ports=["p1", "p2"])
     ir.add(Element("L", "L1", ("p1", "0"), L1))
@@ -278,9 +278,9 @@ def test_inductor_values_recovered():
 def test_vacask_rlgc_netlist():
     """The RLGC structure exports a valid VACASK (Spectre) netlist: OSDI default
     models for the passives and `name (nodes) model param=value` instances."""
-    from core import netlist
+    from snp2le.core import netlist
     tline = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                         "examples", "tline_100um_ihp-sg13g2.s2p")
+                         "snp2le", "examples", "tline_100um_ihp-sg13g2.s2p")
     net = io.load_touchstone(tline)
     res = engine.convert(ConverterState(mode="structure", structure_key="tline-rlgc"), net)
     res.ir.name = "tline_le"

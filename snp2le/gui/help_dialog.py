@@ -8,7 +8,7 @@ _HTML = """
 <p>This tool turns a Touchstone <b>.sNp</b> S-parameter file (for example from an
 AWS&nbsp;Palace EM simulation) into an equivalent <b>lumped-element netlist</b> that
 reproduces the same S-parameters when simulated. The result drops into a circuit-level
-simulation (<b>ngspice</b> or <b>VACASK</b>) so an EM-extracted structure co-simulates
+simulation (<b>Ngspice</b> or <b>VACASK</b>) so an EM-extracted structure co-simulates
 with the rest of your design, without re-running the field solve.</p>
 
 <h3>Top bar</h3>
@@ -78,7 +78,7 @@ OSDI loads come from your testbench, not the exported subcircuit. In VACASK the
 subcircuit's ground is node <tt>GND</tt>: Spectre has no implicit node-0 ground the way
 SPICE does, so your testbench must declare <tt>ground&nbsp;GND</tt> (Xschem's spectre
 netlist does this automatically). A subcircuit grounded to a bare <tt>0</tt> would float
-and give a flat / wrong result. ngspice keeps node <tt>0</tt>. The subcircuit is named
+and give a flat / wrong result. Ngspice keeps node <tt>0</tt>. The subcircuit is named
 after the export file, but only letters, digits and '_' are valid in a SPICE / Spectre
 subcircuit name: a file like <tt>two-port</tt> is exported as subckt <tt>two_port</tt>
 (since '-' is the minus operator), and a note window reports the actual name. Use '_'
@@ -116,7 +116,7 @@ testbench sweep (through an included <tt>sim_range</tt> file), so the simulated 
 covers the same band as the data. The design point <tt>f0</tt> stays in the testbench, and
 the testbench still runs standalone in Xschem with the last-written range.</li>
 <li><b>Show output</b>: tick to show the simulator's console and plot windows during the
-run. For ngspice these are its own console and plot windows. VACASK is launched detached,
+run. For Ngspice these are its own console and plot windows. VACASK is launched detached,
 so instead a live <b>VACASK output</b> window tails its captured log (banner, analysis
 progress, <i>Completed</i> / <i>Failed</i> / <i>aborted</i> messages, postprocess lines).
 Leave it unticked to run quietly. The result is imported either way, and VACASK's captured
@@ -147,12 +147,12 @@ rather than passing them back. So the outcome is read from the <b>result file</b
   for the specific cause.</li>
 </ul>
 <p><b>VACASK and high-order universal macromodels.</b> The vector-fit realisation is
-numerically ill-conditioned at high order (its pole gains span ~1e-5 to ~1e11). ngspice's
+numerically ill-conditioned at high order (its pole gains span ~1e-5 to ~1e11). Ngspice's
 solver equilibrates the matrix internally and copes. VACASK's does not, and on its own
 would mis-place the resonances above ~5 poles. snp2le conditions the exported macromodel
 automatically (a lossless rescale of the state resistors plus a gain-balance of the
 controlled sources), so high-order universal fits now reproduce the model in VACASK exactly
-as they do in ngspice. No action is needed, and structure-specific models are unaffected.</p>
+as they do in Ngspice. No action is needed, and structure-specific models are unaffected.</p>
 
 <p>While a run is in progress the status reads <i>running...</i> (for as long as the
 simulation takes) then <i>importing...</i>, and the <b>Run Simulation</b> button becomes a

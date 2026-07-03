@@ -9,9 +9,9 @@ from __future__ import annotations
 import math
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from core.structures import structure_items
-from core import xschem
-from core.units import parse_eng, format_eng
+from snp2le.core.structures import structure_items
+from snp2le.core import xschem
+from snp2le.core.units import parse_eng, format_eng
 from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN, JKU_RED, PANEL_BORDER, DISABLED_FG
 from .widgets import FitComboBox
 
@@ -211,7 +211,7 @@ class TopBar(QtWidgets.QWidget):
         self.load_sch = QtWidgets.QPushButton("Load .sch")
         self.load_sch.setObjectName("primary"); self.load_sch.setFixedHeight(30)
         self.load_sch.setIcon(_load_icon()); self.load_sch.setIconSize(QtCore.QSize(16, 16))
-        # simulator used to run the loaded testbench (ngspice, or VACASK via xschem)
+        # simulator used to run the loaded testbench (Ngspice, or VACASK via xschem)
         self.simulator = QtWidgets.QComboBox()
         self.simulator.addItem("Ngspice", "ngspice")
         self.simulator.addItem("VACASK", "vacask")

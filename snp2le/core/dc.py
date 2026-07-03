@@ -49,7 +49,7 @@ def dc_check(ir, z0: float = 50.0, ground: str = "0") -> DCHealth:
 
 def _equilibrate(A, iters: int = 4):
     """Symmetric row/column scaling, so the reported margin reflects what a solver that
-    equilibrates (ngspice, VACASK) effectively sees rather than the raw element spread."""
+    equilibrates (Ngspice, VACASK) effectively sees rather than the raw element spread."""
     A = A.copy()
     for _ in range(iters):
         r = np.sqrt(np.maximum(np.abs(A).max(axis=1), 1e-300))

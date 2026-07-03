@@ -4,8 +4,8 @@ import os
 import time
 from PySide6 import QtCore, QtWidgets
 
-from core.state import ConverterState
-from core import io, engine, netlist, xschem
+from snp2le.core.state import ConverterState
+from snp2le.core import io, engine, netlist, xschem
 
 from .top_bar import TopBar
 from .design_view import DesignView
@@ -46,7 +46,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim_proc = None             # running xschem QProcess
         self._sim_start = 0.0             # when the current run started (for auto-import)
         self._sim_timer = None            # polls sim_data for the result after a run
-        self._sim_last_output = ""        # captured xschem/ngspice output (for diagnostics)
+        self._sim_last_output = ""        # captured xschem/Ngspice output (for diagnostics)
         self._sim_watchdog = None         # hard cap so a stuck run can't pin the Run button
         self._sim_simulator = ""          # 'ngspice' | 'vacask' of the current run
         self._sim_output_buf = ""         # xschem output accumulated live during the run
@@ -189,16 +189,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.recompute()
 
     def _export_dir(self, dialect):
-        # last folder for this dialect, else netlist/spectre (vacask) or
-        # netlist/spice (ngspice) at the repo root
+        # remembered folder for this dialect, else the repo's netlist/<dialect> when
+        # running from the source tree, else the current working directory (so an
+        # installed copy never tries to write inside its site-packages)
         last = self._last_export_dir.get(dialect)
         if last and os.path.isdir(last):
             return last
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         sub = "spectre" if dialect == "vacask" else "spice"
         default = os.path.join(repo_root, "netlist", sub)
-        os.makedirs(default, exist_ok=True)
-        return default
+        return default if os.path.isdir(default) else os.getcwd()
 
     def on_export(self, dialect):
         res = engine.convert(self.state, self.net)
@@ -282,9 +282,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def _write_sim_range(self, cwd):
         """Push the loaded Touchstone's frequency span into the testbench sweep.
 
-        Writes sim_range.inc (VACASK: `var f_min/f_max`) and sim_range.spice (ngspice:
+        Writes sim_range.inc (VACASK: `var f_min/f_max`) and sim_range.spice (Ngspice:
         `.csparam f_min/f_max`) next to the testbench.  The testbench includes the matching
-        file (VACASK `include "../sim_range.inc"`, ngspice `.include ../sim_range.spice`),
+        file (VACASK `include "../sim_range.inc"`, Ngspice `.include ../sim_range.spice`),
         so the f_min/f_max sweep bounds always follow the loaded data, yet the testbench
         still runs standalone in Xschem with the last-written range.  f0 stays in the
         testbench, since it is a design point rather than a sweep bound.  Both `../` includes resolve
@@ -484,7 +484,7 @@ class MainWindow(QtWidgets.QMainWindow):
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         return os.path.join(repo_root, "sim_data")
 
-    # extensions that are never an ngspice data table (binary raw, netlists, logs)
+    # extensions that are never an Ngspice data table (binary raw, netlists, logs)
     _NON_DATA_EXTS = (".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out",
                       ".svg", ".png", ".ps", ".pdf", ".sch")
     _DATA_EXTS = (".txt", ".data", ".dat", ".csv")
@@ -528,7 +528,7 @@ class MainWindow(QtWidgets.QMainWindow):
         except OSError:
             return False
 
-    # xschem exits 0 even when the simulator it launched (ngspice / VACASK) crashes,
+    # xschem exits 0 even when the simulator it launched (Ngspice / VACASK) crashes,
     # errors, or aborts an analysis. It only prints the outcome in its output.  Catch
     # every failure phrasing so a clearly-failed run is reported the instant its output
     # reaches us.  This is a fast path only: xschem does not always stream its simulator
@@ -579,7 +579,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._poll_sim_result()
             return
 
-        # ngspice: a non-zero exit (or a streamed error) is an immediate failure...
+        # Ngspice: a non-zero exit (or a streamed error) is an immediate failure...
         if code != 0 or self._sim_reported_failure(out):
             self._reset_run_button()
             self.top.set_sim_status("failed!", False)
@@ -630,7 +630,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if now >= self._sim_poll_deadline:       # 1 h absolute backstop
                 self._end_vacask_poll("failed!", aborted=False)
             return
-        # ngspice: deadline-based (it may run detached and write a little later)
+        # Ngspice: deadline-based (it may run detached and write a little later)
         if now >= self._sim_poll_deadline:
             self._stop_sim_timer()
             self._reset_run_button()

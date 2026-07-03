@@ -69,7 +69,7 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True) -> F
         except OSError:
             pass
     # Condition the realisation (both passes are lossless, so the transfer function and the
-    # ngspice result are unchanged).  rescale_state_resistors lifts the sub-1e-12 state
+    # Ngspice result are unchanged).  rescale_state_resistors lifts the sub-1e-12 state
     # self-resistors to O(1) ohms (clamping them instead corrupts S11/S22 at higher orders),
     # and balance_state_gains equilibrates the tiny input and huge output controlled sources.
     # Together they keep VACASK (which has no internal matrix scaling) accurate well past the

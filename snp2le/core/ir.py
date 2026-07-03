@@ -1,7 +1,7 @@
 """ir.py - the dialect-agnostic Circuit IR.
 
 Both the universal macromodel and the structure-specific extractors produce a
-CircuitIR.  The netlist backends (ngspice SPICE3, VACASK Spectre) and the
+CircuitIR.  The netlist backends (Ngspice SPICE3, VACASK Spectre) and the
 schematic drawer all render *from* this single representation, so every output
 stays consistent regardless of which mode produced the circuit.
 

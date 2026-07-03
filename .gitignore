@@ -9,6 +9,14 @@ __pycache__/
 *.ext
 .DS_Store
 VSCode.md
+# Python build artefacts
+/dist/
+/build/
+*.egg-info/
+.pytest_cache/
+# private release checklist
+release.md
 /schematic/xschem/simulations
 /testbenches/xschem/simulations
 /archive
+/.claude

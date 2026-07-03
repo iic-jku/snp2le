@@ -4,10 +4,10 @@ from __future__ import annotations
 import sys
 from PySide6 import QtWidgets
 
-from gui.style import build_stylesheet
-from gui.mpl_style import apply_style
-from gui.logo import logo_icon
-from gui.main_window import MainWindow
+from snp2le.gui.style import build_stylesheet
+from snp2le.gui.mpl_style import apply_style
+from snp2le.gui.logo import logo_icon
+from snp2le.gui.main_window import MainWindow
 
 
 def _set_windows_app_id():
