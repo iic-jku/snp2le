@@ -2,28 +2,20 @@
   <img src="snp2le/gui/assets/snp2le_logo.svg" alt="snp2le logo" width="140">
 </p>
 
-<h1 align="center">snp2le: S-Parameter To Lumped Element Netlist Converter</h1>
+# snp2le: S-Parameter To Lumped Element Netlist Converter
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0"></a>
-  <img src="https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/GUI-PySide6-41CD52.svg?logo=qt&logoColor=white" alt="PySide6">
-  <img src="https://img.shields.io/badge/PDK-IHP%20SG13G2-orange.svg" alt="IHP SG13G2">
-  <img src="https://img.shields.io/badge/status-WIP-yellow.svg" alt="Work in progress">
-</p>
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)
+![GUI: PySide6](https://img.shields.io/badge/GUI-PySide6-41CD52.svg?logo=qt&logoColor=white)
 
 (c) 2026 Simon Dorrer
 
 Institute for Integrated Circuits and Quantum Computing (IICQC), Johannes Kepler University (JKU), Linz, Austria
 
-> [!WARNING]
-> This repository is a Work in Progress.
-
 > [!IMPORTANT]
 > The converter (GUI and CLI) runs anywhere with **Python ≥ 3.10**, see [Install](#install) below.
 > *Running* the exported netlists in a testbench additionally needs **Xschem** plus **Ngspice** and/or **VACASK**. The easiest way to get all of them is the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container.
 
----
 
 ## Description
 
@@ -36,25 +28,24 @@ It offers two conversion philosophies:
 
 A single dialect-agnostic **Circuit IR** drives both netlist backends and the on-screen schematic, so the outputs always agree. The code is split into a pure-Python, Qt-free `snp2le.core` (fully unit-tested) and a thin PySide6 `snp2le.gui`, both driven by one entry point, `engine.convert(state, net)`.
 
-<!-- Add screenshots under doc/img/ (export them from the GUI). The BPF example below is a good default. -->
-
 <p align="center">
-  <a href="doc/img/snp2le_gui_bpf.png"><img src="doc/img/snp2le_gui_bpf.png" alt="snp2le GUI, band-pass filter" width="85%"></a><br>
+  <a href="doc/fig/snp2le_gui_bpf.png"><img src="doc/fig/snp2le_gui_bpf.png" alt="snp2le GUI, band-pass filter" width="85%"></a><br>
   <em>The snp2le GUI converting a band-pass filter (BPF) S-parameter file into a lumped-element netlist.</em>
 </p>
 
 <p align="center">
-  <a href="doc/img/snp2le_plots_bpf.png"><img src="doc/img/snp2le_plots_bpf.png" alt="snp2le plots, data vs model vs simulation" width="85%"></a><br>
+  <a href="doc/fig/snp2le_plots_bpf.png"><img src="doc/fig/snp2le_plots_bpf.png" alt="snp2le plots, data vs model vs simulation" width="85%"></a><br>
   <em>Plot view: loaded data (grey) vs extracted model (blue) vs imported testbench simulation (red).</em>
 </p>
 
----
 
 ## Directory Structure
 
 - 📄 **pyproject.toml** packaging metadata, dependencies and the `snp2le` entry point
-- 📄 **snp2le.spec** [PyInstaller](https://pyinstaller.org) recipe for a standalone `.exe`
+- 📄 **MANIFEST.in** source-distribution manifest (bundles the examples and assets)
+- 📄 **requirements.txt** runtime dependencies (mirrors `pyproject.toml`)
 - 📁 **snp2le/** the application package (pip-installable)
+  - 📄 `__init__.py` package version
   - 📄 `__main__.py` single entry point (`snp2le` opens the GUI, `snp2le -b` runs the CLI)
   - 📄 `app.py` GUI launcher
   - 📄 `cli.py` command-line interface
@@ -66,6 +57,7 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
     - 📄 `netlist.py` render the IR to Ngspice (SPICE3) and VACASK (Spectre)
     - 📄 `universal.py` vector-fit passive macromodel
     - 📄 `mna.py` rebuild N-port S-parameters from an RLC IR (model overlay)
+    - 📄 `dc.py` DC operating-point (singularity) check for the macromodel
     - 📄 `state.py` `ConverterState` and `Results` dataclasses
     - 📄 `xschem.py` headless Xschem netlist and simulate commands
     - 📁 **structures/** physical extractors, one file per topology
@@ -81,8 +73,7 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
     - 📁 **assets/** logos (svg and png), `snp2le.ico`
   - 📁 **examples/** Touchstone `.sNp` sample files (BPF, inductor, balun, BLC, WPD, and more)
 - 📁 **tests/** pytest suite (`test_core.py`)
-- 📁 **tools/** dev helpers (`make_logos.py`, `make_icon.py`)
-- 📁 **doc/** architecture notes (`architecture.md`) and screenshots
+- 📁 **doc/** `architecture.md` and screenshots (in `fig/`)
 - 📁 **testbenches/xschem/** BPF testbenches (Ngspice and VACASK) plus postprocess eval scripts
 - 📁 **netlist/** exported lumped-element netlists
   - 📁 **spice/** Ngspice (`.spice`)
@@ -91,7 +82,6 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 - 📁 **sim_data/** simulation results, imported and overlaid on the plots
 - 📄 **README.md**, 📄 **LICENSE** (Apache-2.0), 📄 **CITATION.cff**
 
----
 
 ## How to Use
 
@@ -147,7 +137,7 @@ A bundled example is preloaded on first run. More live in `snp2le/examples/`.
 
 Drop the exported subcircuit into an Xschem testbench, then run it from the GUI:
 
-1. **Load .sch.** Pick the testbench. The **Simulator** auto-selects from the file name (a name ending in `_vacask.sch` selects VACASK) and can be overridden.
+1. **Load .sch.** Pick the testbench. The **Simulator** auto-selects from the file name (a name ending in `_ngspice.sch` selects Ngspice or `_vacask.sch` selects VACASK) and can be overridden.
 2. **Run Simulation.** Both simulators netlist and simulate through Xschem and write their result to `sim_data/`, which is imported and overlaid on the plots automatically. The button turns green on success or red on failure. On failure the dialog shows the simulator log.
 3. **Show output.** Tick it to show the simulator's console and plot windows. Leave it unticked to run quietly. The result is imported either way.
 
@@ -160,17 +150,6 @@ Drop the exported subcircuit into an Xschem testbench, then run it from the GUI:
 pytest               # from the repo root
 ```
 
-### Build a standalone executable (optional)
-
-```bash
-pip install pyinstaller cairosvg pillow
-python tools/make_icon.py     # optional: build snp2le/gui/assets/snp2le.ico
-pyinstaller snp2le.spec       # output in dist/snp2le/
-```
-
-This builds `dist/snp2le/snp2le(.exe)`, a folder you can zip and run on a machine without Python. PyInstaller does not cross-compile, so build on the OS you target.
-
----
 
 ## CLI Overview
 
@@ -202,6 +181,7 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `--simulate SCH` | sim | run an Xschem testbench after converting |
 | `--simulator ngspice\|vacask` | sim | simulator for `--simulate` (default: auto from `.sch` name) |
 | `--show-output` | sim | show the simulator's console and plot windows |
+| `--timeout S` | sim | seconds to wait for a `--simulate` result (default 180) |
 | `--plot [SPARAMS]` | sim | display data, model and sim plots (e.g. `S11,S21`) |
 | `--quiet` | both | suppress the per-file status line |
 
@@ -224,7 +204,6 @@ snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \
 > [!NOTE]
 > `--simulate` and `--plot` need Xschem (and a display for `--plot`). They print a clear message and skip if Xschem is not on `PATH`.
 
----
 
 ## Available structures
 
@@ -240,18 +219,20 @@ snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \
 
 New structures plug in by subclassing `snp2le.core.structures.base.Structure` and registering them in `snp2le/core/structures/__init__.py`. They then appear in the GUI dropdown and the CLI automatically.
 
----
 
-## Citation
-
-If you base your work on snp2le, please cite it (see [`CITATION.cff`](CITATION.cff)):
+## Cite This Work
 
 ```
-Dorrer, S. (2026). GitHub Repository of snp2le: An Open-Source S-Parameter
-To Lumped Element Netlist Converter. https://github.com/iic-jku/snp2le
+@misc{2026_snp2le,
+  author = {Dorrer, Simon},
+  month = july,
+  year = {2026},
+  title = {{GitHub Repository for snp2le: A S-Parameter To Lumped Element Netlist Converter}},
+  url = {https://github.com/iic-jku/snp2le},
+  doi = {ToDo}
+}
 ```
 
----
 
 ## Acknowledgements
 
@@ -263,7 +244,6 @@ To Lumped Element Netlist Converter. https://github.com/iic-jku/snp2le
   <img src="snp2le/gui/assets/iicqc_official.svg" alt="Institute for Integrated Circuits and Quantum Computing" height="100">
 </p>
 
----
 
 ## License
 
