@@ -33,10 +33,6 @@ _NON_DATA = {".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out", ".svg", "
 _DATA_EXTS = {".txt", ".data", ".dat", ".csv"}
 
 
-def _repo_root():
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
 def _freq(text):
     """argparse type for a frequency, with a readable error."""
     try:
@@ -165,7 +161,10 @@ def _run_testbench(sch, simulator, show_output, net, timeout):
         except (TypeError, IndexError, ValueError, OSError):
             pass
 
-    sim_data = os.path.join(_repo_root(), "sim_data")
+    # The testbench writes its result to <base>/sim_data, where <base> is two levels above
+    # the testbench directory (Ngspice `wrdata ../../../sim_data`, VACASK postprocess).
+    # Derive it from the .sch, not this install, so a pip-installed snp2le finds it too.
+    sim_data = os.path.join(os.path.dirname(os.path.dirname(cwd)), "sim_data")
     stem = os.path.splitext(os.path.basename(sch))[0]
     marker = os.path.join(sim_data, stem + ".aborted")
     log = xschem.sim_log_path(sch, simulator) if simulator == "vacask" else None

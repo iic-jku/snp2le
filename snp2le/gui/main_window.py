@@ -253,8 +253,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._last_sch_dir and os.path.isdir(self._last_sch_dir):
             return self._last_sch_dir
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        d = os.path.join(repo_root, "testbenches", "xschem")
-        return d if os.path.isdir(d) else repo_root
+        d = os.path.join(repo_root, "testbenches", "xschem")   # source tree
+        return d if os.path.isdir(d) else os.getcwd()          # else the working directory
 
     def on_load_sch(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -480,9 +480,14 @@ class MainWindow(QtWidgets.QMainWindow):
             + (log[-1500:] if log else "(no output was captured)"))
 
     def _sim_output_dir(self):
-        # the testbench writes its result here, named after the testbench
-        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        return os.path.join(repo_root, "sim_data")
+        # The testbench writes its result to <base>/sim_data, where <base> is two levels
+        # above the testbench's own directory (Ngspice `wrdata ../../../sim_data`, VACASK
+        # via its postprocess).  Locate it relative to the loaded .sch, not this file, so it
+        # resolves whether snp2le runs from source or is pip-installed elsewhere.
+        if not self._sch_path:
+            return os.path.join(os.getcwd(), "sim_data")
+        base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(self._sch_path))))
+        return os.path.join(base, "sim_data")
 
     # extensions that are never an Ngspice data table (binary raw, netlists, logs)
     _NON_DATA_EXTS = (".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out",

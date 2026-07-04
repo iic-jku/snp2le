@@ -569,8 +569,8 @@ class PlotView(QtWidgets.QWidget):
         if self._last_sim_dir and os.path.isdir(self._last_sim_dir):
             return self._last_sim_dir
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        d = os.path.join(repo_root, "sim_data")
-        return d if os.path.isdir(d) else repo_root
+        d = os.path.join(repo_root, "sim_data")                # source tree
+        return d if os.path.isdir(d) else os.getcwd()          # else the working directory
 
     def _on_sim_button(self):
         """Import a simulation, or clear it if one is already loaded.  The button
