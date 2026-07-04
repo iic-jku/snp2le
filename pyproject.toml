@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "snp2le"
-version = "0.1.0"
-description = "Convert Touchstone S-parameter files into lumped-element netlists for ngspice and VACASK"
+version = "0.1.1"
+description = "Convert Touchstone S-parameter files into lumped-element netlists for Ngspice and VACASK"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
