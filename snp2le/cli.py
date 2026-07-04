@@ -397,7 +397,7 @@ def cmd_convert(args):
 
 def build_parser():
     p = argparse.ArgumentParser(
-        prog="snp2le", formatter_class=argparse.RawDescriptionHelpFormatter,
+        prog="snp2le -b", formatter_class=argparse.RawDescriptionHelpFormatter,
         description="Touchstone S-parameters to a lumped-element netlist")
     sub = p.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("convert", help="convert one or more .sNp files",
