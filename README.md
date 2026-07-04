@@ -7,6 +7,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/iic-jku/snp2le/blob/main/LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)
 ![GUI: PySide6](https://img.shields.io/badge/GUI-PySide6-41CD52.svg?logo=qt&logoColor=white)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21189545.svg)](https://doi.org/10.5281/zenodo.21189545)
 
 (c) 2026 Simon Dorrer
 
@@ -229,7 +230,7 @@ New structures plug in by subclassing `snp2le.core.structures.base.Structure` an
   year = {2026},
   title = {{GitHub Repository for snp2le: A S-Parameter To Lumped Element Netlist Converter}},
   url = {https://github.com/iic-jku/snp2le},
-  doi = {ToDo}
+  doi = {10.5281/zenodo.21189545}
 }
 ```
 
