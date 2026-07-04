@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from snp2le import __version__
 from snp2le.core.structures import structure_items
 from snp2le.core import xschem
 from snp2le.core.units import parse_eng, format_eng
@@ -96,7 +97,8 @@ class TopBar(QtWidgets.QWidget):
         logo.setFixedWidth(32); logo.setAlignment(QtCore.Qt.AlignVCenter)
         title = QtWidgets.QLabel("S-Parameter To Lumped Element Netlist Converter")
         title.setObjectName("title")
-        lay.addWidget(logo); lay.addWidget(title); lay.addStretch(1)
+        ver = QtWidgets.QLabel(f"v{__version__}"); ver.setObjectName("version")
+        lay.addWidget(logo); lay.addWidget(title); lay.addWidget(ver); lay.addStretch(1)
         vlab = QtWidgets.QLabel("View"); vlab.setObjectName("viewLabel")
         self.view = FitComboBox("Design & Schematic")
         self.view.addItems(["Design & Schematic", "Plot"])

@@ -42,6 +42,7 @@ def build_stylesheet() -> str:
 /* ---- title bar ---- */
 #titlebar {{ background: {DARK}; }}
 #title {{ color: #ffffff; font-size: 14px; font-weight: 600; }}
+#version {{ color: #aab2bd; font-size: 11px; padding-left: 6px; }}
 #viewLabel {{ color: #aab2bd; font-size: 11px; }}
 QPushButton#chip {{ background: rgba(255,255,255,0.10); color: #ffffff;
     border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; padding: 4px 12px; }}
