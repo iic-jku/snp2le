@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-authors = [{ name = "Simon Dorrer", email = "si1505do@gmail.com" }]
+authors = [{ name = "Simon Dorrer", email = "simon.dorrer@jku.at" }]
 keywords = [
     "EDA", "S-parameters", "Touchstone", "SPICE", "ngspice", "VACASK",
     "vector-fitting", "macromodel", "RF", "microwave",
