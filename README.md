@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="snp2le/gui/assets/snp2le_logo.svg" alt="snp2le logo" width="140">
+  <img src="https://raw.githubusercontent.com/iic-jku/snp2le/main/snp2le/gui/assets/snp2le_logo.svg" alt="snp2le logo" width="140">
 </p>
 
 # snp2le: S-Parameter To Lumped Element Netlist Converter
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/iic-jku/snp2le/blob/main/LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)
 ![GUI: PySide6](https://img.shields.io/badge/GUI-PySide6-41CD52.svg?logo=qt&logoColor=white)
 
@@ -13,7 +13,7 @@
 Institute for Integrated Circuits and Quantum Computing (IICQC), Johannes Kepler University (JKU), Linz, Austria
 
 > [!IMPORTANT]
-> The converter (GUI and CLI) runs anywhere with **Python ≥ 3.10**, see [Install](#install) below.
+> The converter (GUI and CLI) runs anywhere with **Python ≥ 3.10**, see [Install](https://github.com/iic-jku/snp2le#install) below.
 > *Running* the exported netlists in a testbench additionally needs **Xschem** plus **Ngspice** and/or **VACASK**. The easiest way to get all of them is the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container.
 
 
@@ -24,17 +24,17 @@ Institute for Integrated Circuits and Quantum Computing (IICQC), Johannes Kepler
 It offers two conversion philosophies:
 
 - **Universal (any N-port).** Vector-fits the S-parameters with [scikit-rf](https://scikit-rf.org) `VectorFitting`, optionally enforces passivity, and synthesises a passive macromodel of R, C and controlled sources. It works for any structure and port count, and is electrically exact but not physically interpretable.
-- **Structure-specific.** Fits a known physical topology, so every component maps to reality (series L, shunt C, coupling k, and so on) at a chosen **extraction frequency**. See [Available structures](#available-structures).
+- **Structure-specific.** Fits a known physical topology, so every component maps to reality (series L, shunt C, coupling k, and so on) at a chosen **extraction frequency**. See [Available structures](https://github.com/iic-jku/snp2le#available-structures).
 
 A single dialect-agnostic **Circuit IR** drives both netlist backends and the on-screen schematic, so the outputs always agree. The code is split into a pure-Python, Qt-free `snp2le.core` (fully unit-tested) and a thin PySide6 `snp2le.gui`, both driven by one entry point, `engine.convert(state, net)`.
 
 <p align="center">
-  <a href="doc/fig/snp2le_gui_bpf.png"><img src="doc/fig/snp2le_gui_bpf.png" alt="snp2le GUI, band-pass filter" width="85%"></a><br>
+  <a href="https://raw.githubusercontent.com/iic-jku/snp2le/main/doc/fig/snp2le_gui_bpf.png"><img src="https://raw.githubusercontent.com/iic-jku/snp2le/main/doc/fig/snp2le_gui_bpf.png" alt="snp2le GUI, band-pass filter" width="85%"></a><br>
   <em>The snp2le GUI converting a band-pass filter (BPF) S-parameter file into a lumped-element netlist.</em>
 </p>
 
 <p align="center">
-  <a href="doc/fig/snp2le_plots_bpf.png"><img src="doc/fig/snp2le_plots_bpf.png" alt="snp2le plots, data vs model vs simulation" width="85%"></a><br>
+  <a href="https://raw.githubusercontent.com/iic-jku/snp2le/main/doc/fig/snp2le_plots_bpf.png"><img src="https://raw.githubusercontent.com/iic-jku/snp2le/main/doc/fig/snp2le_plots_bpf.png" alt="snp2le plots, data vs model vs simulation" width="85%"></a><br>
   <em>Plot view: loaded data (grey) vs extracted model (blue) vs imported testbench simulation (red).</em>
 </p>
 
@@ -241,10 +241,10 @@ New structures plug in by subclassing `snp2le.core.structures.base.Structure` an
 - Vector fitting is provided by [scikit-rf](https://scikit-rf.org).
 
 <p align="center">
-  <img src="snp2le/gui/assets/iicqc_official.svg" alt="Institute for Integrated Circuits and Quantum Computing" height="100">
+  <img src="https://raw.githubusercontent.com/iic-jku/snp2le/main/snp2le/gui/assets/iicqc_official.svg" alt="Institute for Integrated Circuits and Quantum Computing" height="100">
 </p>
 
 
 ## License
 
-Licensed under the **Apache License 2.0**, see [`LICENSE`](LICENSE).
+Licensed under the **Apache License 2.0**, see [`LICENSE`](https://github.com/iic-jku/snp2le/blob/main/LICENSE).
