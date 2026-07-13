@@ -12,6 +12,8 @@ The GUI runs the returned command with QProcess so it does not block the UI.
 """
 from __future__ import annotations
 import os
+import posixpath
+import re
 import shutil
 import subprocess
 from functools import lru_cache
@@ -51,6 +53,44 @@ def sim_log_path(sch_path: str, simulator: str) -> str:
 def vacask_log_path(sch_path: str) -> str:
     """Absolute path of the VACASK console log (kept as the GUI's entry point)."""
     return sim_log_path(sch_path, "vacask")
+
+
+def _read_text(path: str) -> str:
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def sim_data_dir(sch_path: str, simulator: str = "ngspice") -> str:
+    """Directory where `sch_path`'s testbench writes its simulation result.
+
+    The location is the testbench's choice, not ours, so read it from the testbench
+    itself instead of assuming a layout.  Ngspice: the `wrdata <target>` line in the
+    .sch (or the generated netlist), resolved against the `simulations/` netlist dir
+    the simulator runs in.  VACASK: the `postprocess: wrote <file>` line of the
+    captured console log - it appears once the run's postprocess has finished, so
+    callers re-evaluate while polling; the folder is stable across runs.  Falls back
+    to `sim_data/` two levels above the testbench dir (the bundled layout).
+    """
+    sch_path = os.path.abspath(sch_path)
+    cwd = os.path.dirname(sch_path)
+    netlist_dir = os.path.join(cwd, "simulations")
+    if simulator == "vacask":
+        hits = re.findall(r"postprocess:\s+wrote\s+(.+)",
+                          _read_text(sim_log_path(sch_path, "vacask")))
+        if hits:
+            return os.path.dirname(hits[-1].strip())
+    else:
+        stem = os.path.splitext(os.path.basename(sch_path))[0]
+        for src in (sch_path, os.path.join(netlist_dir, stem + ".spice")):
+            m = re.search(r"^\s*wrdata\s+(\S+)", _read_text(src), re.M)
+            if m:
+                # a SPICE path: '/' separated on any platform, '\' is an escape there
+                return os.path.normpath(
+                    os.path.join(netlist_dir, posixpath.dirname(m.group(1))))
+    return os.path.normpath(os.path.join(cwd, "..", "..", "sim_data"))
 
 
 def write_sim_range(cwd: str, f_min: float, f_max: float) -> None:

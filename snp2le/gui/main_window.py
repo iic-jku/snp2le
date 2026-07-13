@@ -317,6 +317,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sch_path, show_output=show, simulator=sim)
         self._write_sim_range(cwd)                        # sync testbench sweep to the data
         os.makedirs(os.path.join(cwd, "simulations"), exist_ok=True)
+        if sim == "ngspice":                    # wrdata cannot create its target folder
+            os.makedirs(xschem.sim_data_dir(self._sch_path, sim), exist_ok=True)
         self._sim_log_path = None
         if sim == "vacask":                               # its console is redirected to a log
             self._sim_log_path = xschem.vacask_log_path(self._sch_path)
@@ -480,14 +482,12 @@ class MainWindow(QtWidgets.QMainWindow):
             + (log[-1500:] if log else "(no output was captured)"))
 
     def _sim_output_dir(self):
-        # The testbench writes its result to <base>/sim_data, where <base> is two levels
-        # above the testbench's own directory (Ngspice `wrdata ../../../sim_data`, VACASK
-        # via its postprocess).  Locate it relative to the loaded .sch, not this file, so it
-        # resolves whether snp2le runs from source or is pip-installed elsewhere.
+        # Where this run's testbench writes its result: read from the testbench itself
+        # (Ngspice wrdata / VACASK log), falling back to the bundled layout.  Evaluated
+        # fresh on every poll tick, so the VACASK log can reveal the folder mid-poll.
         if not self._sch_path:
             return os.path.join(os.getcwd(), "sim_data")
-        base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(self._sch_path))))
-        return os.path.join(base, "sim_data")
+        return xschem.sim_data_dir(self._sch_path, self._sim_simulator or "ngspice")
 
     # extensions that are never an Ngspice data table (binary raw, netlists, logs)
     _NON_DATA_EXTS = (".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out",

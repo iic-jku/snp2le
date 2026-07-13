@@ -161,18 +161,22 @@ def _run_testbench(sch, simulator, show_output, net, timeout):
         except (TypeError, IndexError, ValueError, OSError):
             pass
 
-    # The testbench writes its result to <base>/sim_data, where <base> is two levels above
-    # the testbench directory (Ngspice `wrdata ../../../sim_data`, VACASK postprocess).
-    # Derive it from the .sch, not this install, so a pip-installed snp2le finds it too.
-    sim_data = os.path.join(os.path.dirname(os.path.dirname(cwd)), "sim_data")
+    # Where the testbench writes its result: read from the testbench itself (Ngspice
+    # wrdata / VACASK log), falling back to the bundled layout.  Re-evaluated while
+    # polling below, since the VACASK log only reveals the folder once a run finishes.
+    def sim_data_dir():
+        return xschem.sim_data_dir(sch, simulator)
+
     stem = os.path.splitext(os.path.basename(sch))[0]
-    marker = os.path.join(sim_data, stem + ".aborted")
     log = xschem.sim_log_path(sch, simulator) if simulator == "vacask" else None
-    for stale in (os.path.join(sim_data, stem + ".txt"), marker):   # a clean run this time
+    for stale in (os.path.join(sim_data_dir(), stem + ".txt"),      # a clean run this time
+                  os.path.join(sim_data_dir(), stem + ".aborted")):
         try:
             os.remove(stale)
         except OSError:
             pass
+    if simulator == "ngspice":                  # wrdata cannot create its target folder
+        os.makedirs(sim_data_dir(), exist_ok=True)
 
     env = os.environ.copy()
     if simulator == "vacask" and show_output:               # let the postprocess pop its plot
@@ -189,7 +193,7 @@ def _run_testbench(sch, simulator, show_output, net, timeout):
     settle = [None]
 
     def settled():                                          # appeared and stopped growing
-        r = _find_result(sim_data, stem, start)
+        r = _find_result(sim_data_dir(), stem, start)
         if r is None:
             return None
         try:
@@ -203,7 +207,8 @@ def _run_testbench(sch, simulator, show_output, net, timeout):
 
     def aborted():
         try:
-            return os.path.getmtime(marker) >= start - 1
+            return os.path.getmtime(
+                os.path.join(sim_data_dir(), stem + ".aborted")) >= start - 1
         except OSError:
             return False
 

@@ -106,8 +106,10 @@ Xschem testbench, then run it from here:</p>
 <li><b>Load .sch</b>: pick the Xschem testbench. The <b>Simulator</b> is auto-set from the
 file name (a name ending in <i>_vacask</i> selects VACASK) and can be overridden.</li>
 <li><b>Simulator</b>: <b>Ngspice</b> or <b>VACASK</b>. Both netlist&nbsp;+&nbsp;simulate
-through Xschem and write their result to <tt>sim_data/</tt>, which is imported and
-overlaid on the plots automatically.</li>
+through Xschem and write their result to the testbench's <tt>sim_data/</tt> folder, which
+is imported and overlaid on the plots automatically. The location is read from the
+testbench itself (its <tt>wrdata</tt> target, or VACASK's log), so a testbench with a
+custom output folder imports just the same.</li>
 <li><b>Run Simulation</b>: runs the loaded testbench. The button turns green (successful)
 or red (failed). If no result appears, the dialog shows the simulator log. Loading another
 testbench frees the button if a run or import is still pending.</li>
