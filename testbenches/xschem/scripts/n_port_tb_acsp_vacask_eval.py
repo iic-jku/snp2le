@@ -3,7 +3,7 @@
 # Universal VACASK postprocessing script for the acsp (AC S-parameter) testbenches.  One
 # script serves the 2-, 3- and 4-port testbenches: it reads VACASK's raw output, discovers
 # the port count from the s(i,j) vector names, and processes the full N x N S-matrix.  Each
-# testbench calls it with postprocess(PYTHON, "../n_port_tb_acsp_vacask_eval.py").
+# testbench calls it with postprocess(PYTHON, "../scripts/n_port_tb_acsp_vacask_eval.py").
 #
 # It then:
 #   * writes sim_data/<TB>.txt with a frequency column plus s{i}{j}_db and s{i}{j}_deg for
@@ -28,16 +28,17 @@ try:
     HERE = os.path.dirname(os.path.abspath(__file__))
 except NameError:                              # exec'd without __file__
     HERE = os.getcwd()
+# this script lives in <testbench dir>/scripts/, results go to <testbench dir>/sim_data/
+_BASE = os.path.abspath(os.path.join(HERE, ".."))
 _spec = (glob.glob(os.path.join(os.getcwd(), "*.spectre"))
-         or glob.glob(os.path.join(HERE, "simulations", "*.spectre"))
-         or glob.glob(os.path.join(HERE, "*.spectre")))
+         or glob.glob(os.path.join(_BASE, "simulations", "*.spectre"))
+         or glob.glob(os.path.join(_BASE, "*.spectre")))
 TB = (os.path.splitext(os.path.basename(max(_spec, key=os.path.getmtime)))[0]
       if _spec else "n_port_tb_acsp_vacask")
 
 
 def _abort_marker():
-    repo = os.path.abspath(os.path.join(HERE, "..", ".."))
-    return os.path.join(repo, "sim_data", TB + ".aborted")
+    return os.path.join(_BASE, "sim_data", TB + ".aborted")
 
 
 def mark_aborted(reason):
@@ -54,7 +55,7 @@ def mark_aborted(reason):
 def find_raw():
     """Newest .raw VACASK wrote (cwd is the netlist dir during the run)."""
     cands = []
-    for d in (os.getcwd(), os.path.join(HERE, "simulations"), HERE):
+    for d in (os.getcwd(), os.path.join(_BASE, "simulations"), _BASE):
         cands += glob.glob(os.path.join(d, "*.raw"))
     cands = [c for c in cands if os.path.isfile(c)]
     if not cands:
@@ -108,8 +109,7 @@ def load_acsp(raw):
 def write_table(f, n, dB, deg):
     """Write sim_data/<TB>.txt: a frequency column plus s{i}{j}_db and s{i}{j}_deg for every
     port pair.  snp2le maps columns by name, so any port count imports."""
-    repo = os.path.abspath(os.path.join(HERE, "..", ".."))
-    out_dir = os.path.join(repo, "sim_data")
+    out_dir = os.path.join(_BASE, "sim_data")
     os.makedirs(out_dir, exist_ok=True)
     pairs = [(i, j) for i in range(1, n + 1) for j in range(1, n + 1)]
     cols = ["frequency"] + [f"s{i}{j}_db" for i, j in pairs] + [f"s{i}{j}_deg" for i, j in pairs]
