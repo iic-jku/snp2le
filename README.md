@@ -16,7 +16,8 @@ Institute for Integrated Circuits and Quantum Computing (IICQC), Johannes Kepler
 
 > [!IMPORTANT]
 > The converter (GUI and CLI) runs anywhere with **Python ≥ 3.10**, see [Install](https://github.com/iic-jku/snp2le#install) below.
-> *Running* the exported netlists in a testbench additionally needs **Xschem** plus **Ngspice** and/or **VACASK**. The easiest way to get all of them is the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container.
+> *Running* the exported netlists in a testbench additionally needs **Xschem** plus **Ngspice** and/or **VACASK**. The easiest way to get all of them is the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container. Since tag `2026.07`, `snp2le` has been installed directly in the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container.
+
 
 
 ## Description
