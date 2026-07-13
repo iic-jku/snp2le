@@ -75,14 +75,15 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
     - 📄 `help_dialog.py`, `style.py`, `widgets.py`, and more
     - 📁 **assets/** logos (svg and png), `snp2le.ico`
   - 📁 **examples/** Touchstone `.sNp` sample files (BPF, inductor, balun, BLC, WPD, and more)
-- 📁 **tests/** pytest suite (`test_core.py`)
+- 📁 **tests/** pytest suite (`test_core.py`, `test_xschem.py`)
 - 📁 **doc/** `architecture.md` and screenshots (in `fig/`)
-- 📁 **testbenches/xschem/** BPF testbenches (Ngspice and VACASK) plus postprocess eval scripts
+- 📁 **testbenches/xschem/** BPF testbenches (Ngspice and VACASK)
+  - 📁 **scripts/** postprocess eval scripts
+  - 📁 **sim_data/** simulation results, imported and overlaid on the plots
 - 📁 **netlist/** exported lumped-element netlists
   - 📁 **spice/** Ngspice (`.spice`)
   - 📁 **spectre/** VACASK (`.inc`) plus `syntax_cheatsheet.inc`
 - 📁 **schematic/xschem/** DUT symbol (`bpf_le.sym`) and `xschemrc`
-- 📁 **sim_data/** simulation results, imported and overlaid on the plots
 - 📄 **README.md**, 📄 **LICENSE** (Apache-2.0), 📄 **CITATION.cff**
 
 

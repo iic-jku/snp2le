@@ -72,7 +72,7 @@ def sim_data_dir(sch_path: str, simulator: str = "ngspice") -> str:
     the simulator runs in.  VACASK: the `postprocess: wrote <file>` line of the
     captured console log - it appears once the run's postprocess has finished, so
     callers re-evaluate while polling; the folder is stable across runs.  Falls back
-    to `sim_data/` two levels above the testbench dir (the bundled layout).
+    to `sim_data/` next to the testbench (the bundled layout).
     """
     sch_path = os.path.abspath(sch_path)
     cwd = os.path.dirname(sch_path)
@@ -90,7 +90,7 @@ def sim_data_dir(sch_path: str, simulator: str = "ngspice") -> str:
                 # a SPICE path: '/' separated on any platform, '\' is an escape there
                 return os.path.normpath(
                     os.path.join(netlist_dir, posixpath.dirname(m.group(1))))
-    return os.path.normpath(os.path.join(cwd, "..", "..", "sim_data"))
+    return os.path.join(cwd, "sim_data")
 
 
 def write_sim_range(cwd: str, f_min: float, f_max: float) -> None:

@@ -3,7 +3,7 @@
 The result folder is the testbench's choice, so sim_data_dir must read it from the
 testbench itself: the Ngspice `wrdata` target (from the .sch or the generated netlist),
 the VACASK log's `postprocess: wrote` line, and only fall back to the bundled layout
-(`sim_data/` two levels above the testbench dir) when neither says anything.
+(`sim_data/` next to the testbench) when neither says anything.
 """
 import os
 import sys
@@ -22,9 +22,10 @@ def _make_sch(tmp_path, body, name="tb_ngspice.sch"):
 
 
 def test_ngspice_wrdata_bundled_layout(tmp_path):
-    """The bundled testbenches' wrdata target resolves to <repo>/sim_data."""
-    sch = _make_sch(tmp_path, "value=\"\nwrdata ../../../sim_data/@schname\\\\\\\\.txt\n\"")
-    assert sim_data_dir(str(sch), "ngspice") == str(tmp_path / "sim_data")
+    """The bundled testbenches' wrdata target resolves to sim_data next to the .sch."""
+    sch = _make_sch(tmp_path, "value=\"\nwrdata ../sim_data/@schname\\\\\\\\.txt\n\"")
+    assert sim_data_dir(str(sch), "ngspice") == str(
+        tmp_path / "testbenches" / "xschem" / "sim_data")
 
 
 def test_ngspice_wrdata_custom_folder(tmp_path):
@@ -56,7 +57,8 @@ def test_vacask_folder_from_log(tmp_path):
 
 
 def test_fallback_bundled_layout(tmp_path):
-    """Nothing to read: fall back to sim_data two levels above the testbench dir."""
+    """Nothing to read: fall back to sim_data next to the testbench."""
     sch = _make_sch(tmp_path, "no wrdata anywhere\n")
-    assert sim_data_dir(str(sch), "ngspice") == str(tmp_path / "sim_data")
-    assert sim_data_dir(str(sch), "vacask") == str(tmp_path / "sim_data")
+    expect = str(tmp_path / "testbenches" / "xschem" / "sim_data")
+    assert sim_data_dir(str(sch), "ngspice") == expect
+    assert sim_data_dir(str(sch), "vacask") == expect
