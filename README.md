@@ -46,18 +46,18 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 
 ```text
 📁 snp2le/
-├─ 📁 doc/                   architecture notes and screenshots
-│  ├─ 📁 fig/                GUI and plot screenshots
-│  └─ architecture.md        data flow, internals, how to extend
-├─ 📁 netlist/               exported lumped-element netlists
-│  ├─ 📁 spectre/            VACASK (.inc) + syntax_cheatsheet.inc
-│  └─ 📁 spice/              Ngspice (.spice)
+├─ 📁 doc/                    architecture notes and screenshots
+│  ├─ 📁 fig/                 GUI and plot screenshots
+│  └─ architecture.md         data flow, internals, how to extend
+├─ 📁 netlist/                exported lumped-element netlists
+│  ├─ 📁 spectre/             VACASK (.inc) + syntax_cheatsheet.inc
+│  └─ 📁 spice/               Ngspice (.spice)
 ├─ 📁 schematic/
-│  └─ 📁 xschem/             DUT symbols (*.sym) and xschemrc
-├─ 📁 snp2le/                the application package (pip-installable)
-│  ├─ 📁 core/               pure Python, Qt-free, all the maths
-│  │  ├─ 📁 structures/      physical extractors, one per topology
-│  │  │  ├─ __init__.py      registry (GUI dropdown + CLI find it)
+│  └─ 📁 xschem/              DUT symbols (*.sym) and xschemrc
+├─ 📁 snp2le/                 the application package (pip-installable)
+│  ├─ 📁 core/                pure Python, Qt-free, all the maths
+│  │  ├─ 📁 structures/       physical extractors, one per topology
+│  │  │  ├─ __init__.py       registry (GUI dropdown + CLI find it)
 │  │  │  ├─ base.py
 │  │  │  ├─ balun.py
 │  │  │  ├─ branchline.py
@@ -66,41 +66,41 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 │  │  │  ├─ tline.py
 │  │  │  └─ wilkinson.py
 │  │  ├─ __init__.py
-│  │  ├─ dc.py               DC operating-point (singularity) check
-│  │  ├─ engine.py           convert(state, net) -> Results, the entry point
-│  │  ├─ io.py               load Touchstone, parse Ngspice tables
-│  │  ├─ ir.py               dialect-agnostic Circuit IR
-│  │  ├─ mna.py              rebuild N-port S-parameters from an RLC IR
-│  │  ├─ netlist.py          render the IR to Ngspice and VACASK
-│  │  ├─ state.py            ConverterState and Results dataclasses
-│  │  ├─ units.py            engineering-notation parse and format
-│  │  ├─ universal.py        vector-fit passive macromodel
-│  │  └─ xschem.py           headless Xschem netlist and simulate
-│  ├─ 📁 examples/           Touchstone .sNp samples (BPF, ind, balun, ...)
-│  ├─ 📁 gui/                PySide6-Essentials, no maths
-│  │  ├─ 📁 assets/          logos (svg and png), snp2le.ico
+│  │  ├─ dc.py                DC operating-point (singularity) check
+│  │  ├─ engine.py            convert(state, net) -> Results, the entry point
+│  │  ├─ io.py                load Touchstone, parse Ngspice tables
+│  │  ├─ ir.py                dialect-agnostic Circuit IR
+│  │  ├─ mna.py               rebuild N-port S-parameters from an RLC IR
+│  │  ├─ netlist.py           render the IR to Ngspice and VACASK
+│  │  ├─ state.py             ConverterState and Results dataclasses
+│  │  ├─ units.py             engineering-notation parse and format
+│  │  ├─ universal.py         vector-fit passive macromodel
+│  │  └─ xschem.py            headless Xschem netlist and simulate
+│  ├─ 📁 examples/            Touchstone .sNp samples (BPF, ind, balun, ...)
+│  ├─ 📁 gui/                 PySide6-Essentials, no maths
+│  │  ├─ 📁 assets/           logos (svg and png), snp2le.ico
 │  │  ├─ __init__.py
-│  │  ├─ design_view.py      results, values, tolerances, schematic
-│  │  ├─ main_window.py      the controller
-│  │  ├─ plot_view.py        four S-parameter / extracted-param plots
-│  │  ├─ top_bar.py          load, mode, structure, options, run
-│  │  └─ ...                 help_dialog.py, style.py, widgets.py, and more
-│  ├─ __init__.py            package version
-│  └─ __main__.py            single entry point (GUI, or -b for the CLI)
+│  │  ├─ design_view.py       results, values, tolerances, schematic
+│  │  ├─ main_window.py       the controller
+│  │  ├─ plot_view.py         four S-parameter / extracted-param plots
+│  │  ├─ top_bar.py           load, mode, structure, options, run
+│  │  └─ ...                  help_dialog.py, style.py, widgets.py, and more
+│  ├─ __init__.py             package version
+│  └─ __main__.py             single entry point (GUI, or -b for the CLI)
 ├─ 📁 testbenches/
-│  └─ 📁 xschem/             BPF testbenches (Ngspice and VACASK)
-│     ├─ 📁 scripts/         postprocess eval scripts
-│     └─ 📁 sim_data/        simulation results, overlaid on the plots
-├─ 📁 tests/                 pytest suite
+│  └─ 📁 xschem/              BPF testbenches (Ngspice and VACASK)
+│     ├─ 📁 scripts/          postprocess eval scripts
+│     └─ 📁 sim_data/         simulation results, overlaid on the plots
+├─ 📁 tests/                  pytest suite
 │  ├─ test_core.py
-│  ├─ test_qt_essentials.py  guards the Essentials-only dependency
+│  ├─ test_qt_essentials.py   guards the Essentials-only dependency
 │  └─ test_xschem.py
 ├─ CITATION.cff
-├─ LICENSE                   Apache-2.0
-├─ MANIFEST.in               sdist manifest (bundles examples and assets)
-├─ pyproject.toml            packaging, dependencies, snp2le entry point
+├─ LICENSE                    Apache-2.0
+├─ MANIFEST.in                sdist manifest (bundles examples and assets)
+├─ pyproject.toml             packaging, dependencies, snp2le entry point
 ├─ README.md
-└─ requirements.txt          runtime dependencies (mirrors pyproject.toml)
+└─ requirements.txt           runtime dependencies (mirrors pyproject.toml)
 ```
 
 
