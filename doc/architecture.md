@@ -5,9 +5,19 @@ For what the tool does and how to install and run it, see the main
 is organised, the data flow, how to extend it, and the internal caveats.
 
 `snp2le` is one package split into a pure-Python, Qt-free `snp2le.core` (fully
-testable) and a thin PySide6 `snp2le.gui`, wired together by the single entry
+testable) and a thin `snp2le.gui` on PySide6-Essentials, wired together by the single entry
 point `engine.convert(state, net)`. The module map is the README's
 [Directory Structure](../README.md#directory-structure).
+
+The GUI uses only `QtCore`, `QtGui`, `QtWidgets` and `QtSvg`, so the declared
+dependency is `PySide6-Essentials`, not the full `PySide6` metapackage — the
+latter drags in PySide6-Addons (QtWebEngine, Multimedia, Charts, ...), roughly
+400 MB that nothing here imports. This matters for container images such as
+IIC-OSIC-TOOLS. Keep it that way: a bare `from PySide6.QtCharts import ...`
+would still work on a developer machine that happens to have the metapackage
+installed, but would break an Essentials-only deployment. A full `PySide6`
+install satisfies the requirement too, since the metapackage depends on
+`PySide6-Essentials`.
 
 
 ## Data flow

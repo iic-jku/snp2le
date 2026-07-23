@@ -6,7 +6,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/iic-jku/snp2le/blob/main/LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)
-![GUI: PySide6](https://img.shields.io/badge/GUI-PySide6-41CD52.svg?logo=qt&logoColor=white)
+![GUI: PySide6-Essentials](https://img.shields.io/badge/GUI-PySide6--Essentials-41CD52.svg?logo=qt&logoColor=white)
 [![PyPI](https://img.shields.io/pypi/v/snp2le.svg)](https://pypi.org/project/snp2le/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21189545.svg)](https://doi.org/10.5281/zenodo.21189545)
 
@@ -29,7 +29,7 @@ It offers two conversion philosophies:
 - **Universal (any N-port).** Vector-fits the S-parameters with [scikit-rf](https://scikit-rf.org) `VectorFitting`, optionally enforces passivity, and synthesises a passive macromodel of R, C and controlled sources. It works for any structure and port count, and is electrically exact but not physically interpretable.
 - **Structure-specific.** Fits a known physical topology, so every component maps to reality (series L, shunt C, coupling k, and so on) at a chosen **extraction frequency**. See [Available structures](https://github.com/iic-jku/snp2le#available-structures).
 
-A single dialect-agnostic **Circuit IR** drives both netlist backends and the on-screen schematic, so the outputs always agree. The code is split into a pure-Python, Qt-free `snp2le.core` (fully unit-tested) and a thin PySide6 `snp2le.gui`, both driven by one entry point, `engine.convert(state, net)`.
+A single dialect-agnostic **Circuit IR** drives both netlist backends and the on-screen schematic, so the outputs always agree. The code is split into a pure-Python, Qt-free `snp2le.core` (fully unit-tested) and a thin `snp2le.gui` on PySide6-Essentials, both driven by one entry point, `engine.convert(state, net)`.
 
 <p align="center">
   <a href="https://raw.githubusercontent.com/iic-jku/snp2le/main/doc/fig/snp2le_gui_bpf.png"><img src="https://raw.githubusercontent.com/iic-jku/snp2le/main/doc/fig/snp2le_gui_bpf.png" alt="snp2le GUI, band-pass filter" width="85%"></a><br>
@@ -67,7 +67,7 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
       - 📄 `base.py`, `inductor_pi.py`, `mim_cap.py`, `tline.py`
       - 📄 `wilkinson.py`, `balun.py`, `branchline.py`
       - 📄 `__init__.py` registry (the GUI dropdown and CLI auto-discover it)
-  - 📁 **gui/** PySide6, no maths
+  - 📁 **gui/** PySide6-Essentials, no maths
     - 📄 `main_window.py` the controller
     - 📄 `top_bar.py` load, mode, structure, options, simulator, run
     - 📄 `design_view.py` result, element values, tolerances, schematic, netlist
