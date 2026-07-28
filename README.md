@@ -97,6 +97,7 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 │     └─ 📁 simulations/      generated netlists and raw output (not tracked)
 ├─ 📁 tests/                  pytest suite
 │  ├─ test_core.py
+│  ├─ test_gui_sim_flow.py    headless GUI run/poll/import regressions
 │  ├─ test_qt_essentials.py   guards the Essentials-only dependency
 │  └─ test_xschem.py
 ├─ CITATION.cff

@@ -332,6 +332,24 @@ def test_load_ngspice_sim():
     assert "S12" not in sim                        # only present columns parsed
 
 
+def test_load_ngspice_sim_mixed_case_headers():
+    """The .sch testbenches declare s11_dB; ngspice happens to lower-case the
+    wrdata header, but the parser must not rely on it."""
+    import tempfile
+    text = (" frequency  s11_dB  S11_DEG \n"
+            " 1.0e9  -3.0  45.0 \n"
+            " 2.0e9  -6.0  90.0 \n")
+    fd, path = tempfile.mkstemp(suffix=".txt")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(text)
+        sim = io.load_ngspice_sim(path)
+    finally:
+        os.unlink(path)
+    assert sim["S11"]["db"][1] == -6.0
+    assert sim["S11"]["deg"][0] == 45.0
+
+
 if __name__ == "__main__":
     # allow running without pytest
     for name, fn in sorted(globals().items()):
