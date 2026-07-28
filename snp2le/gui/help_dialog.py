@@ -104,7 +104,7 @@ own window and export to CSV.</p>
 Xschem testbench, then run it from here:</p>
 <ul>
 <li><b>Load .sch</b>: pick the Xschem testbench. The <b>Simulator</b> is auto-set from the
-file name (a name ending in <i>_vacask</i> selects VACASK) and can be overridden.</li>
+file name (a name containing <i>vacask</i> selects VACASK) and can be overridden.</li>
 <li><b>Simulator</b>: <b>Ngspice</b> or <b>VACASK</b>. Both netlist&nbsp;+&nbsp;simulate
 through Xschem and write their result to the testbench's <tt>plot_simulations/data/</tt>
 folder, which is imported and overlaid on the plots automatically. The location is read from the

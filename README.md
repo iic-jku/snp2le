@@ -86,7 +86,9 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 │  │  ├─ top_bar.py           load, mode, structure, options, run
 │  │  └─ ...                  help_dialog.py, style.py, widgets.py, and more
 │  ├─ __init__.py             package version
-│  └─ __main__.py             single entry point (GUI, or -b for the CLI)
+│  ├─ __main__.py             single entry point (GUI, or -b for the CLI)
+│  ├─ app.py                  the GUI launcher (__main__ starts it)
+│  └─ cli.py                  the batch CLI behind -b
 ├─ 📁 testbenches/
 │  └─ 📁 xschem/              N-port testbenches (Ngspice and VACASK)
 │     ├─ 📁 plot_simulations/ plot scripts (plot_*.py and ngspice2python.py)
@@ -160,7 +162,7 @@ A bundled example is preloaded on first run. More live in `snp2le/examples/`.
 
 Drop the exported subcircuit into an Xschem testbench, then run it from the GUI:
 
-1. **Load .sch.** Pick the testbench. The **Simulator** auto-selects from the file name (a name ending in `_ngspice.sch` selects Ngspice or `_vacask.sch` selects VACASK) and can be overridden.
+1. **Load .sch.** Pick the testbench. The **Simulator** auto-selects from the file name (a name containing `vacask` selects VACASK, any other name selects Ngspice) and can be overridden.
 2. **Run Simulation.** Both simulators netlist and simulate through Xschem and write their result table to `plot_simulations/data/`, which is imported and overlaid on the plots automatically. The button turns green on success or red on failure. On failure the dialog shows the simulator log.
 3. **Show output.** Tick it to show the simulator's console and plot windows. Leave it unticked to run quietly. The result is imported either way.
 
@@ -222,7 +224,7 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `--simulator ngspice\|vacask` | sim | simulator for `--simulate` (default: auto from `.sch` name) |
 | `--show-output` | sim | show the simulator's console and plot windows |
 | `--timeout S` | sim | seconds to wait for a `--simulate` result (default 180) |
-| `--plot [SPARAMS]` | sim | display data, model and sim plots (e.g. `S11,S21`) |
+| `--plot [SPARAMS]` | both | display data-vs-model plots, plus the sim overlay after `--simulate` (e.g. `S11,S21`) |
 | `--quiet` | both | suppress the per-file status line |
 
 ### Examples
@@ -242,7 +244,7 @@ snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \
 ```
 
 > [!NOTE]
-> `--simulate` and `--plot` need Xschem (and a display for `--plot`). They print a clear message and skip if Xschem is not on `PATH`.
+> `--simulate` needs Xschem and `--plot` needs a display. If Xschem is not on `PATH`, `--simulate` prints a clear message and the run exits non-zero.
 
 
 ## Available structures
@@ -251,9 +253,9 @@ snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \
 | --- | --- | --- | --- |
 | `inductor-pi` | Inductor | 2 | series R-L plus shunt C/R per port |
 | `mim-cap` | MIM capacitor | 2 | series C with parasitic L/R plus shunt C (use it for MOM caps too) |
-| `tline-rlgc` | Transmission line (RLGC) | 2 | N-cell pi-ladder (`--stages`) |
-| `wilkinson-inphase` | Wilkinson divider (in-phase) | 3 | optional isolation resistor (`--iso-r`) |
-| `wilkinson` | Wilkinson divider (quadrature) | 3 | quadrature (90 deg) outputs |
+| `tline-rlgc` | Tline (RLGC) | 2 | transmission line as an N-cell ladder of L-cells (`--stages`) |
+| `wilkinson-inphase` | Wilkinson (in-phase) | 3 | optional isolation resistor (`--iso-r`) |
+| `wilkinson` | Wilkinson (quadrature) | 3 | quadrature (90 deg) outputs |
 | `balun` | Balun (transformer) | 4 | coupled inductors (k, M, n), Qp and Qs |
 | `branchline` | Branch-line coupler | 4 | optional fitted arm loss (`--iso-r`) |
 

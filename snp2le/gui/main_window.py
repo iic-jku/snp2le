@@ -319,6 +319,13 @@ class MainWindow(QtWidgets.QMainWindow):
         os.makedirs(os.path.join(cwd, "simulations"), exist_ok=True)
         if sim == "ngspice":                    # wrdata cannot create its target folder
             os.makedirs(xschem.sim_data_dir(self._sch_path, sim), exist_ok=True)
+        stem = os.path.splitext(os.path.basename(self._sch_path))[0]
+        for stale in (stem + ".txt", stem + ".aborted"):    # a clean run this time, so a
+            try:                                            # previous result can never be
+                os.remove(os.path.join(                     # mistaken for this run's
+                    xschem.sim_data_dir(self._sch_path, sim), stale))
+            except OSError:
+                pass
         self._sim_log_path = None
         if sim == "vacask":                               # its console is redirected to a log
             self._sim_log_path = xschem.vacask_log_path(self._sch_path)
@@ -489,9 +496,10 @@ class MainWindow(QtWidgets.QMainWindow):
             return os.path.join(os.getcwd(), "plot_simulations", "data")
         return xschem.sim_data_dir(self._sch_path, self._sim_simulator or "ngspice")
 
-    # extensions that are never an Ngspice data table (binary raw, netlists, logs)
+    # extensions that are never an Ngspice data table (binary raw, netlists, logs,
+    # and the VACASK postprocess's <stem>.aborted marker, which lands in the same folder)
     _NON_DATA_EXTS = (".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out",
-                      ".svg", ".png", ".ps", ".pdf", ".sch")
+                      ".svg", ".png", ".ps", ".pdf", ".sch", ".aborted")
     _DATA_EXTS = (".txt", ".data", ".dat", ".csv")
 
     def _find_sim_result(self, tb_stem):
@@ -555,6 +563,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._sim_proc.readAll()).decode(errors="replace")
 
     def _on_sim_finished(self, code, _status):
+        if self._sim_proc is None:               # already handled (stopped, or a crash
+            return                               # that errorOccurred reported first)
         tail = bytes(self._sim_proc.readAll()).decode(errors="replace") if self._sim_proc else ""
         out = self._sim_output_buf + tail
         self._sim_last_output = out                  # keep for the no-result diagnostic
@@ -622,7 +632,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._sim_simulator == "vacask":
             if self._fresh_abort_marker(stem):       # postprocess flagged an abort
                 self._end_vacask_poll("aborted!", aborted=True)
-            elif self._vacask_running():             # still simulating -> keep waiting
+                return
+            if self._vacask_running():               # still simulating -> keep waiting
                 self._sim_vacask_seen = True
                 self._sim_vacask_gone_at = 0.0
             elif self._sim_vacask_seen:              # vacask finished, no result written
@@ -630,8 +641,10 @@ class MainWindow(QtWidgets.QMainWindow):
                     self._sim_vacask_gone_at = now   # brief grace for the file to land
                 elif now - self._sim_vacask_gone_at > 1.5:
                     self._end_vacask_poll("failed!", aborted=False)
+                    return
             elif now - self._sim_start > 12.0:       # vacask never even started
                 self._end_vacask_poll("failed!", aborted=False)
+                return
             if now >= self._sim_poll_deadline:       # 1 h absolute backstop
                 self._end_vacask_poll("failed!", aborted=False)
             return

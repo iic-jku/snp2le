@@ -80,8 +80,12 @@ def sim_data_dir(sch_path: str, simulator: str = "ngspice") -> str:
     if simulator == "vacask":
         hits = re.findall(r"postprocess:\s+wrote\s+(.+)",
                           _read_text(sim_log_path(sch_path, "vacask")))
-        if hits:
-            return os.path.dirname(hits[-1].strip())
+        # the postprocess reports the result table first and then the figure PNG,
+        # which lands in the sibling figures/ folder - only tables count here
+        tables = [h.strip() for h in hits if os.path.splitext(h.strip())[1].lower()
+                  in (".txt", ".csv", ".dat", ".data")]
+        if tables:
+            return os.path.dirname(tables[-1])
     else:
         stem = os.path.splitext(os.path.basename(sch_path))[0]
         for src in (sch_path, os.path.join(netlist_dir, stem + ".spice")):

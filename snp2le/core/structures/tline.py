@@ -1,11 +1,12 @@
 """structures/tline.py - 2-port transmission-line (RLGC) ladder model.
 
 From the ABCD matrix we recover the electrical length gamma*l and characteristic
-impedance Zc, then synthesise N cascaded pi-cells whose cascade exactly matches
-the line at the extraction frequency: series Z_cell = Zc*sinh(theta), shunt
-Y_cell = (2/Zc)*tanh(theta/2) with theta = gamma*l/N.  Each cell is an R-L series
-branch plus a shunt capacitor C' in parallel with a substrate/dielectric
-conductance G' (drawn as R_sh = 1/G').  In the spirit of Volker Muehlhaus'
+impedance Zc, then synthesise an N-cell ladder of L-cells that matches the line
+at the extraction frequency: each cell is a series Z_cell = Zc*sinh(theta)
+followed by a shunt Y_cell = (2/Zc)*tanh(theta/2) to ground, with
+theta = gamma*l/N.  The series branch realises R-L and the shunt a capacitor C'
+in parallel with a substrate/dielectric conductance G' (drawn as R_sh = 1/G').
+In the spirit of Volker Muehlhaus'
 rlgc_from_s2p (https://github.com/VolkerMuehlhaus/lumpedmodel).
 """
 from __future__ import annotations

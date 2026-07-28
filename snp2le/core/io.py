@@ -99,9 +99,10 @@ def load_ngspice_sim(path: str) -> dict:
         if name == fname:
             continue
         key = name[:3].upper()                    # "s11_db" -> "S11"
-        if name.endswith("_db"):
+        low = name.lower()                        # ngspice lower-cases the header names,
+        if low.endswith("_db"):                   # but don't rely on it (.sch says s11_dB)
             out.setdefault(key, {})["db"] = cols[name]
-        elif name.endswith("_deg"):
+        elif low.endswith("_deg"):
             out.setdefault(key, {})["deg"] = cols[name]
     if len(out) < 2:
         raise ValueError("no S-parameter columns (expected names like 's11_db')")

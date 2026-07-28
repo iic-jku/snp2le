@@ -47,14 +47,17 @@ def test_ngspice_wrdata_from_generated_netlist(tmp_path):
 
 
 def test_vacask_folder_from_log(tmp_path):
-    """The VACASK log's last 'postprocess: wrote' line names the exact file."""
+    """The VACASK log's last 'postprocess: wrote' *table* line names the folder.  The
+    postprocess also reports the figure PNG (written to the sibling figures/ folder),
+    which must not win."""
     sch = _make_sch(tmp_path, "", name="tb_vacask.sch")
     sim = sch.parent / "simulations"
     sim.mkdir()
     (sim / "vacask.log").write_text(
         "Analysis 'acsp' completed.\n"
         "postprocess: wrote /somewhere/old/tb_vacask.txt\n"
-        "postprocess: wrote /somewhere/new/tb_vacask.txt\n", encoding="utf-8")
+        "postprocess: wrote /somewhere/new/tb_vacask.txt\n"
+        "postprocess: wrote /somewhere/figures/tb_vacask.png\n", encoding="utf-8")
     assert sim_data_dir(str(sch), "vacask") == "/somewhere/new"
 
 

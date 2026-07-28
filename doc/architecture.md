@@ -24,7 +24,8 @@ install satisfies the requirement too, since the metapackage depends on
 
 The flow is always **load, `engine.convert(state, net)`, `Results`, views**:
 
-1. `io.load_touchstone` reads the `.sNp` (scikit-rf) and drops any 0 Hz sample.
+1. `io.load_touchstone` reads the `.sNp` (scikit-rf); `engine.convert` then drops
+   any 0 Hz sample through `io.without_dc`.
 2. `engine.convert(state, net)` runs the chosen mode and returns a `Results`
    dataclass: the IR, both rendered netlists, the data-vs-model S-parameters,
    element values, tolerances and messages.
@@ -67,5 +68,5 @@ pytest
   The model is still usable. The status is reported honestly ("near-passive").
 * A 0 Hz (DC) sample is dropped automatically, since it breaks the
   Y-/ABCD-parameter extraction and the MNA rebuild.
-* The transmission-line ladder uses 2 pi-cells by default (`N_SEGMENTS` in
+* The transmission-line ladder uses 2 L-cells by default (`N_SEGMENTS` in
   `snp2le/core/structures/tline.py`) and can be set from 1 to 10 stages.

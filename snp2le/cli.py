@@ -158,8 +158,9 @@ def _run_testbench(sch, simulator, show_output, net, timeout):
     if net is not None:                                      # the sweep follows the loaded data
         try:
             xschem.write_sim_range(cwd, float(net.f[0]), float(net.f[-1]))
-        except (TypeError, IndexError, ValueError, OSError):
-            pass
+        except (TypeError, IndexError, ValueError, OSError) as exc:
+            print(f"[WARN] could not sync the testbench sweep to the loaded data "
+                  f"(the last-written sim_range is used instead): {exc}", file=sys.stderr)
 
     # Where the testbench writes its result: read from the testbench itself (Ngspice
     # wrdata / VACASK log), falling back to the bundled layout.  Re-evaluated while
@@ -235,7 +236,9 @@ def _run_testbench(sch, simulator, show_output, net, timeout):
             gone_at = gone_at or time.time()
             if time.time() - gone_at > 1.5:
                 return fail(f"{simulator} finished without writing a result")
-        elif time.time() - start > 12.0:                    # never even started / instant fail
+        elif os.path.isdir("/proc") and time.time() - start > 12.0:
+            # never even started / instant fail - only detectable where /proc exists;
+            # without it (e.g. Windows) the --timeout deadline above rules
             return fail(f"{simulator} produced no result (check the testbench and models)")
         time.sleep(0.3)
     return fail(f"no result for '{stem}' after {timeout:.0f} s")
@@ -447,6 +450,14 @@ def build_parser():
 
 
 def main(argv=None):
+    # Value rows print unit symbols like Ω and µ.  On Windows consoles with a legacy
+    # code page (cp1252/cp437) the default 'strict' encoding would crash the print,
+    # so degrade unencodable characters to '?' instead.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, OSError):
+            pass
     args = build_parser().parse_args(argv)
     if args.cmd == "list-structures":
         for key, name, nports in structure_items():

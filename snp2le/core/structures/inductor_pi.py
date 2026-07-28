@@ -4,8 +4,8 @@ Classic on-chip inductor equivalent: a series R-L branch between the two ports
 and, at each port, a shunt branch to ground made of a capacitor in *series* with
 a substrate resistor (C_ox in series with R_sub).  Branches are split from the
 Y-parameters via the averaged mutual term ymn=(y12+y21)/2.  The shunt C and R come
-from the shunt impedance Zshunt = 1/(y+ymn) (series R-C), and values are taken at
-the frequency of peak quality factor (below self-resonance).  Topology and
+from the shunt impedance Zshunt = 1/(y+ymn) (series R-C), and all values are taken
+at the requested extraction frequency.  Topology and
 extraction follow Volker Muehlhaus' pi_from_s2p
 (https://github.com/VolkerMuehlhaus/lumpedmodel).
 """
@@ -89,7 +89,7 @@ class InductorPi(Structure):
         self._add_shunt(ir, "p1", 1, Csh, Rsh)
         self._add_shunt(ir, "p2", 2, Csh, Rsh)
 
-        metrics = {"Q_peak": float(Q[k]), "f_extract": float(f[k]),
+        metrics = {"Q_fext": float(Q[k]), "f_extract": float(f[k]),
                    "Ls": Ls, "Rs": Rs}
         rows = [("Q", float(Q[k]), ""),
                 ("L_s", Ls, "H"), ("R_s", Rs, "Ω"),
@@ -133,7 +133,7 @@ class InductorPi(Structure):
 
         good = f > 0
         qd = np.nan_to_num(D["Q"], nan=-np.inf)
-        k = int(np.argmax(np.where(good, qd, -np.inf)))      # peak-Q (fit point)
+        k = int(np.argmax(np.where(good, qd, -np.inf)))      # peak-Q index (scales y-limits)
 
         def md(key, scale=1.0):
             return None if M is None else M[key] * scale
