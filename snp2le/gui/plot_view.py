@@ -565,11 +565,12 @@ class PlotView(QtWidgets.QWidget):
 
     # ---- import simulation / CSV / pop-out -------------------------------
     def _sim_dir(self):
-        # the last import folder, else the repo's sim_data folder
+        # the last import folder, else the repo's bundled simulation-data folder
         if self._last_sim_dir and os.path.isdir(self._last_sim_dir):
             return self._last_sim_dir
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        d = os.path.join(repo_root, "sim_data")                # source tree
+        d = os.path.join(repo_root, "testbenches", "xschem",
+                         "plot_simulations", "data")           # source tree
         return d if os.path.isdir(d) else os.getcwd()          # else the working directory
 
     def _on_sim_button(self):

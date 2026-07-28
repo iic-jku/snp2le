@@ -106,8 +106,8 @@ Xschem testbench, then run it from here:</p>
 <li><b>Load .sch</b>: pick the Xschem testbench. The <b>Simulator</b> is auto-set from the
 file name (a name ending in <i>_vacask</i> selects VACASK) and can be overridden.</li>
 <li><b>Simulator</b>: <b>Ngspice</b> or <b>VACASK</b>. Both netlist&nbsp;+&nbsp;simulate
-through Xschem and write their result to the testbench's <tt>sim_data/</tt> folder, which
-is imported and overlaid on the plots automatically. The location is read from the
+through Xschem and write their result to the testbench's <tt>plot_simulations/data/</tt>
+folder, which is imported and overlaid on the plots automatically. The location is read from the
 testbench itself (its <tt>wrdata</tt> target, or VACASK's log), so a testbench with a
 custom output folder imports just the same.</li>
 <li><b>Run Simulation</b>: runs the loaded testbench. The button turns green (successful)
@@ -136,8 +136,8 @@ keeps its <i>Completed</i> / <i>Failed</i> / <i>aborted</i> messages on its own 
 rather than passing them back. So the outcome is read from the <b>result file</b>:
   <ul>
   <li><b>Completed</b> (success): the analysis ran and the postprocess wrote
-  <tt>sim_data/&lt;testbench&gt;.txt</tt>, which is imported, and the button turns green
-  (<b>successful!</b>).</li>
+  <tt>plot_simulations/data/&lt;testbench&gt;.txt</tt>, which is imported, and the button
+  turns green (<b>successful!</b>).</li>
   <li><b>Aborted</b>: the analysis started but broke numerically (e.g. a singular matrix).
   No result is written, but the postprocess leaves an <tt>.aborted</tt> marker, so snp2le
   reports <b>aborted!</b>.</li>

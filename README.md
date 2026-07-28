@@ -88,9 +88,11 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 │  ├─ __init__.py             package version
 │  └─ __main__.py             single entry point (GUI, or -b for the CLI)
 ├─ 📁 testbenches/
-│  └─ 📁 xschem/              BPF testbenches (Ngspice and VACASK)
-│     ├─ 📁 scripts/          postprocess eval scripts
-│     └─ 📁 sim_data/         simulation results, overlaid on the plots
+│  └─ 📁 xschem/              N-port testbenches (Ngspice and VACASK)
+│     ├─ 📁 plot_simulations/ plot scripts (plot_*.py and ngspice2python.py)
+│     │  ├─ 📁 data/          simulation result tables, overlaid on the plots
+│     │  └─ 📁 figures/       PNG figures written by the plot scripts
+│     └─ 📁 simulations/      generated netlists and raw output (not tracked)
 ├─ 📁 tests/                  pytest suite
 │  ├─ test_core.py
 │  ├─ test_qt_essentials.py   guards the Essentials-only dependency
@@ -159,11 +161,28 @@ A bundled example is preloaded on first run. More live in `snp2le/examples/`.
 Drop the exported subcircuit into an Xschem testbench, then run it from the GUI:
 
 1. **Load .sch.** Pick the testbench. The **Simulator** auto-selects from the file name (a name ending in `_ngspice.sch` selects Ngspice or `_vacask.sch` selects VACASK) and can be overridden.
-2. **Run Simulation.** Both simulators netlist and simulate through Xschem and write their result to `sim_data/`, which is imported and overlaid on the plots automatically. The button turns green on success or red on failure. On failure the dialog shows the simulator log.
+2. **Run Simulation.** Both simulators netlist and simulate through Xschem and write their result table to `plot_simulations/data/`, which is imported and overlaid on the plots automatically. The button turns green on success or red on failure. On failure the dialog shows the simulator log.
 3. **Show output.** Tick it to show the simulator's console and plot windows. Leave it unticked to run quietly. The result is imported either way.
 
 > [!NOTE]
 > A simulator (Xschem plus Ngspice and/or VACASK) is only needed for this step. The conversion and export themselves are pure Python.
+
+### View testbench results
+
+The testbenches follow the `plot_simulations` structure of the [ihp-sg13g2-ams-chip-template](https://github.com/iic-jku/ihp-sg13g2-ams-chip-template): every testbench exports its result table to `testbenches/xschem/plot_simulations/data/`, and the plot scripts next to it write their PNG figures to `testbenches/xschem/plot_simulations/figures/`.
+
+- `plot_n_port_tb_acsp_vacask.py` runs automatically as the VACASK postprocess step of every `*_tb_acsp_vacask.sch` run: it writes both the result table (`data/<testbench>.txt`, the same column naming the Ngspice testbenches use) and the figure (`figures/<testbench>.png`).
+- `plot_n_port_tb_acsp_ngspice.py` reproduces the `.control` blocks' plots from the exported Ngspice `wrdata` tables with matplotlib, magnitude and phase over frequency, one figure per testbench. Run it after a quiet Ngspice run (where the `plot` commands are suppressed).
+- `ngspice2python.py` is the helper module that loads the `wrdata` columns (the same helper the [ihp-sg13g2-ams-chip-template](https://github.com/iic-jku/ihp-sg13g2-ams-chip-template) plotting scripts use).
+
+One script serves every port count: it discovers the exported vectors from the table header (Ngspice) or the `s(i,j)` vector names (VACASK). Without an argument every `*_tb_acsp_ngspice` table in `data/` is plotted; with a testbench name only that one:
+
+```bash
+python3 testbenches/xschem/plot_simulations/plot_n_port_tb_acsp_ngspice.py
+python3 testbenches/xschem/plot_simulations/plot_n_port_tb_acsp_ngspice.py two_port_tb_acsp_ngspice
+```
+
+The plot windows open when a display is available; headless, only the PNGs are written.
 
 ### Run the tests
 
@@ -216,10 +235,10 @@ snp2le -b convert coupler.s4p --mode universal --order 12 -o coupler.spice
 snp2le -b convert ind.s2p --mode structure --structure inductor-pi \
     --fext 7GHz --format both --values --tolerances
 
-# convert the BPF, run its Xschem testbench, and show data vs model vs sim plots
+# convert the BPF, run the 2-port Xschem testbench, and show data vs model vs sim plots
 snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \
-    --mode universal --order 13 -o netlist/spice/bpf_le.spice \
-    --simulate testbenches/xschem/bpf_le_tb_acsp_ngspice.sch --plot
+    --mode universal --order 13 -o netlist/spice/two_port.spice \
+    --simulate testbenches/xschem/two_port_tb_acsp_ngspice.sch --plot
 ```
 
 > [!NOTE]

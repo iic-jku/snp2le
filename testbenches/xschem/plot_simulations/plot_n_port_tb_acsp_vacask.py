@@ -1,15 +1,15 @@
-# n_port_tb_acsp_vacask_eval.py
+# plot_n_port_tb_acsp_vacask.py
 #
 # Universal VACASK postprocessing script for the acsp (AC S-parameter) testbenches.  One
 # script serves the 2-, 3- and 4-port testbenches: it reads VACASK's raw output, discovers
 # the port count from the s(i,j) vector names, and processes the full N x N S-matrix.  Each
-# testbench calls it with postprocess(PYTHON, "../scripts/n_port_tb_acsp_vacask_eval.py").
+# testbench calls it with postprocess(PYTHON, "../plot_simulations/plot_n_port_tb_acsp_vacask.py").
 #
 # It then:
-#   * writes sim_data/<TB>.txt with a frequency column plus s{i}{j}_db and s{i}{j}_deg for
-#     every port pair (the same column naming the ngspice testbench uses), which snp2le
-#     imports, and
-#   * plots every |S(i,j)| in dB and its phase to a PNG.
+#   * writes plot_simulations/data/<TB>.txt with a frequency column plus s{i}{j}_db and
+#     s{i}{j}_deg for every port pair (the same column naming the ngspice testbench uses),
+#     which snp2le imports, and
+#   * plots every |S(i,j)| in dB and its phase to plot_simulations/figures/<TB>.png.
 #
 # VACASK ships rawfile.py on the postprocess Python path (the IIC reference scripts also do
 # `from rawfile import rawread`).
@@ -21,15 +21,21 @@ import numpy as np
 from rawfile import rawread
 
 # The result and the abort marker are named after the testbench, so a run of
-# three_port_tb_acsp_vacask.sch writes sim_data/three_port_tb_acsp_vacask.txt.  This one
+# three_port_tb_acsp_vacask.sch writes data/three_port_tb_acsp_vacask.txt.  This one
 # script is shared by every N-port testbench, so the name comes from the running netlist
 # (<TB>.spectre in the netlist dir), not from this generic file name.
 try:
     HERE = os.path.dirname(os.path.abspath(__file__))
 except NameError:                              # exec'd without __file__
     HERE = os.getcwd()
-# this script lives in <testbench dir>/scripts/, results go to <testbench dir>/sim_data/
+# This script lives in <testbench dir>/plot_simulations/ (and VACASK runs it from the
+# <testbench dir>/simulations/ netlist dir), so either way _BASE is the testbench dir.
+# The result tables go to plot_simulations/data/ (where the ngspice testbenches' wrdata
+# also lands, so snp2le finds both flows' outputs in the same place) and the figures to
+# plot_simulations/figures/, like those of the plot_*_ngspice.py scripts.
 _BASE = os.path.abspath(os.path.join(HERE, ".."))
+DATA_DIR = os.path.join(_BASE, "plot_simulations", "data")
+FIGURES_DIR = os.path.join(_BASE, "plot_simulations", "figures")
 _spec = (glob.glob(os.path.join(os.getcwd(), "*.spectre"))
          or glob.glob(os.path.join(_BASE, "simulations", "*.spectre"))
          or glob.glob(os.path.join(_BASE, "*.spectre")))
@@ -38,7 +44,7 @@ TB = (os.path.splitext(os.path.basename(max(_spec, key=os.path.getmtime)))[0]
 
 
 def _abort_marker():
-    return os.path.join(_BASE, "sim_data", TB + ".aborted")
+    return os.path.join(DATA_DIR, TB + ".aborted")
 
 
 def mark_aborted(reason):
@@ -107,9 +113,9 @@ def load_acsp(raw):
 
 
 def write_table(f, n, dB, deg):
-    """Write sim_data/<TB>.txt: a frequency column plus s{i}{j}_db and s{i}{j}_deg for every
+    """Write data/<TB>.txt: a frequency column plus s{i}{j}_db and s{i}{j}_deg for every
     port pair.  snp2le maps columns by name, so any port count imports."""
-    out_dir = os.path.join(_BASE, "sim_data")
+    out_dir = DATA_DIR
     os.makedirs(out_dir, exist_ok=True)
     pairs = [(i, j) for i in range(1, n + 1) for j in range(1, n + 1)]
     cols = ["frequency"] + [f"s{i}{j}_db" for i, j in pairs] + [f"s{i}{j}_deg" for i, j in pairs]
@@ -160,7 +166,8 @@ def main():
     axp.set_ylabel("phase (deg)"); axp.set_xlabel("frequency (GHz)")
     axp.grid(True, alpha=0.3)
     fig.tight_layout()
-    png = os.path.join(os.path.dirname(table), TB + ".png")
+    os.makedirs(FIGURES_DIR, exist_ok=True)
+    png = os.path.join(FIGURES_DIR, TB + ".png")
     fig.savefig(png, dpi=130)
     print(f"postprocess: wrote {png}")
     if os.environ.get("SHOW_PLOTS"):

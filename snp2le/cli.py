@@ -10,8 +10,8 @@
 
     # convert, run an Xschem testbench, and show data-vs-model-vs-sim plots
     snp2le -b convert bpf.s2p --mode universal --order 13 \\
-        -o netlist/spice/bpf_le.spice \\
-        --simulate testbenches/xschem/bpf_le_tb_acsp_ngspice.sch --plot
+        -o netlist/spice/two_port.spice \\
+        --simulate testbenches/xschem/two_port_tb_acsp_ngspice.sch --plot
 
 Globs are expanded.  With --format both, two files are written per input.  The exit code is
 non-zero if any conversion or a requested simulation fails.
@@ -27,7 +27,7 @@ from snp2le.core import io, engine, units, netlist
 from snp2le.core.state import ConverterState
 from snp2le.core.structures import structure_items
 
-# extensions in sim_data that are never a result table
+# extensions in the testbench's data folder that are never a result table
 _NON_DATA = {".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out", ".svg", ".png",
              ".ps", ".pdf", ".sch", ".aborted"}
 _DATA_EXTS = {".txt", ".data", ".dat", ".csv"}

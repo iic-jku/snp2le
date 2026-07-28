@@ -45,7 +45,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._last_sch_dir = ""           # remembered .sch folder
         self._sim_proc = None             # running xschem QProcess
         self._sim_start = 0.0             # when the current run started (for auto-import)
-        self._sim_timer = None            # polls sim_data for the result after a run
+        self._sim_timer = None            # polls the data folder for the result after a run
         self._sim_last_output = ""        # captured xschem/Ngspice output (for diagnostics)
         self._sim_watchdog = None         # hard cap so a stuck run can't pin the Run button
         self._sim_simulator = ""          # 'ngspice' | 'vacask' of the current run
@@ -486,7 +486,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # (Ngspice wrdata / VACASK log), falling back to the bundled layout.  Evaluated
         # fresh on every poll tick, so the VACASK log can reveal the folder mid-poll.
         if not self._sch_path:
-            return os.path.join(os.getcwd(), "sim_data")
+            return os.path.join(os.getcwd(), "plot_simulations", "data")
         return xschem.sim_data_dir(self._sch_path, self._sim_simulator or "ngspice")
 
     # extensions that are never an Ngspice data table (binary raw, netlists, logs)
@@ -495,7 +495,7 @@ class MainWindow(QtWidgets.QMainWindow):
     _DATA_EXTS = (".txt", ".data", ".dat", ".csv")
 
     def _find_sim_result(self, tb_stem):
-        """Locate the simulation result for testbench `tb_stem` in sim_data.
+        """Locate the simulation result for testbench `tb_stem` in its data folder.
 
         The testbench writes its result there named after itself.  Prefer a file
         written during this run (newer than the run start) whose name starts with the
