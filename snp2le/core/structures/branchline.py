@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """structures/branchline.py - 4-port lumped-element branch-line (quadrature) coupler.
 
 The classic pi-LP-pi-LP parallel-branch design: the distributed branch-line hybrid

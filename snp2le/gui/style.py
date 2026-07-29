@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """style.py - the application stylesheet, in the JKU palette.
 
 Reconstructed to match the filter-designer look: dark titlebar with white title

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """footer.py - light footer bar: JKU logo (left), IICQC logo (centre) and the
 copyright (right), matching the filter designer.
 

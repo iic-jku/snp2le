@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """structures/balun.py - 4-port lumped-element transformer balun.
 
 A symmetric coupled-coil balun (primary ports 1-2, secondary ports 3-4).  From the

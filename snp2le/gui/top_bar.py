@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """top_bar.py - control strip.
 
 Dark title bar: snp2le logo + title, then (right) View selector + Help.

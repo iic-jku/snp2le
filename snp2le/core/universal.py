@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """universal.py - the universal (any-N-port) macromodel via vector fitting.
 
 Wraps skrf.vectorFitting.VectorFitting: auto-fit the S-parameters, optionally

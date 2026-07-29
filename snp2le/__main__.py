@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """snp2le entry point.
 
     snp2le                 launch the graphical interface (default)

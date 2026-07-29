@@ -7,6 +7,9 @@ F {}
 E {}
 B 4 960 -880 1100 -700 {fill = false}
 B 4 1380 -880 1520 -700 {fill = false}
+T {SPDX-FileCopyrightText: 2026 Simon Dorrer
+SPDX-License-Identifier: Apache-2.0
+} 1820 -145 0 0 0.4 0.4 {}
 T {VACASK Testbench for AC S-parameter analysis - Two-Port} 420 -1715 0 0 1 1 {}
 T {Port 1} 965 -875 0 0 0.3 0.3 {}
 T {Port 2} 1515 -875 0 1 0.3 0.3 {}

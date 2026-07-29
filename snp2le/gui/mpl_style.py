@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """mpl_style.py - global matplotlib styling to match the app."""
 from __future__ import annotations
 import matplotlib

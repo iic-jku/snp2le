@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """mna.py - minimal nodal analysis: an R/L/C CircuitIR -> N-port S-parameters.
 
 Used to reconstruct the *model* response of a physical structure model so the

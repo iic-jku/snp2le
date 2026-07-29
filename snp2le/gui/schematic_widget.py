@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """schematic_widget.py - render a CircuitIR's schematic (Schemdraw -> SVG ->
 pixmap), scaled to fit the panel.  Falls back to a text note for the universal
 macromodel, which has no human-readable schematic.

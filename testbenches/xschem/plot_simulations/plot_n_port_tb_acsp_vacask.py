@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 # plot_n_port_tb_acsp_vacask.py
 #
 # Universal VACASK postprocessing script for the acsp (AC S-parameter) testbenches.  One

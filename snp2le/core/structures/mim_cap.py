@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """structures/mim_cap.py - 2-port MIM capacitor model extraction.
 
 Series path: a main capacitor C_s with a small parasitic series L_s and loss R_s.

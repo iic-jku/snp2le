@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """test_core.py - core tests (no Qt). Run with:  pytest -q
 
 Covers the unit helpers, both conversion modes, all structures, netlist rendering

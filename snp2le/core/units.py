@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """units.py - parse and format engineering-notation numbers (e.g. '0.82n', '50').
 
 Pure Python, no GUI imports.  Mirrors the helper from the filter designer so the

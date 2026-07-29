@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """engine.py - the conversion pipeline (pure Python, no Qt).
 
 convert(state, net) runs the chosen mode, renders both netlist dialects from the

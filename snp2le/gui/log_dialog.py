@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """log_dialog.py - a non-modal window that shows (and live-tails) a simulator log.
 
 Used for VACASK's "Show output": xschem launches VACASK detached and then quits, so

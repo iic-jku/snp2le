@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """widgets.py - small reusable Qt widgets (math labels, entries, section title).
 
 Ported from the filter designer so the two tools share look and behaviour.

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """netlist.py - render a CircuitIR to Ngspice (SPICE3) and VACASK (Spectre).
 
 Also parses the SPICE subcircuit that scikit-rf emits for the universal

@@ -93,6 +93,9 @@ unitx=1
 logx=0
 logy=0
 linewidth_mult=4}
+T {SPDX-FileCopyrightText: 2026 Simon Dorrer
+SPDX-License-Identifier: Apache-2.0
+} 1820 -140 0 0 0.4 0.4 {}
 T {Ngspice Testbench for AC S-parameter analysis - Two-Port} 480 -1720 0 0 1 1 {}
 N 1000 -1240 1000 -1180 {lab=v1}
 N 1000 -1120 1000 -1060 {lab=GND}

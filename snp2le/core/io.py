@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """io.py - load Touchstone (.sNp) files via scikit-rf and summarize them.
 
 The rest of the tool only ever sees an skrf.Network plus a small NetworkInfo

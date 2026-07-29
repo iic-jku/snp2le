@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """help_dialog.py - scrollable usage guide opened from the Help button."""
 from __future__ import annotations
 from PySide6 import QtWidgets

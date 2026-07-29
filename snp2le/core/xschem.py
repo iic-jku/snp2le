@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """xschem.py - integration with the Xschem schematic editor / simulator.
 
 Pure Python (no Qt): detect whether `xschem` is installed and build the headless

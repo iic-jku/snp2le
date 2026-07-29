@@ -122,8 +122,8 @@ logx=0
 logy=0
 linewidth_mult=4}
 B 2 2160 -600 2960 -200 {flags=graph
-y1=-180
-y2=180
+y1=36
+y2=396
 ypos1=0
 ypos2=2
 divy=5
@@ -143,6 +143,9 @@ unitx=1
 logx=0
 logy=0
 linewidth_mult=4}
+T {SPDX-FileCopyrightText: 2026 Simon Dorrer
+SPDX-License-Identifier: Apache-2.0
+} 2750 -140 0 0 0.4 0.4 {}
 T {Ngspice Testbench for AC S-parameter analysis - Three-Port} 870 -2330 0 0 1 1 {}
 N 1420 -1540 1420 -1480 {lab=v1}
 N 1420 -1420 1420 -1360 {lab=GND}

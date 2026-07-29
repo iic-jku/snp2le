@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """logo.py - load the snp2le logo (S-parameter dip -> lumped network) from SVG,
 for the title bar and the window/taskbar icon.
 """

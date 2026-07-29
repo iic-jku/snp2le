@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """snp2le - convert Touchstone S-parameters into lumped-element netlists.
 
 A PySide6 GUI and command-line tool that turns a Touchstone .sNp file into an

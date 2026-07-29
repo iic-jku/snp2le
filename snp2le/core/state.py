@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """state.py - ConverterState (all user inputs) + Results (everything views render).
 
 ConverterState is a plain dataclass (no Qt) so the logic is testable and the

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """structures/base.py - interface for structure-specific physical extractors.
 
 A Structure assumes a known topology and fits its real component values to the

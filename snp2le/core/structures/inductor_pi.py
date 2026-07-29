@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """structures/inductor_pi.py - 2-port inductor model extraction.
 
 Classic on-chip inductor equivalent: a series R-L branch between the two ports

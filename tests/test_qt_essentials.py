@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """test_qt_essentials.py - guard the PySide6-Essentials-only dependency.
 
 snp2le declares `PySide6-Essentials`, not the full `PySide6` metapackage, so the

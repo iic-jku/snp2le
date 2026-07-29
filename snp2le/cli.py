@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """cli.py - command-line interface for batch and scripted use.
 
     # universal macromodel to an Ngspice netlist

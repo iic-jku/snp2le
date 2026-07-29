@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """test_gui_sim_flow.py - the GUI's simulation-result detection, headless.
 
 No simulator is needed for the decisions MainWindow makes after a run: which

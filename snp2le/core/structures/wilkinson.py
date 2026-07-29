@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """structures/wilkinson.py - 3-port lumped-element Wilkinson power dividers.
 
 Two selectable models:

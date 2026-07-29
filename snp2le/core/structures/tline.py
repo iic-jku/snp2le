@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """structures/tline.py - 2-port transmission-line (RLGC) ladder model.
 
 From the ABCD matrix we recover the electrical length gamma*l and characteristic

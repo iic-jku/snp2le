@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """dc.py - DC operating-point health check for a CircuitIR.
 
 A universal (vector-fit) macromodel is a *linear* network, so its DC operating point is a

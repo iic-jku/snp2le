@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """combobox_style.py - a clean, modern QComboBox style.
 
 Draws a custom down-chevron (enabled + disabled) into the temp dir at runtime and

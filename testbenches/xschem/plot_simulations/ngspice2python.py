@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 # ngspice2python.py
 #
 # Module for loading Ngspice files into Python.  This is the same helper module the

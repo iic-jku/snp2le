@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """test_xschem.py - sim_data_dir resolution (no Qt, no xschem needed). Run with: pytest -q
 
 The result folder is the testbench's choice, so sim_data_dir must read it from the

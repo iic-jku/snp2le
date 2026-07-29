@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """ir.py - the dialect-agnostic Circuit IR.
 
 Both the universal macromodel and the structure-specific extractors produce a

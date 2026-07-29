@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
 """plot_view.py - the "Plot" page.
 
 Four S-parameters are shown side by side.  Each column shows magnitude (dB, top)
