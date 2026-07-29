@@ -5,6 +5,7 @@
 # snp2le: S-Parameter To Lumped Element Netlist Converter
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/iic-jku/snp2le/blob/main/LICENSE)
+[![License Check](https://github.com/iic-jku/snp2le/actions/workflows/license-check.yml/badge.svg)](https://github.com/iic-jku/snp2le/actions/workflows/license-check.yml)
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)
 ![GUI: PySide6-Essentials](https://img.shields.io/badge/GUI-PySide6--Essentials-41CD52.svg?logo=qt&logoColor=white)
 [![PyPI](https://img.shields.io/pypi/v/snp2le.svg)](https://pypi.org/project/snp2le/)
@@ -91,7 +92,7 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 │  └─ cli.py                  the batch CLI behind -b
 ├─ 📁 testbenches/
 │  └─ 📁 xschem/              N-port testbenches (Ngspice and VACASK)
-│     ├─ 📁 plot_simulations/ plot scripts (plot_*.py and ngspice2python.py)
+│     ├─ 📁 plot_simulations/ plot scripts (plot_*.py, sparam_plot.py, ngspice2python.py)
 │     │  ├─ 📁 data/          simulation result tables, overlaid on the plots
 │     │  └─ 📁 figures/       PNG figures written by the plot scripts
 │     └─ 📁 simulations/      generated netlists and raw output (not tracked)
@@ -100,11 +101,16 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 │  ├─ test_gui_sim_flow.py    headless GUI run/poll/import regressions
 │  ├─ test_qt_essentials.py   guards the Essentials-only dependency
 │  └─ test_xschem.py
+├─ 📁 LICENSES/               license texts the REUSE check resolves against
+│  └─ Apache-2.0.txt
+├─ 📁 .github/workflows/      CI
+│  └─ license-check.yml       reuse lint: every file carries copyright + license
 ├─ CITATION.cff
 ├─ LICENSE                    Apache-2.0
 ├─ MANIFEST.in                sdist manifest (bundles examples and assets)
 ├─ pyproject.toml             packaging, dependencies, snp2le entry point
 ├─ README.md
+├─ REUSE.toml                 licensing of files that cannot carry an SPDX header
 └─ requirements.txt           runtime dependencies (mirrors pyproject.toml)
 ```
 
@@ -177,6 +183,7 @@ The testbenches follow the `plot_simulations` structure of the [ihp-sg13g2-ams-c
 - `plot_n_port_tb_acsp_vacask.py` runs automatically as the VACASK postprocess step of every `*_tb_acsp_vacask.sch` run: it writes both the result table (`data/<testbench>.txt`, the same column naming the Ngspice testbenches use) and the figure (`figures/<testbench>.png`).
 - `plot_n_port_tb_acsp_ngspice.py` reproduces the `.control` blocks' plots from the exported Ngspice `wrdata` tables with matplotlib, magnitude and phase over frequency, one figure per testbench. Run it after a quiet Ngspice run (where the `plot` commands are suppressed).
 - `ngspice2python.py` is the helper module that loads the `wrdata` columns (the same helper the [ihp-sg13g2-ams-chip-template](https://github.com/iic-jku/ihp-sg13g2-ams-chip-template) plotting scripts use).
+- `sparam_plot.py` holds the figure layout both plot scripts draw through, so the Ngspice and VACASK results are directly comparable. An N-port testbench has N x N S-parameters, which is unreadable in a single pair of axes, so the figure is split by excitation port: one column of axes per driven port j, magnitude on top and phase below, leaving only N traces per panel. The color encodes the receiving port i and is the same in every panel, so one legend serves the whole figure.
 
 One script serves every port count: it discovers the exported vectors from the table header (Ngspice) or the `s(i,j)` vector names (VACASK). Without an argument every `*_tb_acsp_ngspice` table in `data/` is plotted; with a testbench name only that one:
 
@@ -291,3 +298,17 @@ New structures plug in by subclassing `snp2le.core.structures.base.Structure` an
 ## License
 
 Licensed under the **Apache License 2.0**, see [`LICENSE`](https://github.com/iic-jku/snp2le/blob/main/LICENSE).
+
+The repository is [REUSE](https://reuse.software) compliant: every file carries `SPDX-FileCopyrightText` and `SPDX-License-Identifier` tags, either inline (source files) or through [`REUSE.toml`](https://github.com/iic-jku/snp2le/blob/main/REUSE.toml) for files that cannot hold a header (configs, schematics and symbols, generated netlists, example Touchstone data, figures and result tables). The [License Check](https://github.com/iic-jku/snp2le/actions/workflows/license-check.yml) workflow runs `reuse lint` on every push and pull request to `main`, so a new file without licensing information fails CI. Check it locally with:
+
+```bash
+pip install 'reuse[charset-normalizer]'
+reuse lint
+```
+
+When adding a source file, start it with:
+
+```python
+# SPDX-FileCopyrightText: 2026 Simon Dorrer
+# SPDX-License-Identifier: Apache-2.0
+```

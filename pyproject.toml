@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "build", "twine"]
+dev = ["pytest", "build", "twine", "reuse"]
 
 [project.urls]
 Homepage = "https://github.com/iic-jku/snp2le"

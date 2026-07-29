@@ -1,3 +1,4 @@
-include LICENSE README.md
+include LICENSE README.md REUSE.toml
+recursive-include LICENSES *
 recursive-include snp2le/examples *
 recursive-include snp2le/gui/assets *
