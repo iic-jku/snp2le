@@ -139,6 +139,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_change(self):
         self._pull()
+        # The recompute is debounced, so for the next ~120 ms nothing is running
+        # and _res still holds the previous settings' model.  Grey Export now, or
+        # a quick click in that window would silently write the old netlist.
+        self._set_exports_enabled(False)
         self._timer.start()
 
     def on_view_change(self, view):
@@ -816,11 +820,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.design.set_file_info(io.info_for(self.net).summary)
         self._fit.request(self.state, self.net)
 
+    def _set_exports_enabled(self, enabled):
+        """Export is only offered while `_res` matches what the controls say."""
+        for button in (self.top.exp_ng, self.top.exp_va):
+            button.setEnabled(bool(enabled))
+
     def _on_fit_started(self):
         self.fit_status.start()
         self._fit_clock.start()
-        for button in (self.top.exp_ng, self.top.exp_va):
-            button.setEnabled(False)           # no finished model to write right now
+        self._set_exports_enabled(False)       # no finished model to write right now
 
     def _tick_fit_progress(self):
         self.fit_status.update_progress(self._fit.snapshot())
@@ -833,12 +841,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.fit_status.finish(False, "conversion failed")
             return
         self._res = res
-        if res.mode == "structure":            # mirror the freq actually used (it may
-            self.top.show_fext(res.metrics.get("f_extract"))   # have been auto-detected)
+        superseded = self._fit.has_pending()   # a newer request is already queued
+        if res.mode == "structure" and not superseded:
+            # Mirror the frequency actually used (it may have been auto-detected).
+            # Skipped when superseded: this result's f_ext is already stale, and
+            # writing it back would stamp on the value the user just typed.
+            self.top.show_fext(res.metrics.get("f_extract"))
         self.design.update_results(res)
         self.plots.update_results(res)
-        for button in (self.top.exp_ng, self.top.exp_va):
-            button.setEnabled(bool(res.ok))
+        self._set_exports_enabled(bool(res.ok) and not superseded)
         self.fit_status.finish(
             res.ok,
             f"conversion complete: {progress.message}" if res.ok

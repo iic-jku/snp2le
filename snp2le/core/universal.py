@@ -136,7 +136,7 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
     attempted = False
     # These rebind sys.stdout/sys.stderr process-wide, not per thread, and the GUI now
     # runs this on a worker, so the whole application is muted for the duration of the
-    # fit.  See doc/architecture.md, "Notes / limitations".
+    # fit.  See doc/architecture.md, "Notes / limitations.
     with contextlib.redirect_stdout(_io.StringIO()), \
             contextlib.redirect_stderr(_io.StringIO()):
         vf = _auto_fit(net, max_order, _span(report, 0.0, end_fit))

@@ -186,3 +186,42 @@ def test_shutdown_while_a_fit_runs_is_safe(win, monkeypatch):
     win._fit.shutdown(msec=5000)            # the closeEvent path
     assert not win._fit.busy()
     _app().processEvents()
+
+
+def test_changing_a_control_greys_export_before_the_fit_starts(win):
+    """The recompute is debounced, so there is a window where nothing runs yet.
+
+    Export must not stay live through it: `_res` still holds the previous
+    settings' model, and writing that under the new settings is silent and wrong.
+    """
+    # Start from a completed conversion of our own: the shutdown test above
+    # deliberately abandons a run, which leaves Export greyed.
+    win.recompute()
+    _settle(win)
+    assert win.top.exp_ng.isEnabled()
+    win.on_change()                             # what a control change emits
+    assert not win._fit.busy(), "the debounce fired early, the window is untested"
+    assert not win.top.exp_ng.isEnabled(), "Export stayed live during the debounce"
+    assert not win.top.exp_va.isEnabled()
+    _settle(win)                                # let the debounced fit run
+    deadline = time.time() + _TIMEOUT
+    while time.time() < deadline and not win.top.exp_ng.isEnabled():
+        _app().processEvents()
+        time.sleep(0.02)
+    assert win.top.exp_ng.isEnabled(), "Export never came back"
+
+
+def test_a_superseded_result_keeps_the_typed_extraction_frequency(win, monkeypatch):
+    """A finished fit that a newer request already replaces must not write its
+    own f_ext back over the value the user typed while it was running."""
+    from snp2le.core.state import Results
+    _settle(win)
+    monkeypatch.setattr(win.design, "update_results", lambda res: None)
+    monkeypatch.setattr(win.plots, "update_results", lambda res: None)
+    monkeypatch.setattr(win._fit, "has_pending", lambda: True)
+    win.top._set_fext(12e9)                     # what the user just typed
+    stale = Results(ok=True, mode="structure")
+    stale.metrics = {"f_extract": 3e9}          # what the outgoing fit used
+    win._on_fit_finished(stale)
+    assert win.top._f_extract_hz == pytest.approx(12e9)
+    assert not win.top.exp_ng.isEnabled(), "a superseded model must not be exportable"

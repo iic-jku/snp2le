@@ -126,6 +126,17 @@ pytest
   Y-/ABCD-parameter extraction and the MNA rebuild.
 * The transmission-line ladder uses 2 L-cells by default (`N_SEGMENTS` in
   `snp2le/core/structures/tline.py`) and can be set from 1 to 10 stages.
+* `fit_universal` wraps the fit in `contextlib.redirect_stdout/stderr` to
+  swallow scikit-rf's chatter, and those rebind `sys.stdout` / `sys.stderr` for
+  the whole process, not for one thread. That was harmless while the fit blocked
+  the GUI thread (nothing else could run). Now that it runs on a worker, the
+  redirect is live for the GUI thread too, so anything it writes to stderr
+  during a fit is discarded, most visibly the traceback PySide6 prints when a
+  slot raises. Conversions run one at a time, so the redirects never nest.
+  Kept as is on purpose: every alternative (a `warnings.catch_warnings`, a
+  logging filter) is equally process-global, and a thread-aware stream proxy
+  would mean replacing `sys.stderr` from library import. Note the consequence
+  when debugging a GUI problem that only shows up during a fit.
 * A conversion cannot be cancelled once started. The long call inside it
   (`VectorFitting.auto_fit`) is not interruptible, so a Stop button could not
   honour its own label. Superseding requests are coalesced instead, and the
