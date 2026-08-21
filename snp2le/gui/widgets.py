@@ -96,31 +96,45 @@ def passivity_text(res) -> str:
     """The passivity status for a result.  Shared by the design and plot views so they
     always agree.
 
-    'passive' means the measured sigma_max is at or below 1, 'within target' means it
-    is above 1 but at or below the relaxed target the user set, 'near-passive' means
-    enforcement ran and could not reach the target, 'not passive' means the model is
-    above the target it was judged against.  The verdict follows the measured value
-    rather than the target, so a strictly passive model still reads 'passive' when the
-    target happens to be raised.  A failed conversion has no model to judge."""
+    'passive' means the measured sigma_max is at or below 1, 'below ceiling' means it
+    is above 1 but at or below the raised ceiling the user set, 'near-passive' means
+    enforcement ran and could not reach the ceiling, 'not passive' means the model is
+    above the ceiling it was judged against.  The verdict follows the measured value
+    rather than the ceiling, so a strictly passive model still reads 'passive' when the
+    ceiling happens to be raised.  A failed conversion has no model to judge."""
     if not res.ok:
         return "—"
     sigma = getattr(res, "sigma_max", float("nan"))
     if res.passive:
         # NaN means nothing was measured: a structure model, passive by construction
-        return "within target ✓" if sigma > 1.0 else "passive ✓"
+        return "below ceiling ✓" if sigma > 1.0 else "passive ✓"
     if any("passivity enforced" in m for m in res.messages):
         return "near-passive"
     return "not passive"
 
 
+_SYMBOLS = {"sigma_max": "σ_max"}
+
+
+def with_symbols(text: str) -> str:
+    """Swap the ASCII names the core writes into messages for their Greek symbols.
+
+    The core keeps those strings ASCII because the CLI prints them to a terminal, and a
+    Windows console in cp1252 turns a Greek sigma into '?'.  A Qt label has no such
+    limit, so the substitution happens here, at the point of drawing."""
+    for ascii_name, symbol in _SYMBOLS.items():
+        text = text.replace(ascii_name, symbol)
+    return text
+
+
 def sigma_text(res) -> str:
-    """The measured sigma_max against the target it was judged at, e.g. '1.016 / 1.05'.
+    """The measured sigma_max against the ceiling it was judged against, e.g. '1.016 / 1.05'.
     An em dash when there is no measured value: a failed conversion, or any structure
     model, which is passive by construction."""
     sigma = getattr(res, "sigma_max", float("nan"))
     if not res.ok or sigma != sigma:               # failed, or NaN
         return "—"
-    return f"{sigma:.3f} / {getattr(res, 'passivity_target', 1.0):.2f}"
+    return f"{sigma:.3f} / {getattr(res, 'passivity_ceiling', 1.0):.2f}"
 
 
 def section_title(text: str) -> QtWidgets.QWidget:

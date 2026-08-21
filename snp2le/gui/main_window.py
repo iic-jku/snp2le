@@ -110,7 +110,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.iso_resistor = v["iso_resistor"]
         self.state.max_order = v["max_order"]
         self.state.enforce_passivity = v["enforce_passivity"]
-        self.state.passivity_target = v["passivity_target"]
+        self.state.passivity_ceiling = v["passivity_ceiling"]
 
     def on_change(self):
         self._pull()

@@ -13,7 +13,7 @@ from PySide6 import QtCore, QtWidgets
 from snp2le.core.units import format_eng
 from .style import JKU_GRAY, STATUS_GREEN, STATUS_AMBER, STATUS_RED
 from .widgets import (OutputField, section_title, MathLabel, passivity_text,
-                      sigma_text)
+                      sigma_text, with_symbols)
 from .schematic_widget import SchematicWidget
 
 
@@ -217,7 +217,8 @@ class DesignView(QtWidgets.QWidget):
             of.value.setStyleSheet(f"color:{color};")
             self.tol_host.addWidget(of, alignment=QtCore.Qt.AlignHCenter)
 
-        self.msg_lbl.setText("  \u00b7  ".join(res.messages) if res.messages else "")
+        self.msg_lbl.setText(with_symbols("  \u00b7  ".join(res.messages))
+                             if res.messages else "")
         self.ngspice_edit.setPlainText(res.ngspice or "")
         self.vacask_edit.setPlainText(res.vacask or "")
 

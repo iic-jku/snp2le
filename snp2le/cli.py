@@ -11,7 +11,7 @@
         --fext 7GHz --format both --values --tolerances
 
     # enforce passivity only down to 1.05, keeping accuracy strict enforcement would cost
-    snp2le -b convert bpf.s2p --mode universal --order 13 --passivity-target 1.05
+    snp2le -b convert bpf.s2p --mode universal --order 13 --passivity-ceiling 1.05
 
     # convert, run an Xschem testbench, and show data-vs-model-vs-sim plots
     snp2le -b convert bpf.s2p --mode universal --order 13 \\
@@ -57,17 +57,17 @@ def _stages(text):
     return n
 
 
-def _passivity_target(text):
-    """argparse type for the passivity target (a float from 1.0 to 1.2)."""
+def _passivity_ceiling(text):
+    """argparse type for the passivity ceiling (a float from 1.0 to 1.2)."""
     try:
         v = float(text)
     except Exception:                                       # noqa: BLE001
         raise argparse.ArgumentTypeError(
-            f"invalid passivity target '{text}' (a number, e.g. 1.05)")
-    if not universal.PASSIVITY_TARGET_MIN <= v <= universal.PASSIVITY_TARGET_MAX:
+            f"invalid passivity ceiling '{text}' (a number, e.g. 1.05)")
+    if not universal.PASSIVITY_CEILING_MIN <= v <= universal.PASSIVITY_CEILING_MAX:
         raise argparse.ArgumentTypeError(
-            f"--passivity-target must be between {universal.PASSIVITY_TARGET_MIN:.1f} and "
-            f"{universal.PASSIVITY_TARGET_MAX:.1f} (got {v})")
+            f"--passivity-ceiling must be between {universal.PASSIVITY_CEILING_MIN:.1f} and "
+            f"{universal.PASSIVITY_CEILING_MAX:.1f} (got {v})")
     return v
 
 
@@ -133,7 +133,7 @@ def _tail_log(path, header):
 
 def _find_result(sim_data, stem, start):
     """Newest result file freshly written by this run: prefer one named after the testbench,
-    else any data-style file (Ngspice wrdata targets vary)."""
+    else any data-style file (Ngspice wrdata ceilings vary)."""
     if not os.path.isdir(sim_data):
         return None
     named, data = [], []
@@ -195,7 +195,7 @@ def _run_testbench(sch, simulator, show_output, net, timeout):
             os.remove(stale)
         except OSError:
             pass
-    if simulator == "ngspice":                  # wrdata cannot create its target folder
+    if simulator == "ngspice":                  # wrdata cannot create its ceiling folder
         os.makedirs(sim_data_dir(), exist_ok=True)
 
     env = os.environ.copy()
@@ -322,12 +322,12 @@ def cmd_convert(args):
         print("[WARN] -o is ignored with multiple inputs; each output is named after its "
               "source", file=sys.stderr)
 
-    # the target is what the enforcement aims at, so it means nothing without it
-    if args.passivity_target is not None and not args.passive:
-        print("[WARN] --passivity-target is ignored with --no-passive, which exports the "
+    # the ceiling is what the enforcement aims at, so it means nothing without it
+    if args.passivity_ceiling is not None and not args.passive:
+        print("[WARN] --passivity-ceiling is ignored with --no-passive, which exports the "
               "raw fit untouched", file=sys.stderr)
-    p_target = (universal.PASSIVITY_TARGET_DEFAULT if args.passivity_target is None
-                else args.passivity_target)
+    p_ceiling = (universal.PASSIVITY_CEILING_DEFAULT if args.passivity_ceiling is None
+                else args.passivity_ceiling)
 
     formats = ["ngspice", "vacask"] if args.format == "both" else [args.format]
     rc = 0
@@ -343,7 +343,7 @@ def cmd_convert(args):
         state = ConverterState(
             mode=args.mode, structure_key=args.structure,
             max_order=args.order, enforce_passivity=args.passive,
-            passivity_target=p_target,
+            passivity_ceiling=p_ceiling,
             f_extract=args.fext, n_segments=args.stages, iso_resistor=args.iso_r)
         res = engine.convert(state, net)
         if not res.ok:
@@ -448,13 +448,13 @@ def build_parser():
     c.add_argument("--passive", action="store_true", default=True,
                    help="enforce passivity (universal, default on)")
     c.add_argument("--no-passive", dest="passive", action="store_false")
-    c.add_argument("--passivity-target", dest="passivity_target", type=_passivity_target,
+    c.add_argument("--passivity-ceiling", dest="passivity_ceiling", type=_passivity_ceiling,
                    default=None, metavar="SIGMA",
                    help=f"largest singular value the enforced model may keep, "
-                        f"{universal.PASSIVITY_TARGET_MIN:.1f} to "
-                        f"{universal.PASSIVITY_TARGET_MAX:.1f}. Universal mode, needs "
+                        f"{universal.PASSIVITY_CEILING_MIN:.1f} to "
+                        f"{universal.PASSIVITY_CEILING_MAX:.1f}. Universal mode, needs "
                         f"--passive. Default "
-                        f"{universal.PASSIVITY_TARGET_DEFAULT:.1f} (strictly passive)")
+                        f"{universal.PASSIVITY_CEILING_DEFAULT:.1f} (strictly passive)")
     # structure-mode options
     c.add_argument("--fext", type=_freq, default=10e9, metavar="FREQ",
                    help="extraction frequency, e.g. 7GHz (structure)")

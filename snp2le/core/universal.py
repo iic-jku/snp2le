@@ -9,7 +9,7 @@ fitted S-parameters on any frequency grid for the data-vs-model plots.
 
 Passivity is reported as a number, not only as a flag: `max_singular_value` returns
 the largest singular value of the fitted S-matrix over all frequencies, and a fit is
-enforced down to the passivity target rather than only to 1 (see PASSIVITY_TARGET_*).
+enforced down to the passivity ceiling rather than only to 1 (see PASSIVITY_CEILING_*).
 
 The passivity-enforcement strategy in `_enforce_passivity` (escalate the sample
 count, then fall back to a lower model order) was inspired by the COBRA project's
@@ -32,10 +32,10 @@ from . import netlist as _nl
 class FitResult:
     ir: CircuitIR = None
     n_poles: int = 0
-    passive: bool = False               # sigma_max <= passivity_target
+    passive: bool = False               # sigma_max <= passivity_ceiling
     sigma_max: float = float("nan")     # largest singular value of the model S-matrix
     sigma_max_freq: float = float("nan")   # where that peak sits [Hz]
-    passivity_target: float = 1.0        # sigma_max the fit was judged against
+    passivity_ceiling: float = 1.0      # sigma_max the fit was judged against
     rms_error: float = float("nan")     # fraction (0..1) over all Sij
     vf: object = None                   # the VectorFitting object
     messages: list = field(default_factory=list)
@@ -49,15 +49,15 @@ _PASSIVITY_N_SAMPLES = (200, 800)
 # Otherwise we keep the accurate (near-passive) fit rather than ship a wreck.
 _USABLE_RMS = 0.1
 
-# Passivity target: the largest singular value the enforced model is allowed to keep.
+# Passivity ceiling: the largest singular value the enforced model is allowed to keep.
 # sigma_max <= 1 is the passivity condition itself (the model can never deliver more
 # power than it absorbs, at any frequency), so 1.0 is the strict default.  Enforcing a
-# target above 1.0 leaves that much gain at the model's worst frequency and buys back
-# accuracy in exchange, since the perturbation has less to correct.  1.2 is the ceiling:
-# past roughly 20 % the excess energy is large enough to grow a transient run away.
-PASSIVITY_TARGET_MIN = 1.0
-PASSIVITY_TARGET_DEFAULT = 1.0
-PASSIVITY_TARGET_MAX = 1.2
+# ceiling above 1.0 leaves that much gain at the model's worst frequency and buys back
+# accuracy in exchange, since the perturbation has less to correct.  1.2 is the highest
+# allowed: past roughly 20 % the excess is large enough to grow a transient run away.
+PASSIVITY_CEILING_MIN = 1.0
+PASSIVITY_CEILING_DEFAULT = 1.0
+PASSIVITY_CEILING_MAX = 1.2
 
 # sigma_max grid: log-spaced points over the model's whole frequency range, plus this
 # many extra points inside each violation band scikit-rf reports (the peaks sit there).
@@ -69,9 +69,9 @@ _SIGMA_BAND_POINTS = 64
 _SIGMA_SPAN_DECADES = 4.0
 
 
-def clamp_passivity_target(value) -> float:
-    """A usable passivity target: a number clamped into
-    [PASSIVITY_TARGET_MIN, PASSIVITY_TARGET_MAX], or the strict default.
+def clamp_passivity_ceiling(value) -> float:
+    """A usable passivity ceiling: a number clamped into
+    [PASSIVITY_CEILING_MIN, PASSIVITY_CEILING_MAX], or the strict default.
 
     A readable number outside the range clamps to the edge it overshot, so 9.9 gives
     1.2 and 0.5 gives 1.0.  In the GUI that edge lands straight back in the field, which
@@ -81,55 +81,68 @@ def clamp_passivity_target(value) -> float:
     try:
         v = float(value)
     except (TypeError, ValueError):
-        return PASSIVITY_TARGET_DEFAULT
+        return PASSIVITY_CEILING_DEFAULT
     if v != v:                                     # NaN, no nearest edge to pick
-        return PASSIVITY_TARGET_DEFAULT
-    return float(min(max(v, PASSIVITY_TARGET_MIN), PASSIVITY_TARGET_MAX))
+        return PASSIVITY_CEILING_DEFAULT
+    return float(min(max(v, PASSIVITY_CEILING_MIN), PASSIVITY_CEILING_MAX))
 
 
-def effective_target(enforce_passivity: bool,
-                     passivity_target=PASSIVITY_TARGET_DEFAULT) -> float:
-    """The sigma_max a fit is aimed at, and judged against.
+def effective_ceiling(enforce_passivity: bool,
+                      passivity_ceiling=PASSIVITY_CEILING_DEFAULT) -> float:
+    """The sigma_max a fit is held under, and judged against.
 
-    The target only means anything while enforcement is running, since it is the value
+    The ceiling only means anything while enforcement is running, since it is the value
     the perturbation works towards.  With enforcement off nothing is aimed at, so the
     model is judged against strict passivity and the GUI greys the field out to say so.
     Keeping the rule here means the GUI, the CLI and the engine cannot disagree on it."""
     if not enforce_passivity:
-        return PASSIVITY_TARGET_DEFAULT
-    return clamp_passivity_target(passivity_target)
+        return PASSIVITY_CEILING_DEFAULT
+    return clamp_passivity_ceiling(passivity_ceiling)
 
 
 def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
-                  passivity_target: float = PASSIVITY_TARGET_DEFAULT) -> FitResult:
+                  passivity_ceiling: float = PASSIVITY_CEILING_DEFAULT) -> FitResult:
     """Vector-fit `net` and synthesise a lumped-element SPICE subcircuit.
 
-    `passivity_target` is the sigma_max the enforcement works towards.  It applies only
-    with `enforce_passivity=True`, since it is what the perturbation aims at, see
-    `effective_target`."""
+    `passivity_ceiling` is the sigma_max the enforcement brings the model down to.  It
+    applies only with `enforce_passivity=True`, since it is what the perturbation works
+    towards, see `effective_ceiling`."""
     res = FitResult()
-    target = res.passivity_target = effective_target(enforce_passivity, passivity_target)
+    ceiling = res.passivity_ceiling = effective_ceiling(enforce_passivity,
+                                                        passivity_ceiling)
+    touched = False
     with contextlib.redirect_stdout(_io.StringIO()), \
             contextlib.redirect_stderr(_io.StringIO()):
         vf = _auto_fit(net, max_order)
         if enforce_passivity:
-            vf, msgs = _enforce_passivity(vf, net, target)
+            vf, msgs, touched = _enforce_passivity(vf, net, ceiling)
             res.messages.extend(msgs)
         res.sigma_max, res.sigma_max_freq = max_singular_value(vf)
 
     res.vf = vf
     res.n_poles = int(len(np.atleast_1d(vf.poles)))
-    res.passive = _meets_target(vf, res.sigma_max, target)
+    res.passive = _meets_ceiling(vf, res.sigma_max, ceiling)
     res.rms_error = _rms_error(vf, net)
     # Report the number whenever there is a violation to report, met or not.  A model
     # that is passive outright needs no line.  The frequency comes with it: it is what
     # separates a real hazard from a high-frequency asymptote nothing will excite.
-    if res.sigma_max > PASSIVITY_TARGET_MIN:
+    if res.sigma_max > PASSIVITY_CEILING_MIN:
         from .units import format_eng
-        res.messages.append(
-            f"max singular value {res.sigma_max:.3f} at "
-            f"{format_eng(res.sigma_max_freq, 'Hz')}, "
-            f"{'within' if res.passive else 'ABOVE'} target {target:.2f}")
+        # ASCII here on purpose: this string also goes to a terminal, and a Windows
+        # console in cp1252 renders a Greek sigma as '?'.  The GUI swaps in the symbol
+        # when it draws the line (widgets.with_symbols).
+        where = (f"sigma_max {res.sigma_max:.3f} at "
+                 f"{format_eng(res.sigma_max_freq, 'Hz')}")
+        if enforce_passivity and not touched:
+            # The ceiling was never binding.  Say so, or the reading is "I asked for
+            # 1.20 and got 1.019", when the answer is that nothing needed correcting.
+            res.messages.append(
+                f"{where} is already below the ceiling {ceiling:.2f}, "
+                f"fit left untouched")
+        else:
+            res.messages.append(
+                f"{where}, {'below' if res.passive else 'ABOVE'} "
+                f"ceiling {ceiling:.2f}")
 
     import tempfile, os
     with tempfile.NamedTemporaryFile("w+", suffix=".cir", delete=False) as fh:
@@ -170,8 +183,8 @@ def _auto_fit(net, max_order: int):
     return vf
 
 
-def _enforce_at(vf, target: float, n_samples: int):
-    """Perturb `vf` in place until sigma_max <= `target`.
+def _enforce_at(vf, ceiling: float, n_samples: int):
+    """Perturb `vf` in place until sigma_max <= `ceiling`.
 
     scikit-rf's `passivity_enforce` only knows the strict condition sigma_max <= 1, but
     sigma_max(S) <= t is exactly sigma_max(S/t) <= 1.  So scale the rational model down
@@ -181,47 +194,50 @@ def _enforce_at(vf, target: float, n_samples: int):
 
     Scaling every term keeps it one rational function: S(s) = D + sum_k R_k / (s - p_k),
     so dividing D and every R_k by t divides S by t at every frequency, poles unmoved."""
-    if target != 1.0:
+    if ceiling != 1.0:
         for attr in ("residues", "constant_coeff", "proportional_coeff"):
-            setattr(vf, attr, getattr(vf, attr) / target)
+            setattr(vf, attr, getattr(vf, attr) / ceiling)
     vf.passivity_enforce(n_samples=n_samples)
-    if target != 1.0:
+    if ceiling != 1.0:
         for attr in ("residues", "constant_coeff", "proportional_coeff"):
-            setattr(vf, attr, getattr(vf, attr) * target)
+            setattr(vf, attr, getattr(vf, attr) * ceiling)
     return vf
 
 
-def _enforce_passivity(vf, net, target: float = PASSIVITY_TARGET_DEFAULT):
-    """Bring the model's sigma_max down to `target`, escalating effort only as needed,
+def _enforce_passivity(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT):
+    """Bring the model's sigma_max down to `ceiling`, escalating effort only as needed,
     never shipping a worse model than the original fit.
 
-    1. If it already meets the target, do nothing.
+    1. If it already sits below the ceiling, do nothing.
     2. Enforce from a *pristine copy* of the fit at an escalating sample count
        (this catches narrow violation bands, and replaces scraping scikit-rf's
        warning text, which is brittle).  Each attempt starts from the clean fit
        so perturbations do not compound.
     3. Last resort: one lower-order refit (a smaller model is often easier to
        make passive, at some accuracy cost).
-    A candidate is kept only if it meets the target *and* still resembles the data
+    A candidate is kept only if it clears the ceiling *and* still resembles the data
     (`rms < _USABLE_RMS`).  Otherwise the accurate near-passive fit is returned.  That
-    guard matters more at a relaxed target, not less: a model whose violation band runs
-    to infinity cannot be fixed by perturbing residues at any target, and without the
+    guard matters more at a raised ceiling, not less: a model whose violation band runs
+    to infinity cannot be fixed by perturbing residues at any ceiling, and without the
     guard the failed attempt would be shipped in place of a good fit.
 
     Strategy adapted from the COBRA project (https://github.com/DI-PASSIONATE/COBRA).
 
-    Returns (vector_fitting, messages).
+    Returns (vector_fitting, messages, touched), where `touched` is False when the fit
+    already complied and was handed back untouched.  The caller reports that case
+    differently, because "nothing was done" is the answer to "why did my ceiling of 1.20
+    leave the model at 1.019".
     """
     import copy
     msgs = []
-    if _meets_target(vf, None, target):
-        return vf, msgs
+    if _meets_ceiling(vf, None, ceiling):
+        return vf, msgs, False
 
     best = [None]                                  # [(rms, vf)] best usable candidate
-    at = "" if target <= PASSIVITY_TARGET_MIN else f" at {target:.2f}"
+    at = "" if ceiling <= PASSIVITY_CEILING_MIN else f" at {ceiling:.2f}"
 
     def keep_if_good(cand, how):
-        if not _meets_target(cand, None, target):
+        if not _meets_ceiling(cand, None, ceiling):
             return False
         r = _rms_error(cand, net)
         if r < _USABLE_RMS and (best[0] is None or r < best[0][0]):
@@ -234,14 +250,14 @@ def _enforce_passivity(vf, net, target: float = PASSIVITY_TARGET_DEFAULT):
     for n_samples in _PASSIVITY_N_SAMPLES:
         cand = copy.deepcopy(vf)
         try:
-            _enforce_at(cand, target, n_samples)
+            _enforce_at(cand, ceiling, n_samples)
         except Exception as exc:                   # noqa: BLE001
             msgs.append(f"passivity enforce failed: {exc}")
             break
         if keep_if_good(cand, f"n_samples={n_samples}"):
-            return best[0][1], msgs
+            return best[0][1], msgs, True
 
-    # last resort: a single lower-order refit (kept only if it meets the target)
+    # last resort: a single lower-order refit (kept only if it clears the ceiling)
     poles = np.atleast_1d(vf.poles)
     n_cmplx = int(np.count_nonzero(poles.imag)) or (len(poles) // 2)
     k = max(2, int(n_cmplx * 0.66))
@@ -249,15 +265,15 @@ def _enforce_passivity(vf, net, target: float = PASSIVITY_TARGET_DEFAULT):
         cand = VectorFitting(net)
         try:
             cand.vector_fit(n_poles_real=1, n_poles_cmplx=k)
-            if not _meets_target(cand, None, target):
-                _enforce_at(cand, target, _PASSIVITY_N_SAMPLES[-1])
+            if not _meets_ceiling(cand, None, ceiling):
+                _enforce_at(cand, ceiling, _PASSIVITY_N_SAMPLES[-1])
         except Exception:                          # noqa: BLE001
             cand = None
         if cand is not None and keep_if_good(cand, f"reduced order ({k} cmplx)"):
-            return best[0][1], msgs
+            return best[0][1], msgs, True
 
     msgs.append("passivity enforced (near-passive)")
-    return vf, msgs
+    return vf, msgs, True
 
 
 def _is_passive(vf) -> bool:
@@ -267,10 +283,10 @@ def _is_passive(vf) -> bool:
         return False
 
 
-def _meets_target(vf, sigma_max, target: float) -> bool:
-    """Does the model sit at or below `target`?
+def _meets_ceiling(vf, sigma_max, ceiling: float) -> bool:
+    """Does the model sit at or below `ceiling`?
 
-    At the strict target scikit-rf's eigenvalue test decides, because it is exact and
+    At the strict ceiling scikit-rf's eigenvalue test decides, because it is exact and
     finds violation bands too narrow for any sampled grid to see.  Above it the sampled
     sigma_max is what the question is about, and a peak narrow enough for the grid to
     miss carries no energy worth refusing a fit over.
@@ -279,11 +295,11 @@ def _meets_target(vf, sigma_max, target: float) -> bool:
     number pass it in, since the measurement is the expensive half."""
     if _is_passive(vf):
         return True
-    if target <= PASSIVITY_TARGET_MIN:
+    if ceiling <= PASSIVITY_CEILING_MIN:
         return False
     if sigma_max is None:
         sigma_max = max_singular_value(vf)[0]
-    return bool(sigma_max == sigma_max and sigma_max <= target)
+    return bool(sigma_max == sigma_max and sigma_max <= ceiling)
 
 
 def max_singular_value(vf):
