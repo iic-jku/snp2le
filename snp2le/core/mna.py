@@ -58,7 +58,12 @@ def _coupled_groups(ir):
     return groups, coupled
 
 
-def rlc_sparams(ir, freq_hz, z0=50.0):
+def rlc_sparams(ir, freq_hz, z0=50.0, progress=None):
+    """S-parameters of the RLC `ir` on `freq_hz`, reporting 0..1 to `progress`.
+
+    One MNA solve per frequency, so a wide EM sweep is the slowest part of a
+    structure-mode conversion and the one worth reporting from.
+    """
     ports = list(ir.ports)
     # node index map. Ground '0' is the reference (excluded from the matrix)
     nodes = set()
@@ -78,7 +83,13 @@ def rlc_sparams(ir, freq_hz, z0=50.0):
 
     groups, coupled = _coupled_groups(ir)          # mutual-inductor preprocessing
 
+    # report every ~2 % of the sweep: often enough to look continuous, rare
+    # enough that the reporting never shows up next to the solve itself
+    step = max(1, len(w) // 50)
+
     for k, wk in enumerate(w):
+        if progress is not None and k % step == 0:
+            progress(k / len(w), f"solving {k + 1} of {len(w)} frequencies")
         Y = np.zeros((N, N), dtype=complex)
 
         def stamp(a, b, y):

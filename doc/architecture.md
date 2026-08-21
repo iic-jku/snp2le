@@ -33,6 +33,44 @@ The flow is always **load, `engine.convert(state, net)`, `Results`, views**:
    `Results`, so what you see and what you export always agree.
 
 
+## Progress and threading
+
+`engine.convert(state, net, progress=None)` takes an optional
+`callback(fraction, message)` and reports an overall 0..1 along the way.
+`core/progress.py` holds the two pieces around that contract: `StageTracker`
+maps a stage's own 0..1 onto its weighted slice of the whole run (the weights
+live in `engine._PLAN_UNIVERSAL` / `_PLAN_STRUCTURE`), and `ProgressReporter` is
+a thread-safe sink that also keeps elapsed time and an ETA. Core stays Qt-free:
+the reporter is plain `threading`.
+
+Two parts of the pipeline report from inside, which is what makes the fraction
+track real work rather than count steps:
+
+* `mna.rlc_sparams` reports per frequency (one MNA solve each), which dominates
+  a structure-mode conversion over a wide EM sweep.
+* `universal._fit_watch` reports during `auto_fit`. scikit-rf offers no callback
+  there, but it appends to `vf.d_res_history` once per pole-relocation
+  iteration, so a watcher thread polls that length. It is a real signal and
+  needs no log scraping, which is the brittle route `_enforce_passivity`
+  already avoids. The iteration count is not known in advance, so the reported
+  fraction follows a saturating curve and deliberately stops short of 1.
+
+On the GUI side, `gui/fit_runner.py` runs `engine.convert` on a `QThread` and
+`gui/fit_status.py` renders the strip under the control row. Two rules there:
+
+* **One fit at a time, newest wins.** A request arriving mid-fit is remembered,
+  not queued, so dragging a spin box starts one more conversion, not one per
+  value. `MainWindow._res` caches the finished `Results`, and Export writes
+  that instead of re-converting on the GUI thread.
+* **Progress is sampled, not pushed.** The worker updates the reporter and
+  `MainWindow._fit_clock` reads `snapshot()` every 80 ms. No Qt signal crosses
+  the thread boundary except `finished`, and the elapsed display keeps ticking
+  even while the fit sits inside one long scikit-rf call.
+
+A QThread destroyed while running aborts the process, so `FitRunner.shutdown()`
+waits, and parks a worker that outlives the wait in `fit_runner._ORPHANS`.
+
+
 ## Adding a structure
 
 Subclass `snp2le.core.structures.base.Structure`, implement `extract(net, ...)`
@@ -88,3 +126,7 @@ pytest
   Y-/ABCD-parameter extraction and the MNA rebuild.
 * The transmission-line ladder uses 2 L-cells by default (`N_SEGMENTS` in
   `snp2le/core/structures/tline.py`) and can be set from 1 to 10 stages.
+* A conversion cannot be cancelled once started. The long call inside it
+  (`VectorFitting.auto_fit`) is not interruptible, so a Stop button could not
+  honour its own label. Superseding requests are coalesced instead, and the
+  window stays usable meanwhile.

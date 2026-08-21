@@ -10,6 +10,7 @@ actually enforced against it.  These tests drive the real MainWindow offscreen
 """
 import os
 import sys
+import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -58,6 +59,22 @@ def win():
     yield w
     w.close()
     app.processEvents()
+
+
+def _settle(win, timeout=60.0):
+    """Pump the event loop until the conversion has finished.
+
+    recompute() hands the work to a worker thread and returns, so a test that reads
+    the Result panel straight afterwards would read the previous fit."""
+    app = QtWidgets.QApplication.instance()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        app.processEvents()
+        if not win._fit.busy():
+            app.processEvents()             # let the finished handler render
+            return
+        time.sleep(0.01)
+    raise AssertionError("the conversion never finished")
 
 
 @pytest.fixture()
@@ -138,6 +155,7 @@ def test_the_target_reaches_the_state_and_is_enforced(win, top):
     win._pull()
     assert win.state.passivity_ceiling == 1.05
     win.recompute()
+    _settle(win)
     assert win.design.sigma_out.value.text() != "—"
     assert win.design.sigma_out.value.text().endswith("/ 1.05")
 

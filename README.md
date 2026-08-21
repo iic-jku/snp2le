@@ -32,6 +32,8 @@ It offers two conversion philosophies:
 
 A single dialect-agnostic **Circuit IR** drives both netlist backends and the on-screen schematic, so the outputs always agree. The code is split into a pure-Python, Qt-free `snp2le.core` (fully unit-tested) and a thin `snp2le.gui` on PySide6-Essentials, both driven by one entry point, `engine.convert(state, net)`.
 
+A fit of a large N-port runs for seconds to minutes, so it runs on a worker thread and reports as it goes: the GUI shows a progress bar with elapsed and remaining time and leaves the outcome on screen when it finishes, and the CLI draws the same progress on a terminal. See [Watching a conversion](https://github.com/iic-jku/snp2le#watching-a-conversion).
+
 <p align="center">
   <a href="https://raw.githubusercontent.com/iic-jku/snp2le/main/doc/fig/snp2le_gui_bpf.png"><img src="https://raw.githubusercontent.com/iic-jku/snp2le/main/doc/fig/snp2le_gui_bpf.png" alt="snp2le GUI, band-pass filter" width="85%"></a><br>
   <em>The snp2le GUI converting a band-pass filter (BPF) S-parameter file into a lumped-element netlist.</em>
@@ -73,6 +75,7 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 │  │  ├─ ir.py                dialect-agnostic Circuit IR
 │  │  ├─ mna.py               rebuild N-port S-parameters from an RLC IR
 │  │  ├─ netlist.py           render the IR to Ngspice and VACASK
+│  │  ├─ progress.py          progress reporting for long conversions
 │  │  ├─ state.py             ConverterState and Results dataclasses
 │  │  ├─ units.py             engineering-notation parse and format
 │  │  ├─ universal.py         vector-fit passive macromodel
@@ -82,6 +85,8 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 │  │  ├─ 📁 assets/           logos (svg and png), snp2le.ico
 │  │  ├─ __init__.py
 │  │  ├─ design_view.py       results, values, tolerances, schematic
+│  │  ├─ fit_runner.py        runs engine.convert on a worker thread
+│  │  ├─ fit_status.py        the conversion progress / outcome strip
 │  │  ├─ main_window.py       the controller
 │  │  ├─ plot_view.py         four S-parameter / extracted-param plots
 │  │  ├─ top_bar.py           load, mode, structure, options, run
@@ -98,7 +103,9 @@ A single dialect-agnostic **Circuit IR** drives both netlist backends and the on
 │     └─ 📁 simulations/      generated netlists and raw output (not tracked)
 ├─ 📁 tests/                  pytest suite
 │  ├─ test_core.py
+│  ├─ test_gui_fit_progress.py  headless non-blocking-conversion regressions
 │  ├─ test_gui_sim_flow.py    headless GUI run/poll/import regressions
+│  ├─ test_progress.py        progress reporting, ETA and the fit watcher
 │  ├─ test_qt_essentials.py   guards the Essentials-only dependency
 │  └─ test_xschem.py
 ├─ 📁 LICENSES/               license texts the REUSE check resolves against
@@ -205,6 +212,28 @@ The **Result** panel reports the measured sigma_max next to the ceiling it was j
 
 - **At 0 Hz or inside your band**: a real hazard. Enforce, or raise the order.
 - **Far above the top data point**, at 10^4 times it or so: that is the model's high-frequency asymptote, not a resonance. It usually means the fit order is too high for the file. The bundled `tline_100um_ihp-sg13g2.s2p` reaches sigma_max = 5.24 at order 13 but only 1.018 at order 6, for the same reason.
+### Watching a conversion
+
+Every conversion runs on a worker thread, so the window stays usable while it
+runs. The strip under the control row is the only place you need to look:
+
+| While it runs | When it ends |
+| --- | --- |
+| what the fit is doing (`vector fitting, 7 iterations`, `solving 240 of 401 frequencies`) | `conversion complete: 12 poles, rms 3.1e-03  (24.6 s)` in green |
+| elapsed time, and remaining time once it can be estimated | `conversion failed: <reason>` in red |
+| a progress bar tracking the real work, not a step count | the line stays until the next conversion starts |
+
+Three details worth knowing:
+
+- The bar only appears after ~0.35 s, so a fast structure extraction does not
+  flicker it on and off while you turn a spin box.
+- Changing controls during a fit does not queue one conversion per change. The
+  running fit finishes, then the newest settings are converted, once.
+- If a long fit finishes while you are in another window, the taskbar entry
+  flashes. The result is also just there when you come back.
+
+**Export** writes the conversion that finished, so it is disabled while one is
+running and never blocks the window to re-fit.
 
 ### Run a testbench (simulate)
 
@@ -275,7 +304,8 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `--show-output` | sim | show the simulator's console and plot windows |
 | `--timeout S` | sim | seconds to wait for a `--simulate` result (default 180) |
 | `--plot [SPARAMS]` | both | display data-vs-model plots, plus the sim overlay after `--simulate` (e.g. `S11,S21`) |
-| `--quiet` | both | suppress the per-file status line |
+| `--quiet` | both | suppress the per-file status line (and the progress bar) |
+| `--progress` / `--no-progress` | both | force the progress bar on or off (default: on when stderr is a terminal) |
 
 ### Examples
 

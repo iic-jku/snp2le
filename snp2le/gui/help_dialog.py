@@ -88,6 +88,22 @@ higher ceiling, since order 6 brings the same file to 1.018.</p></li>
 <li><b>View</b>: switch between <i>Design &amp; Schematic</i> and <i>Plot</i>.</li>
 </ul>
 
+<h3>Progress strip</h3>
+<p>The slim row under the controls reports the conversion. While one runs it shows what
+the fit is doing, the elapsed time, an estimate of the time left, and a progress bar.
+When it ends the bar goes and the line becomes the outcome, green
+(<i>conversion complete: 12 poles, rms 3.1e-03</i>) or red with the reason. That line
+stays until the next conversion starts, so nothing has to be watched or clicked to
+learn how a fit went.</p>
+<ul>
+<li>The window stays usable while a fit runs: the conversion is not on the UI thread.</li>
+<li>Changing controls during a fit does not queue one conversion per change. The running
+fit finishes, then the newest settings are converted, once.</li>
+<li>A long fit that ends while you are in another window flashes the taskbar entry.</li>
+<li><b>Export</b> writes the conversion that finished, so it is greyed out while one is
+running.</li>
+</ul>
+
 <h3>Design &amp; Schematic</h3>
 <ul>
 <li><b>Result</b>: fit/extraction quality. RMS error against the data, passivity,
