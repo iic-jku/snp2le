@@ -12,7 +12,8 @@ from PySide6 import QtCore, QtWidgets
 
 from snp2le.core.units import format_eng
 from .style import JKU_GRAY, STATUS_GREEN, STATUS_AMBER, STATUS_RED
-from .widgets import OutputField, section_title, MathLabel, passivity_text
+from .widgets import (OutputField, section_title, MathLabel, passivity_text,
+                      sigma_text)
 from .schematic_widget import SchematicWidget
 
 
@@ -58,8 +59,22 @@ class DesignView(QtWidgets.QWidget):
         self.mode_out = OutputField("mode", "\u2014", label_w=100, equals=False)
         self.rms_out = OutputField("RMS error", "\u2014", label_w=100, equals=False)
         self.pass_out = OutputField("passivity", "\u2014", label_w=100, equals=False)
+        self.sigma_out = OutputField("sigma_max", "\u2014", label_w=100, equals=False)
+        self.sigma_out.setToolTip(
+            "Largest singular value of the model's S-matrix over all frequencies, and "
+            "the bound it is judged against.\n"
+            "At or below 1.000 the model is passive: it can never deliver more power "
+            "than it absorbs, at any frequency.\n"
+            "Above 1.000 it has that much gain at its worst frequency, which a transient "
+            "run can grow without bound.\n"
+            "The message line below names that frequency. A peak far above the data is "
+            "the model's high-frequency\nasymptote, which usually means the order is too "
+            "high for the file.\n"
+            "Untick 'Enforce passivity' in the top bar to raise the bound and keep the "
+            "more accurate fit.")
         self.order_out = OutputField("order / Q", "\u2014", label_w=100, equals=False)
-        for w in (self.mode_out, self.rms_out, self.pass_out, self.order_out):
+        for w in (self.mode_out, self.rms_out, self.pass_out, self.sigma_out,
+                  self.order_out):
             left.addWidget(w)
 
         left.addWidget(section_title("Element values"))
@@ -145,6 +160,13 @@ class DesignView(QtWidgets.QWidget):
         else:
             self.rms_out.set_value("\u2014")
         self.pass_out.set_value(passivity_text(res))
+        self.sigma_out.set_value(sigma_text(res))
+        # green inside the bound, red outside it, so a relaxed bound never reads as a
+        # clean pass without the number that earned it
+        sigma = getattr(res, "sigma_max", float("nan"))
+        self.sigma_out.value.setStyleSheet(
+            "" if (not res.ok or sigma != sigma)
+            else f"color:{STATUS_GREEN if res.passive else STATUS_RED};font-weight:600;")
         if res.mode == "universal":
             self.order_out.label.setText("order")
             self.order_out.set_value(f"{res.n_poles} poles")

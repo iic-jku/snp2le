@@ -4,8 +4,9 @@
 
 Dark title bar: snp2le logo + title, then (right) View selector + Help.
 Light controls row: Load .sNp, Mode (Universal / Structure), Structure, Max
-order, Enforce passivity.  Structures that do not match the loaded port count are
-greyed out so an invalid choice can never be made.
+order, Enforce passivity, Passivity target.  Structures that do not match the loaded
+port count are greyed out so an invalid choice can never be made, and the passivity
+target is greyed out (pinned to its strict default) while passivity is not enforced.
 """
 from __future__ import annotations
 import math
@@ -15,6 +16,8 @@ from snp2le import __version__
 from snp2le.core.structures import structure_items
 from snp2le.core import xschem
 from snp2le.core.units import parse_eng, format_eng
+from snp2le.core.universal import (PASSIVITY_TARGET_DEFAULT, PASSIVITY_TARGET_MAX,
+                                   PASSIVITY_TARGET_MIN, clamp_passivity_target)
 from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN, JKU_RED, PANEL_BORDER, DISABLED_FG
 from .widgets import FitComboBox
 
@@ -169,6 +172,29 @@ class TopBar(QtWidgets.QWidget):
         self.order.setFixedWidth(92)
 
         self.passive = QtWidgets.QCheckBox("Enforce passivity"); self.passive.setChecked(True)
+        self.passive.setToolTip(
+            "Perturb the fit until its worst singular value reaches the Passivity\n"
+            "target, so a transient run cannot draw energy out of the model. It costs\n"
+            "fit accuracy. Untick to export the raw fit untouched, whatever it measures.")
+
+        # Passivity target: the sigma_max the perturbation works towards.  It only means
+        # something while enforcement is running, so the field is greyed and pinned to the
+        # default when 'Enforce passivity' is off (see universal.effective_target, which
+        # is the single source of that rule).
+        self._p_target = PASSIVITY_TARGET_DEFAULT
+        self.p_target = QtWidgets.QLineEdit(); self.p_target.setFixedWidth(76)
+        self.p_target.setToolTip(
+            "Largest singular value the enforced model is allowed to keep.\n"
+            f"{PASSIVITY_TARGET_MIN:.2f} is strict passivity: the model can never "
+            "deliver more power than it absorbs.\n"
+            "A higher target leaves that much gain at the model's worst frequency and "
+            "buys back\naccuracy in exchange, since the perturbation has less to "
+            "correct.\n"
+            "A target above what the fit already measures leaves it untouched.\n"
+            f"Range {PASSIVITY_TARGET_MIN:.2f} to {PASSIVITY_TARGET_MAX:.2f}. A value "
+            "outside it is replaced by the limit it overshot.\n"
+            "Only applies while 'Enforce passivity' is ticked.")
+        self._set_target(PASSIVITY_TARGET_DEFAULT)           # show the default, not an empty box
 
         # structure-specific options live in their own containers so each can be shown
         # only for the structure it belongs to (otherwise hidden entirely)
@@ -189,7 +215,9 @@ class TopBar(QtWidgets.QWidget):
         up = QtWidgets.QHBoxLayout(self.uni_page); up.setContentsMargins(0, 0, 0, 0)
         up.setSpacing(14)
         up.addLayout(self._labeled("Max order", self.order))
-        up.addLayout(self._labeled("", self.passive)); up.addStretch(1)
+        up.addLayout(self._labeled("", self.passive))
+        up.addLayout(self._labeled("Passivity target", self.p_target))
+        up.addStretch(1)
         self.struct_page = QtWidgets.QWidget()
         sp = QtWidgets.QHBoxLayout(self.struct_page); sp.setContentsMargins(0, 0, 0, 0)
         sp.setSpacing(14)
@@ -281,7 +309,8 @@ class TopBar(QtWidgets.QWidget):
         self.stages.valueChanged.connect(lambda _=None: self.changed.emit())
         self.iso_r.toggled.connect(lambda _=None: self.changed.emit())
         self.order.valueChanged.connect(lambda _=None: self.changed.emit())
-        self.passive.toggled.connect(lambda _=None: self.changed.emit())
+        self.passive.toggled.connect(self._on_change)      # also greys the target field
+        self.p_target.editingFinished.connect(self._on_target)
         self.exp_ng.clicked.connect(lambda: self.export_clicked.emit("ngspice"))
         self.exp_va.clicked.connect(lambda: self.export_clicked.emit("vacask"))
         self.load_sch.clicked.connect(self.load_sch_clicked.emit)
@@ -308,6 +337,7 @@ class TopBar(QtWidgets.QWidget):
         self.iso_r.setChecked(True)
         self.order.setValue(6)
         self.passive.setChecked(True)
+        self._set_target(PASSIVITY_TARGET_DEFAULT)
         self.sim_output.setChecked(False)
         self.simulator.setCurrentIndex(0)                  # Ngspice
         for w in widgets:
@@ -375,6 +405,7 @@ class TopBar(QtWidgets.QWidget):
         self.passive.setChecked(bool(state.enforce_passivity))
         for w in widgets:
             w.blockSignals(False)
+        self._set_target(state.passivity_target)
         self._set_fext(float(state.f_extract))
         self._apply_constraints()
 
@@ -385,6 +416,14 @@ class TopBar(QtWidgets.QWidget):
 
     def _apply_constraints(self):
         is_struct = self.mode.currentData() == "structure"
+        # nothing aims at the target without enforcement, so the field greys out and
+        # returns to its default, keeping what is shown equal to what the fit uses
+        if self.passive.isChecked():
+            self.p_target.setEnabled(True)
+        else:
+            self.p_target.setEnabled(False)
+            if self._p_target != PASSIVITY_TARGET_DEFAULT:
+                self._set_target(PASSIVITY_TARGET_DEFAULT)
         self.structure.setEnabled(is_struct)       # greyed in universal mode
         # show the mode's own controls: structure -> f_ext + option, universal -> order + passivity
         self.mode_stack.setCurrentWidget(self.struct_page if is_struct else self.uni_page)
@@ -431,6 +470,33 @@ class TopBar(QtWidgets.QWidget):
         if hz and abs(float(hz) - self._f_extract_hz) > 1e-3:
             self._set_fext(hz)
 
+    def _set_target(self, value):
+        """Set the passivity-target field + stored value (no recompute).
+
+        The value is clamped first, so the field can never show a target outside the
+        allowed range, not even from a hand-edited design file."""
+        self._p_target = clamp_passivity_target(value)
+        self.p_target.setText(f"{self._p_target:.2f}")
+
+    def _on_target(self):
+        """Parse the field on edit and recompute when the value actually changed.
+
+        An out-of-range number is replaced by the limit it overshot, so typing 9.9 leaves
+        1.20 in the field and typing 0.5 leaves 1.00.  Showing the limit is how someone
+        who has not read the tooltip discovers it, and it beats f_ext's red field here
+        because this input has only two edges to hit.  Text that is not a number at all
+        has no edge to clamp to and falls back to the strict target.  A decimal comma is
+        accepted."""
+        try:
+            v = float(self.p_target.text().strip().replace(",", "."))
+        except ValueError:
+            v = None
+        v = clamp_passivity_target(v)            # out of range -> the nearest limit
+        changed = v != self._p_target
+        self._set_target(v)                       # also normalises the text, '1,1' -> '1.10'
+        if changed:
+            self.changed.emit()
+
     def _on_fext(self):
         """Parse the field on edit, recompute only on a valid, changed value."""
         try:
@@ -456,4 +522,5 @@ class TopBar(QtWidgets.QWidget):
             "iso_resistor": bool(self.iso_r.isChecked()),
             "max_order": int(self.order.value()),
             "enforce_passivity": bool(self.passive.isChecked()),
+            "passivity_target": float(self._p_target),
         }

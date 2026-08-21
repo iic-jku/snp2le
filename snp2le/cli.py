@@ -10,6 +10,9 @@
     snp2le -b convert ind.s2p --mode structure --structure inductor-pi \\
         --fext 7GHz --format both --values --tolerances
 
+    # enforce passivity only down to 1.05, keeping accuracy strict enforcement would cost
+    snp2le -b convert bpf.s2p --mode universal --order 13 --passivity-target 1.05
+
     # convert, run an Xschem testbench, and show data-vs-model-vs-sim plots
     snp2le -b convert bpf.s2p --mode universal --order 13 \\
         -o netlist/spice/two_port.spice \\
@@ -25,7 +28,7 @@ import os
 import re
 import sys
 
-from snp2le.core import io, engine, units, netlist
+from snp2le.core import io, engine, units, netlist, universal
 from snp2le.core.state import ConverterState
 from snp2le.core.structures import structure_items
 
@@ -52,6 +55,20 @@ def _stages(text):
     if not 1 <= n <= 10:
         raise argparse.ArgumentTypeError(f"--stages must be between 1 and 10 (got {n})")
     return n
+
+
+def _passivity_target(text):
+    """argparse type for the passivity target (a float from 1.0 to 1.2)."""
+    try:
+        v = float(text)
+    except Exception:                                       # noqa: BLE001
+        raise argparse.ArgumentTypeError(
+            f"invalid passivity target '{text}' (a number, e.g. 1.05)")
+    if not universal.PASSIVITY_TARGET_MIN <= v <= universal.PASSIVITY_TARGET_MAX:
+        raise argparse.ArgumentTypeError(
+            f"--passivity-target must be between {universal.PASSIVITY_TARGET_MIN:.1f} and "
+            f"{universal.PASSIVITY_TARGET_MAX:.1f} (got {v})")
+    return v
 
 
 def _out_path(src, explicit, dialect, n_inputs, n_formats):
@@ -305,6 +322,13 @@ def cmd_convert(args):
         print("[WARN] -o is ignored with multiple inputs; each output is named after its "
               "source", file=sys.stderr)
 
+    # the target is what the enforcement aims at, so it means nothing without it
+    if args.passivity_target is not None and not args.passive:
+        print("[WARN] --passivity-target is ignored with --no-passive, which exports the "
+              "raw fit untouched", file=sys.stderr)
+    p_target = (universal.PASSIVITY_TARGET_DEFAULT if args.passivity_target is None
+                else args.passivity_target)
+
     formats = ["ngspice", "vacask"] if args.format == "both" else [args.format]
     rc = 0
     last_res = None
@@ -319,6 +343,7 @@ def cmd_convert(args):
         state = ConverterState(
             mode=args.mode, structure_key=args.structure,
             max_order=args.order, enforce_passivity=args.passive,
+            passivity_target=p_target,
             f_extract=args.fext, n_segments=args.stages, iso_resistor=args.iso_r)
         res = engine.convert(state, net)
         if not res.ok:
@@ -351,7 +376,9 @@ def cmd_convert(args):
                 if res.mode == "universal":
                     dc = ("" if res.dc is None
                           else "  dc=solvable" if res.dc.ok else "  dc=SINGULAR")
-                    extra = f"rms={res.rms_error:.2e}  poles={res.n_poles}{dc}"
+                    sig = ("" if res.sigma_max != res.sigma_max
+                           else f"  sigma_max={res.sigma_max:.3f}")
+                    extra = f"rms={res.rms_error:.2e}  poles={res.n_poles}{sig}{dc}"
                 else:
                     extra = f"f_ext={units.format_eng(res.metrics.get('f_extract'), 'Hz')}"
                 print(f"[ OK ] {src} -> {out}  ({dialect}, {extra})")
@@ -421,6 +448,13 @@ def build_parser():
     c.add_argument("--passive", action="store_true", default=True,
                    help="enforce passivity (universal, default on)")
     c.add_argument("--no-passive", dest="passive", action="store_false")
+    c.add_argument("--passivity-target", dest="passivity_target", type=_passivity_target,
+                   default=None, metavar="SIGMA",
+                   help=f"largest singular value the enforced model may keep, "
+                        f"{universal.PASSIVITY_TARGET_MIN:.1f} to "
+                        f"{universal.PASSIVITY_TARGET_MAX:.1f}. Universal mode, needs "
+                        f"--passive. Default "
+                        f"{universal.PASSIVITY_TARGET_DEFAULT:.1f} (strictly passive)")
     # structure-mode options
     c.add_argument("--fext", type=_freq, default=10e9, metavar="FREQ",
                    help="extraction frequency, e.g. 7GHz (structure)")
