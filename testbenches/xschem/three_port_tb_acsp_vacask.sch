@@ -42,7 +42,7 @@ only_toplevel=false
 value="
 control
   // User Constants
-  // f_min / f_max are auto-synced to the loaded Touchstone by snp2le (sim_range.inc).
+  // f_min / f_max are auto-synced by snp2le to the band it fitted (sim_range.inc).
   // edit that file (or this include) for a standalone run.
   include \\"../sim_range.inc\\"
 

@@ -4,8 +4,8 @@
 
 Dark title bar: snp2le logo + title, then (right) View selector + Help.
 Light controls row: Load .sNp, Mode (Universal / Structure), Structure, Max
-order, Enforce passivity.  Structures that do not match the loaded port count are
-greyed out so an invalid choice can never be made.
+order, Enforce passivity, Fit range.  Structures that do not match the loaded port
+count are greyed out so an invalid choice can never be made.
 """
 from __future__ import annotations
 import math
@@ -198,6 +198,26 @@ class TopBar(QtWidgets.QWidget):
         self.mode_stack = QtWidgets.QStackedWidget()
         self.mode_stack.addWidget(self.uni_page); self.mode_stack.addWidget(self.struct_page)
 
+        # fit range: the band of the loaded file the model is fitted to.  It applies to
+        # both modes, so it sits outside the mode stack.  Empty field = open on that side.
+        self._f_min_hz = None
+        self._f_max_hz = None
+        self.f_min = QtWidgets.QLineEdit(); self.f_min.setFixedWidth(78)
+        self.f_max = QtWidgets.QLineEdit(); self.f_max.setFixedWidth(78)
+        self.f_min.setPlaceholderText("start"); self.f_max.setPlaceholderText("stop")
+        band_tip = ("Frequency band the model is fitted to (both modes).\n"
+                    "Leave empty for the loaded file's full range.\n"
+                    "Accepts engineering notation, e.g. 110 GHz.")
+        for w in (self.f_min, self.f_max):
+            w.setToolTip(band_tip)
+        band = QtWidgets.QWidget()
+        bl = QtWidgets.QHBoxLayout(band)
+        bl.setContentsMargins(0, 0, 0, 0); bl.setSpacing(4)
+        to_lbl = QtWidgets.QLabel("to"); to_lbl.setProperty("class", "fieldLabel")
+        bl.addWidget(self.f_min); bl.addWidget(to_lbl); bl.addWidget(self.f_max)
+        self.band_box = self._labeled_widget("Fit range", band)
+        self.band_box.setToolTip(band_tip)
+
         # fixed vertical divider between the conversion controls and the action buttons
         self.sep = QtWidgets.QFrame(); self.sep.setFixedWidth(1)
         self.sep.setStyleSheet(f"background-color:{PANEL_BORDER};")
@@ -249,6 +269,7 @@ class TopBar(QtWidgets.QWidget):
         lay.addLayout(self._labeled("Mode", self.mode))
         lay.addLayout(self._labeled("Structure", self.structure))
         lay.addWidget(self.mode_stack)         # f_ext+option (structure) or order+passivity
+        lay.addWidget(self.band_box)           # fit range (both modes)
         lay.addSpacing(24)
         lay.addWidget(self.sep)                # fixed divider, always visible
         lay.addSpacing(24)
@@ -278,6 +299,8 @@ class TopBar(QtWidgets.QWidget):
         self.mode.currentIndexChanged.connect(self._on_change)
         self.structure.currentIndexChanged.connect(self._on_change)
         self.f_ext.editingFinished.connect(self._on_fext)
+        self.f_min.editingFinished.connect(self._on_band)
+        self.f_max.editingFinished.connect(self._on_band)
         self.stages.valueChanged.connect(lambda _=None: self.changed.emit())
         self.iso_r.toggled.connect(lambda _=None: self.changed.emit())
         self.order.valueChanged.connect(lambda _=None: self.changed.emit())
@@ -313,6 +336,7 @@ class TopBar(QtWidgets.QWidget):
         for w in widgets:
             w.blockSignals(False)
         self._set_fext(10e9)                               # default extraction freq
+        self._set_band(None, None)                         # full range again
         self.clear_sim_status()
         self._apply_constraints()
 
@@ -376,6 +400,7 @@ class TopBar(QtWidgets.QWidget):
         for w in widgets:
             w.blockSignals(False)
         self._set_fext(float(state.f_extract))
+        self._set_band(state.f_min, state.f_max)
         self._apply_constraints()
 
     # ---- constraints -----------------------------------------------------
@@ -447,6 +472,46 @@ class TopBar(QtWidgets.QWidget):
             self._f_extract_hz = v
             self.changed.emit()
 
+    def _set_band(self, f_min, f_max):
+        """Set the fit-range fields + stored values (no recompute).  None clears a
+        field, which means "open on that side" (the loaded file's own edge)."""
+        for hz, field, attr in ((f_min, self.f_min, "_f_min_hz"),
+                                (f_max, self.f_max, "_f_max_hz")):
+            try:
+                hz = None if hz in (None, 0) else float(hz)
+            except (TypeError, ValueError):     # a hand-edited design: leave that side open
+                hz = None
+            setattr(self, attr, hz)
+            field.setText("" if hz is None else format_eng(hz, "Hz"))
+            field.setProperty("error", False)
+            self._repolish(field)
+
+    def _on_band(self):
+        """Parse both fit-range fields on edit, recompute only on a valid, changed band.
+
+        An empty field is a valid input (that side follows the data).  Unparsable text
+        turns the field red and the last good value is kept, exactly like f_ext.  Whether
+        the band itself makes sense against the loaded file is decided by the converter,
+        which reports it in the Conversion panel."""
+        band = []
+        for field, attr in ((self.f_min, "_f_min_hz"), (self.f_max, "_f_max_hz")):
+            text = field.text().strip()
+            if not text:
+                band.append(None)
+                ok = True
+            else:
+                try:
+                    v = parse_eng(text)
+                except ValueError:
+                    v = None
+                ok = v is not None and v > 0
+                band.append(v if ok else getattr(self, attr))
+            field.setProperty("error", not ok)
+            self._repolish(field)
+        if tuple(band) != (self._f_min_hz, self._f_max_hz):
+            self._f_min_hz, self._f_max_hz = band
+            self.changed.emit()
+
     def values(self) -> dict:
         return {
             "mode": self.mode.currentData(),
@@ -456,4 +521,6 @@ class TopBar(QtWidgets.QWidget):
             "iso_resistor": bool(self.iso_r.isChecked()),
             "max_order": int(self.order.value()),
             "enforce_passivity": bool(self.passive.isChecked()),
+            "f_min": self._f_min_hz,
+            "f_max": self._f_max_hz,
         }

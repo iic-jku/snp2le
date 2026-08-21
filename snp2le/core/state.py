@@ -19,6 +19,8 @@ class ConverterState:
     iso_resistor: bool = True             # include the Wilkinson isolation resistor
     max_order: int = 6
     enforce_passivity: bool = True
+    f_min: float | None = None            # fit band start [Hz], None = the data's first point
+    f_max: float | None = None            # fit band stop  [Hz], None = the data's last point
     source_path: str = ""                 # last loaded .sNp (for save/restore)
 
     def to_json(self) -> str:
@@ -50,6 +52,7 @@ class Results:
     value_rows: list = field(default_factory=list)   # (name, value, unit)
     value_drift: dict = field(default_factory=dict)  # {label: band-drift %} per value
     messages: list = field(default_factory=list)
+    band_limited: bool = False            # the fit used a sub-band of the loaded file
 
     # plotting payload
     freq: object = None                   # data frequencies [Hz]

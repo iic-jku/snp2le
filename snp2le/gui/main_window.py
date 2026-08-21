@@ -44,6 +44,7 @@ class MainWindow(QtWidgets.QMainWindow):
             os.path.dirname(os.path.dirname(__file__)), "examples")
         self._last_export_dir = {}        # per-dialect remembered export folder
         self._sch_path = ""               # selected Xschem testbench
+        self._res = None                  # last conversion result (its band drives the sweep)
         self._last_sch_dir = ""           # remembered .sch folder
         self._sim_proc = None             # running xschem QProcess
         self._sim_start = 0.0             # when the current run started (for auto-import)
@@ -110,6 +111,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.iso_resistor = v["iso_resistor"]
         self.state.max_order = v["max_order"]
         self.state.enforce_passivity = v["enforce_passivity"]
+        self.state.f_min = v["f_min"]
+        self.state.f_max = v["f_max"]
 
     def on_change(self):
         self._pull()
@@ -282,20 +285,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.set_sim_status("stopped", False)
 
     def _write_sim_range(self, cwd):
-        """Push the loaded Touchstone's frequency span into the testbench sweep.
+        """Push the fitted frequency band into the testbench sweep.
 
         Writes sim_range.inc (VACASK: `var f_min/f_max`) and sim_range.spice (Ngspice:
         `.csparam f_min/f_max`) next to the testbench.  The testbench includes the matching
         file (VACASK `include "../sim_range.inc"`, Ngspice `.include ../sim_range.spice`),
-        so the f_min/f_max sweep bounds always follow the loaded data, yet the testbench
-        still runs standalone in Xschem with the last-written range.  f0 stays in the
-        testbench, since it is a design point rather than a sweep bound.  Both `../` includes resolve
-        from the netlist dir (cwd/simulations) to cwd, where these files are written."""
-        net = getattr(self, "net", None)
-        if net is None:
+        so the f_min/f_max sweep bounds always follow the band the exported model was fitted
+        over (the full file unless a Fit range is set, since the model says nothing about
+        frequencies it never saw), yet the testbench still runs standalone in Xschem with the
+        last-written range.  f0 stays in the testbench, since it is a design point rather than
+        a sweep bound.  Both `../` includes resolve from the netlist dir (cwd/simulations) to
+        cwd, where these files are written."""
+        f = getattr(self._res, "freq", None) if self._res is not None else None
+        if f is None or not len(f):                # no conversion yet: fall back to the file
+            net = getattr(self, "net", None)
+            f = None if net is None else net.f
+        if f is None or not len(f):
             return
         try:
-            xschem.write_sim_range(cwd, float(net.f[0]), float(net.f[-1]))
+            xschem.write_sim_range(cwd, float(f[0]), float(f[-1]))
         except (TypeError, IndexError, ValueError, OSError):
             pass
 
@@ -776,7 +784,7 @@ class MainWindow(QtWidgets.QMainWindow):
     # ---- the pipeline ----------------------------------------------------
     def recompute(self):
         self.design.set_file_info(io.info_for(self.net).summary)
-        res = engine.convert(self.state, self.net)
+        res = self._res = engine.convert(self.state, self.net)
         if res.mode == "structure":            # mirror the freq actually used (it may
             self.top.show_fext(res.metrics.get("f_extract"))   # have been auto-detected)
         self.design.update_results(res)

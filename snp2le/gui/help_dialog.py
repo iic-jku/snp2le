@@ -41,6 +41,15 @@ it is outside the data it falls back to the device's natural design point.</li>
 <li><b>Max order</b> / <b>Enforce passivity</b> (universal mode): the number of poles the
 vector fit may use (more poles track sharp resonances but enlarge the netlist), and
 whether to make the model strictly passive for a stable transient run.</li>
+<li><b>Fit range</b> (both modes): the band of the loaded file the model is fitted to.
+Leave both fields empty for the full file, or enter a start and/or a stop frequency in
+engineering notation (e.g. <i>110&nbsp;GHz</i> to <i>170&nbsp;GHz</i>) to fit only a
+sub-band. Spending the model order on the band you actually operate in gives a much better
+fit there than spreading it over a wide EM sweep, at the price of a model that says nothing
+outside the band. An edge outside the data is clamped to the data and reported, an empty or
+inverted band is refused. The band applies to everything downstream: the RMS error, the
+tolerances, the plots, and the sweep written into a testbench run. The <b>Result</b> panel
+shows the band actually fitted, highlighted while it is a sub-band.</li>
 <li><b>Model option</b> (shown only for the structure it belongs to):
   <ul>
   <li><b>Stages</b>: number of RLGC ladder cells for the transmission line (1 to 10).</li>
@@ -115,10 +124,11 @@ custom output folder imports just the same.</li>
 <li><b>Run Simulation</b>: runs the loaded testbench. The button turns green (successful)
 or red (failed). If no result appears, the dialog shows the simulator log. Loading another
 testbench frees the button if a run or import is still pending.</li>
-<li><b>Frequency range</b>: each run writes the loaded file's frequency span into the
-testbench sweep (through an included <tt>sim_range</tt> file), so the simulated overlay
-covers the same band as the data. The design point <tt>f0</tt> stays in the testbench, and
-the testbench still runs standalone in Xschem with the last-written range.</li>
+<li><b>Frequency range</b>: each run writes the fitted band into the testbench sweep
+(through an included <tt>sim_range</tt> file), so the simulated overlay covers the same
+band as the data the model was fitted to (the full file unless a <b>Fit range</b> is
+set). The design point <tt>f0</tt> stays in the testbench, and the testbench still runs
+standalone in Xschem with the last-written range.</li>
 <li><b>Show output</b>: tick to show the simulator's console and plot windows during the
 run. For Ngspice these are its own console and plot windows. VACASK is launched detached,
 so instead a live <b>VACASK output</b> window tails its captured log (banner, analysis
