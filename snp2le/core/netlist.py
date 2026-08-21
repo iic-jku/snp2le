@@ -27,6 +27,19 @@ def _num(x: float) -> str:
 _LIMITS = {"R": (1e-12, 1e12), "C": (1e-18, 1e3), "L": (1e-18, 1e3)}
 _UNIT_KIND = {"Ω": "R", "F": "C", "H": "L"}
 
+# Resistor thermal noise is switched OFF on every emitted resistor.  These models are
+# fitted to EM S-parameters: their resistors realise the fitted response (the vector-fit
+# state self-resistors, the port sensor resistors), they are not the physical loss of the
+# structure sitting at a physical temperature.  Left noisy, a noise analysis would charge
+# 4kTR against fitting elements whose count and value follow the fit order, so the same
+# structure fitted at order 6 and order 13 would report different noise.  Both simulators
+# spell the switch the same way: ngspice takes "noisy=0" as a resistor instance parameter
+# (manual 3.2.1) and VACASK's resistor.va declares `parameter integer noisy = 1` as an
+# instance parameter.  Verified in IIC-OSIC-TOOLS against ngspice 47 and vacask bf59752:
+# on a 1k/1k divider, switching the shunt resistor off drops the total output noise by
+# exactly sqrt(2) in ngspice and the output PSD by exactly 2 in VACASK.
+_NOISY_OFF = "noisy=0"
+
 
 def _clamp(kind: str, value: float) -> float:
     lo_hi = _LIMITS.get(kind)
@@ -207,7 +220,9 @@ def render_ngspice(ir: CircuitIR) -> str:
     L += [f"* {c}" for c in ir.comments[:4]]
     L.append(f".SUBCKT {ir.name} {' '.join(ir.ports)}")
     for e in ir.elements:
-        if e.kind in ("R", "C", "L", "V"):
+        if e.kind == "R":
+            L.append(f"{e.name} {e.nodes[0]} {e.nodes[1]} {_num(e.value)} {_NOISY_OFF}")
+        elif e.kind in ("C", "L", "V"):
             L.append(f"{e.name} {e.nodes[0]} {e.nodes[1]} {_num(e.value)}")
         elif e.kind in ("G", "E"):
             L.append(f"{e.name} {e.nodes[0]} {e.nodes[1]} "
@@ -254,7 +269,8 @@ def _vc_instance(e: Element) -> str:
     n = " ".join(_vc_node(x) for x in e.nodes)        # no spaces inside the ( ) node list
     if e.kind in _VC_PASSIVE:
         model, p = _VC_PASSIVE[e.kind]
-        return f"{e.name} ({n}) {model} {p}={_num(e.value)}"
+        noise = f" {_NOISY_OFF}" if e.kind == "R" else ""
+        return f"{e.name} ({n}) {model} {p}={_num(e.value)}{noise}"
     if e.kind == "V":
         return f"{e.name} ({n}) vsource dc={_num(e.value)}"
     if e.kind == "G":                                 # VCCS, transconductance in A/V

@@ -45,7 +45,8 @@ ends
 // ============================================================================
 
 // ---- Verilog-A passives shipped with VACASK (resolved via SIM_MODULE_PATH) --
-// load "resistor.osdi"     // module resistor(A,B)   param: r  [, has_noise=1]
+// load "resistor.osdi"     // module resistor(A,B)   param: r, noisy  (noisy=1 is the
+//                          // default and turns thermal noise ON, noisy=0 turns it off)
 // load "capacitor.osdi"    // module capacitor(A,B)  param: c
 // load "inductor.osdi"     // module inductor(A,B)   param: l
 // load "diode.osdi"        // module diode(...)      (see diode.va for params)
@@ -53,7 +54,7 @@ ends
 // Builtins (no load needed): vsource  isource  vcvs vccs ccvs cccs  + L-coupling
 
 // ---- Passives ---------------------------------------------------------------
-// r1   (a b)        resistor  r=2k
+// r1   (a b)        resistor  r=2k              // add noisy=0 for a noiseless resistor
 // c1   (a b)        capacitor c=1p
 // l1   (a b)        inductor  l=3n
 

@@ -294,6 +294,29 @@ def test_vacask_rlgc_netlist():
     assert "\nmodel " not in vc and "simulator lang=spectre" not in vc
 
 
+# ---------------------------------------------------------------- resistor noise
+def test_resistors_are_noiseless_in_both_dialects():
+    """Every emitted resistor carries noisy=0, and nothing else does.
+
+    These resistors realise a fit to EM data, they are not the physical loss of a
+    structure sitting at a temperature, so their 4kTR is meaningless in a noise analysis
+    (on the committed 2-port it dominated the output noise by seven decades).  ngspice
+    and VACASK's resistor.va happen to spell the switch the same way, noisy."""
+    from snp2le.core import netlist
+    res = engine.convert(ConverterState(mode="universal", max_order=6),
+                         _example("bpf_ihp-sg13g2.s2p"))
+    res.ir.name = "bpf_le"
+    ng = netlist.render_ngspice(res.ir)
+    vc = netlist.render_vacask(res.ir)
+    n_res = sum(1 for e in res.ir.elements if e.kind == "R")
+    assert n_res > 0
+    assert ng.count("noisy=0") == n_res and vc.count("noisy=0") == n_res   # one per resistor
+    for line in ng.splitlines():                       # never on a C, L, V or a source
+        assert ("noisy=0" in line) == line.startswith("R")
+    for line in vc.splitlines():
+        assert ("noisy=0" in line) == (" resistor r=" in line)
+
+
 # ---------------------------------------------------------------- edge cases
 def test_dc_point_is_dropped():
     net = inductor_2port(with_dc=True)
