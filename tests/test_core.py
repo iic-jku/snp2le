@@ -295,17 +295,18 @@ def test_vacask_rlgc_netlist():
 
 
 # ---------------------------------------------------------------- resistor noise
-def test_resistors_are_noiseless_in_both_dialects():
-    """Every emitted resistor carries noisy=0, and nothing else does.
+def test_universal_resistors_are_noiseless_in_both_dialects():
+    """A vector-fit model's resistors carry noisy=0, and nothing else does.
 
-    These resistors realise a fit to EM data, they are not the physical loss of a
-    structure sitting at a temperature, so their 4kTR is meaningless in a noise analysis
-    (on the committed 2-port it dominated the output noise by seven decades).  ngspice
-    and VACASK's resistor.va happen to spell the switch the same way, noisy."""
+    They are scikit-rf state self-resistors and port sensors realising the fitted
+    response, not devices, so their 4kTR is meaningless (on the committed 2-port it beat
+    the terminations by seven decades).  ngspice and VACASK's resistor.va happen to
+    spell the switch the same way, noisy."""
     from snp2le.core import netlist
     res = engine.convert(ConverterState(mode="universal", max_order=6),
                          _example("bpf_ihp-sg13g2.s2p"))
     res.ir.name = "bpf_le"
+    assert not res.ir.physical
     ng = netlist.render_ngspice(res.ir)
     vc = netlist.render_vacask(res.ir)
     n_res = sum(1 for e in res.ir.elements if e.kind == "R")
@@ -315,6 +316,24 @@ def test_resistors_are_noiseless_in_both_dialects():
         assert ("noisy=0" in line) == line.startswith("R")
     for line in vc.splitlines():
         assert ("noisy=0" in line) == (" resistor r=" in line)
+
+
+def test_structure_resistors_keep_their_noise():
+    """Structure models are the opposite case: their resistors are real devices.
+
+    Riso is a physical 100 ohm resistor on the die, Rs is a coil's conductor loss and the
+    shunt R its substrate loss, so silencing them would understate a divider's or an LNA
+    match's noise.  Only the non-physical universal fit gets noisy=0."""
+    from snp2le.core import netlist
+    wpd = engine.convert(ConverterState(mode="structure", structure_key="wilkinson-inphase",
+                                        iso_resistor=True), _example("wpd_ihp-sg13g2.s3p"))
+    ind = engine.convert(ConverterState(mode="structure", structure_key="inductor-pi"),
+                         _example("ind_500pH_ihp-sg13cmos5l.s2p"))
+    for res in (wpd, ind):
+        assert res.ir.physical
+        assert any(e.kind == "R" for e in res.ir.elements)
+        for text in (netlist.render_ngspice(res.ir), netlist.render_vacask(res.ir)):
+            assert "noisy" not in text               # real loss keeps its thermal noise
 
 
 # ---------------------------------------------------------------- edge cases
