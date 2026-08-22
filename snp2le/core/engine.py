@@ -61,11 +61,15 @@ def convert(state, net) -> Results:
 def _convert_universal(state, net, res):
     from . import dc as _dc
     fit = _uni.fit_universal(net, max_order=state.max_order,
-                             enforce_passivity=state.enforce_passivity)
+                             enforce_passivity=state.enforce_passivity,
+                             passivity_ceiling=state.passivity_ceiling)
     res.ir = fit.ir
     res.physical = False
     res.n_poles = fit.n_poles
     res.passive = fit.passive
+    res.sigma_max = fit.sigma_max
+    res.sigma_max_freq = fit.sigma_max_freq
+    res.passivity_ceiling = fit.passivity_ceiling
     res.rms_error = fit.rms_error
     res.messages = fit.messages
     res.model_s = _uni.model_sparams(fit.vf, net.f)

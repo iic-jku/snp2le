@@ -38,9 +38,44 @@ does not match the loaded file are greyed out:
 <li><b>f<sub>ext</sub></b> (structure mode): the single frequency at which the lumped
 values are read off the data. Accepts engineering notation (e.g. <i>7&nbsp;GHz</i>). If
 it is outside the data it falls back to the device's natural design point.</li>
-<li><b>Max order</b> / <b>Enforce passivity</b> (universal mode): the number of poles the
-vector fit may use (more poles track sharp resonances but enlarge the netlist), and
-whether to make the model strictly passive for a stable transient run.</li>
+<li><b>Max order</b> (universal mode): the number of poles the vector fit may use. More
+poles track sharp resonances but enlarge the netlist.</li>
+<li><b>Enforce passivity</b> / <b>Passivity ceiling</b> (universal mode): a model is
+<i>passive</i> when the largest singular value of its S-matrix, &sigma;<sub>max</sub>,
+stays at or below 1 at every frequency, which is the same as saying it can never deliver
+more power than it absorbs. A non-passive model is not just inaccurate: a transient run
+can feed on the excess energy and grow without bound, so the simulation blows up or
+refuses to converge even though the AC response looked fine.
+<p>Making it passive is not free. A vector fit typically violates passivity outside the
+band it was fitted to, and pushing it back below 1 there costs accuracy inside the band,
+often by one to two orders of magnitude in RMS error. The <b>Passivity ceiling</b> is how
+far the enforcement has to go, so it buys that accuracy back in exchange for a bounded,
+known violation.</p>
+  <ul>
+  <li><b>Ticked</b> (the default): the fit is perturbed until it reaches the ceiling. At
+  <i>1.00</i> that is strict passivity, which is what you want for anything simulated in
+  the time domain. Raise it to stop short: on <tt>wpd_ihp-sg13g2.s3p</tt> at order 6 the
+  raw fit sits at 1.083 with RMS 8.7e-04, a ceiling of 1.00 gives 0.9999 at 2.6e-03, and a
+  ceiling of 1.05 gives 1.0499 at 1.3e-03, half the accuracy cost. A ceiling above what the
+  fit already measures leaves the model untouched rather than adding gain to reach it.</li>
+  <li><b>Unticked</b>: nothing is enforced and the raw fit is exported as it is. The
+  ceiling field greys out at <i>1.00</i>, since nothing is aiming at it, and
+  &sigma;<sub>max</sub> is still measured and reported so you can see what you are
+  shipping.</li>
+  </ul>
+The range is <i>1.00</i> to <i>1.20</i>. A number outside it is replaced by the limit it
+overshot, so entering <i>9.9</i> leaves <i>1.20</i> in the field and <i>0.5</i> leaves
+<i>1.00</i>, which is the quickest way to see what the limits are. Text that is not a
+number falls back to <i>1.00</i>. Reasonable ceilings: <i>1.00</i> for a transient or a
+long harmonic-balance run, <i>1.01</i> to <i>1.05</i> for an AC or S-parameter sweep where
+a per-cent-level violation outside your band cannot do anything, and up to <i>1.20</i>
+only as a diagnostic while you are looking at what the fit is doing.
+<p><b>A ceiling is not always reachable.</b> The perturbation only moves the model's
+residues, so a violation band that runs to infinity, caused by a non-passive constant
+term, cannot be corrected at any ceiling. <tt>tline_100um_ihp-sg13g2.s2p</tt> at order 13
+stays at 5.24 whatever you ask for. The accurate fit is then kept rather than a wrecked
+one and the result reads <i>near-passive</i>. The fix is a lower <b>Max order</b>, not a
+higher ceiling, since order 6 brings the same file to 1.018.</p></li>
 <li><b>Fit range</b> (both modes): the band of the loaded file the model is fitted to.
 Leave both fields empty for the full file, or enter a start and/or a stop frequency in
 engineering notation (e.g. <i>110&nbsp;GHz</i> to <i>170&nbsp;GHz</i>) to fit only a
@@ -65,7 +100,16 @@ shows the band actually fitted, highlighted while it is a sub-band.</li>
 <h3>Design &amp; Schematic</h3>
 <ul>
 <li><b>Result</b>: fit/extraction quality. RMS error against the data, passivity,
-and the model order (universal) or the extraction frequency (structure). For a universal
+&sigma;<sub>max</sub> against the ceiling it was judged against (green below the
+ceiling, red above it), and the model order (universal) or the extraction frequency (structure).
+Passivity reads <i>passive</i> below 1, <i>below ceiling</i> when a raised ceiling was
+reached, <i>near-passive</i> when enforcement ran and could not reach it, and <i>not
+passive</i> when the model is above its ceiling. Structure models are passive by
+construction, so they show no &sigma;<sub>max</sub>. When there is a violation, the
+message line under the panel also names the frequency of the peak: at 0&nbsp;Hz or inside
+your band it is a real hazard, while one far above the top data point is the model's
+high-frequency asymptote and usually means the order is too high for the file. For a
+universal
 macromodel it also reports a <b>DC operating point</b> check: the model is linear, so its
 DC solve only fails if the network is singular (typically an internal node with no DC path
 to ground). A solvable model is marked. A singular one is flagged, with a hint to lower

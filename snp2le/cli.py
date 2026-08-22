@@ -13,6 +13,9 @@
     # fit only the 110 to 170 GHz sub-band of a wider EM sweep
     snp2le -b convert core.s7p --mode universal --order 24 --fmin 110GHz --fmax 170GHz
 
+    # enforce passivity only down to 1.05, keeping accuracy strict enforcement would cost
+    snp2le -b convert bpf.s2p --mode universal --order 13 --passivity-ceiling 1.05
+
     # convert, run an Xschem testbench, and show data-vs-model-vs-sim plots
     snp2le -b convert bpf.s2p --mode universal --order 13 \\
         -o netlist/spice/two_port.spice \\
@@ -28,7 +31,7 @@ import os
 import re
 import sys
 
-from snp2le.core import io, engine, units, netlist
+from snp2le.core import io, engine, units, netlist, universal
 from snp2le.core.state import ConverterState
 from snp2le.core.structures import structure_items
 
@@ -55,6 +58,20 @@ def _stages(text):
     if not 1 <= n <= 10:
         raise argparse.ArgumentTypeError(f"--stages must be between 1 and 10 (got {n})")
     return n
+
+
+def _passivity_ceiling(text):
+    """argparse type for the passivity ceiling (a float from 1.0 to 1.2)."""
+    try:
+        v = float(text)
+    except Exception:                                       # noqa: BLE001
+        raise argparse.ArgumentTypeError(
+            f"invalid passivity ceiling '{text}' (a number, e.g. 1.05)")
+    if not universal.PASSIVITY_CEILING_MIN <= v <= universal.PASSIVITY_CEILING_MAX:
+        raise argparse.ArgumentTypeError(
+            f"--passivity-ceiling must be between {universal.PASSIVITY_CEILING_MIN:.1f} and "
+            f"{universal.PASSIVITY_CEILING_MAX:.1f} (got {v})")
+    return v
 
 
 def _out_path(src, explicit, dialect, n_inputs, n_formats):
@@ -309,6 +326,13 @@ def cmd_convert(args):
         print("[WARN] -o is ignored with multiple inputs; each output is named after its "
               "source", file=sys.stderr)
 
+    # the ceiling is what the enforcement aims at, so it means nothing without it
+    if args.passivity_ceiling is not None and not args.passive:
+        print("[WARN] --passivity-ceiling is ignored with --no-passive, which exports the "
+              "raw fit untouched", file=sys.stderr)
+    p_ceiling = (universal.PASSIVITY_CEILING_DEFAULT if args.passivity_ceiling is None
+                else args.passivity_ceiling)
+
     formats = ["ngspice", "vacask"] if args.format == "both" else [args.format]
     rc = 0
     last_res = None
@@ -322,6 +346,7 @@ def cmd_convert(args):
         state = ConverterState(
             mode=args.mode, structure_key=args.structure,
             max_order=args.order, enforce_passivity=args.passive,
+            passivity_ceiling=p_ceiling,
             f_extract=args.fext, n_segments=args.stages, iso_resistor=args.iso_r,
             f_min=args.fmin, f_max=args.fmax)
         res = engine.convert(state, net)
@@ -355,7 +380,9 @@ def cmd_convert(args):
                 if res.mode == "universal":
                     dc = ("" if res.dc is None
                           else "  dc=solvable" if res.dc.ok else "  dc=SINGULAR")
-                    extra = f"rms={res.rms_error:.2e}  poles={res.n_poles}{dc}"
+                    sig = ("" if res.sigma_max != res.sigma_max
+                           else f"  sigma_max={res.sigma_max:.3f}")
+                    extra = f"rms={res.rms_error:.2e}  poles={res.n_poles}{sig}{dc}"
                 else:
                     extra = f"f_ext={units.format_eng(res.metrics.get('f_extract'), 'Hz')}"
                 print(f"[ OK ] {src} -> {out}  ({dialect}, {extra})")
@@ -428,6 +455,13 @@ def build_parser():
     c.add_argument("--passive", action="store_true", default=True,
                    help="enforce passivity (universal, default on)")
     c.add_argument("--no-passive", dest="passive", action="store_false")
+    c.add_argument("--passivity-ceiling", dest="passivity_ceiling", type=_passivity_ceiling,
+                   default=None, metavar="SIGMA",
+                   help=f"largest singular value the enforced model may keep, "
+                        f"{universal.PASSIVITY_CEILING_MIN:.1f} to "
+                        f"{universal.PASSIVITY_CEILING_MAX:.1f}. Universal mode, needs "
+                        f"--passive. Default "
+                        f"{universal.PASSIVITY_CEILING_DEFAULT:.1f} (strictly passive)")
     # structure-mode options
     c.add_argument("--fext", type=_freq, default=10e9, metavar="FREQ",
                    help="extraction frequency, e.g. 7GHz (structure)")

@@ -294,6 +294,48 @@ def test_vacask_rlgc_netlist():
     assert "\nmodel " not in vc and "simulator lang=spectre" not in vc
 
 
+# ---------------------------------------------------------------- resistor noise
+def test_universal_resistors_are_noiseless_in_both_dialects():
+    """A vector-fit model's resistors carry noisy=0, and nothing else does.
+
+    They are scikit-rf state self-resistors and port sensors realising the fitted
+    response, not devices, so their 4kTR is meaningless (on the committed 2-port it beat
+    the terminations by seven decades).  ngspice and VACASK's resistor.va happen to
+    spell the switch the same way, noisy."""
+    from snp2le.core import netlist
+    res = engine.convert(ConverterState(mode="universal", max_order=6),
+                         _example("bpf_ihp-sg13g2.s2p"))
+    res.ir.name = "bpf_le"
+    assert not res.ir.physical
+    ng = netlist.render_ngspice(res.ir)
+    vc = netlist.render_vacask(res.ir)
+    n_res = sum(1 for e in res.ir.elements if e.kind == "R")
+    assert n_res > 0
+    assert ng.count("noisy=0") == n_res and vc.count("noisy=0") == n_res   # one per resistor
+    for line in ng.splitlines():                       # never on a C, L, V or a source
+        assert ("noisy=0" in line) == line.startswith("R")
+    for line in vc.splitlines():
+        assert ("noisy=0" in line) == (" resistor r=" in line)
+
+
+def test_structure_resistors_keep_their_noise():
+    """Structure models are the opposite case: their resistors are real devices.
+
+    Riso is a physical 100 ohm resistor on the die, Rs is a coil's conductor loss and the
+    shunt R its substrate loss, so silencing them would understate a divider's or an LNA
+    match's noise.  Only the non-physical universal fit gets noisy=0."""
+    from snp2le.core import netlist
+    wpd = engine.convert(ConverterState(mode="structure", structure_key="wilkinson-inphase",
+                                        iso_resistor=True), _example("wpd_ihp-sg13g2.s3p"))
+    ind = engine.convert(ConverterState(mode="structure", structure_key="inductor-pi"),
+                         _example("ind_500pH_ihp-sg13cmos5l.s2p"))
+    for res in (wpd, ind):
+        assert res.ir.physical
+        assert any(e.kind == "R" for e in res.ir.elements)
+        for text in (netlist.render_ngspice(res.ir), netlist.render_vacask(res.ir)):
+            assert "noisy" not in text               # real loss keeps its thermal noise
+
+
 # ---------------------------------------------------------------- fit range
 def test_fit_range_restricts_the_data():
     """A sub-band fit sees only the points inside it, in both modes, and everything
@@ -435,6 +477,126 @@ def test_load_ngspice_sim_mixed_case_headers():
         os.unlink(path)
     assert sim["S11"]["db"][1] == -6.0
     assert sim["S11"]["deg"][0] == 45.0
+
+
+# ------------------------------------------------------------- passivity bound
+def test_passivity_ceiling_is_clamped_and_applies_only_when_enforcing():
+    """An out-of-range number clamps to the limit it overshot, so the GUI can show the
+    user what the limit is.  Something that is not a number has no edge to clamp to and
+    falls back to the strict default.  Without enforcement nothing aims at the ceiling, so
+    the model is judged strictly."""
+    from snp2le.core import universal as u
+    assert u.clamp_passivity_ceiling(1.05) == 1.05
+    assert u.clamp_passivity_ceiling("1.05") == 1.05
+    assert u.clamp_passivity_ceiling(u.PASSIVITY_CEILING_MIN) == u.PASSIVITY_CEILING_MIN
+    assert u.clamp_passivity_ceiling(u.PASSIVITY_CEILING_MAX) == u.PASSIVITY_CEILING_MAX
+    # too large clamps up to the ceiling, too small down to the floor
+    for big in (1.201, 9.9, float("inf")):
+        assert u.clamp_passivity_ceiling(big) == u.PASSIVITY_CEILING_MAX, big
+    for small in (0.999, 0.5, -3.0, float("-inf")):
+        assert u.clamp_passivity_ceiling(small) == u.PASSIVITY_CEILING_MIN, small
+    # not a number at all: no edge to pick, so the strict default
+    for bad in (None, "", "abc", float("nan")):
+        assert u.clamp_passivity_ceiling(bad) == u.PASSIVITY_CEILING_DEFAULT, bad
+
+    # the ceiling is what the enforcement aims at, so it only applies while enforcing
+    assert u.effective_ceiling(True, 1.05) == 1.05
+    assert u.effective_ceiling(True, 5.0) == u.PASSIVITY_CEILING_MAX
+    assert u.effective_ceiling(False, u.PASSIVITY_CEILING_MAX) == u.PASSIVITY_CEILING_DEFAULT
+
+
+def test_sigma_max_is_measured_without_enforcement():
+    """The raw fit of the bundled BPF is slightly non-passive.  With enforcement off the
+    model is exported exactly as fitted, and sigma_max says by how much it misses."""
+    from snp2le.core import universal
+    net = io.without_dc(_example("bpf_ihp-sg13g2.s2p"))
+    raw = universal.fit_universal(net, max_order=13, enforce_passivity=False)
+    assert raw.sigma_max == raw.sigma_max                  # a real number, not NaN
+    assert raw.sigma_max > 1.0                             # this file does violate
+    assert not raw.passive                                 # judged strictly, so it fails
+    assert raw.passivity_ceiling == universal.PASSIVITY_CEILING_DEFAULT
+
+    # the ceiling is ignored without enforcement: nothing aims at it, nothing is modified
+    ignored = universal.fit_universal(net, max_order=13, enforce_passivity=False,
+                                      passivity_ceiling=universal.PASSIVITY_CEILING_MAX)
+    assert ignored.passivity_ceiling == universal.PASSIVITY_CEILING_DEFAULT
+    assert abs(ignored.sigma_max - raw.sigma_max) < 1e-9
+    assert abs(ignored.rms_error - raw.rms_error) < 1e-12
+    assert not ignored.passive
+
+
+def test_a_relaxed_target_is_reached_and_costs_less_accuracy():
+    """The point of the ceiling: enforcing down to 1.05 instead of 1.0 reaches 1.05 and
+    keeps a fit closer to the data than strict enforcement would.  The Wilkinson is the
+    example where all three outcomes are distinguishable."""
+    from snp2le.core import universal
+    net = io.without_dc(_example("wpd_ihp-sg13g2.s3p"))
+    raw = universal.fit_universal(net, max_order=6, enforce_passivity=False)
+    strict = universal.fit_universal(net, max_order=6, enforce_passivity=True,
+                                     passivity_ceiling=1.00)
+    mid = universal.fit_universal(net, max_order=6, enforce_passivity=True,
+                                  passivity_ceiling=1.05)
+
+    assert raw.sigma_max > 1.05                            # there is something to correct
+    assert strict.sigma_max <= 1.0 + 1e-6 and strict.passive
+    assert mid.sigma_max <= 1.05 + 1e-6 and mid.passive    # the ceiling was reached
+    assert mid.sigma_max > 1.0                             # and not overshot to strict
+    # the whole reason for the control: a raised ceiling costs less accuracy
+    assert raw.rms_error < mid.rms_error < strict.rms_error
+
+
+def test_a_target_above_the_fit_leaves_the_model_untouched():
+    """Aiming above what the fit already measures must not *add* gain to reach it."""
+    from snp2le.core import universal
+    net = io.without_dc(_example("bpf_ihp-sg13g2.s2p"))
+    raw = universal.fit_universal(net, max_order=13, enforce_passivity=False)
+    high = universal.fit_universal(net, max_order=13, enforce_passivity=True,
+                                   passivity_ceiling=universal.PASSIVITY_CEILING_MAX)
+    assert raw.sigma_max < universal.PASSIVITY_CEILING_MAX
+    assert abs(high.sigma_max - raw.sigma_max) < 1e-9      # untouched
+    assert abs(high.rms_error - raw.rms_error) < 1e-12     # accuracy fully kept
+    assert high.passive                                    # and it meets the ceiling
+
+
+def test_passivity_ceiling_flows_through_engine_and_state():
+    from snp2le.core import universal
+    net = _example("wpd_ihp-sg13g2.s3p")
+    st = ConverterState(mode="universal", max_order=6, enforce_passivity=True,
+                        passivity_ceiling=1.05)
+    res = engine.convert(st, net)
+    assert res.ok
+    assert res.passivity_ceiling == 1.05
+    assert res.sigma_max == res.sigma_max and res.passive
+    assert res.sigma_max <= 1.05 + 1e-6
+    # the setting survives a design save/load round trip
+    assert ConverterState.from_json(st.to_json()).passivity_ceiling == st.passivity_ceiling
+
+
+def test_structure_mode_reports_no_sigma_max():
+    """A structure model is an RLC network, passive by construction, so it carries no
+    measured sigma_max and its bound stays at the strict default."""
+    res = engine.convert(ConverterState(mode="structure", structure_key="mim-cap",
+                                        f_extract=10e9),
+                         _example("mim_cap_170fF_ihp-sg13g2.s2p"))
+    assert res.ok and res.passive
+    assert res.sigma_max != res.sigma_max                  # NaN
+    assert res.passivity_ceiling == 1.0
+
+
+def test_cli_passivity_ceiling_argument():
+    """--passivity-ceiling parses inside the range, is refused outside it, and stays None
+    when it is not given, so the CLI can tell 'default' from 'explicitly 1.0'."""
+    from snp2le import cli
+    p = cli.build_parser()
+    assert p.parse_args(["convert", "x.s2p", "--no-passive",
+                         "--passivity-ceiling", "1.05"]).passivity_ceiling == 1.05
+    assert p.parse_args(["convert", "x.s2p"]).passivity_ceiling is None
+    for bad in ("0.9", "1.5", "abc"):
+        try:
+            p.parse_args(["convert", "x.s2p", "--passivity-ceiling", bad])
+        except SystemExit:
+            continue
+        raise AssertionError(f"--passivity-ceiling {bad} should have been refused")
 
 
 if __name__ == "__main__":

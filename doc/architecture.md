@@ -66,6 +66,24 @@ pytest
   same response as Ngspice.
 * `is_passive()` may report borderline-False even after enforcement on a good fit.
   The model is still usable. The status is reported honestly ("near-passive").
+* Passivity is also reported as a number. `universal.max_singular_value()` returns
+  the largest singular value of the fitted S-matrix over a grid that spans four
+  decades either side of the data and is refined inside the violation bands
+  `passivity_test()` reports. `ConverterState.passivity_ceiling` (1.0 to 1.2) is the
+  sigma_max the enforcement works towards, not merely an acceptance threshold: the
+  model really is perturbed down to it, which trades a bounded violation for a fit up
+  to a few times more accurate than strict enforcement gives. sigma_max(S) <= t is
+  exactly sigma_max(S/t) <= 1, so `universal._enforce_at()` scales the rational model
+  by 1/t, runs scikit-rf's standard perturbation, and scales back. At t = 1.0 both
+  scalings are the identity, which is what keeps the strict path bit-for-bit what it
+  was. A ceiling the residue perturbation cannot reach (an unbounded violation band,
+  from a non-passive constant term) leaves the accurate fit in place instead. 1.0 is
+  the floor because a lossless reciprocal network sits at exactly 1. An out-of-range
+  number is clamped to the edge it overshot and a non-number falls back to the default
+  (`universal.clamp_passivity_ceiling()`), so the GUI field answers "what is the limit"
+  by showing it. The rule that the ceiling applies only while enforcing lives in
+  `universal.effective_ceiling()` alone, so the GUI, the CLI and the engine cannot
+  disagree about it.
 * A 0 Hz (DC) sample is dropped automatically, since it breaks the
   Y-/ABCD-parameter extraction and the MNA rebuild.
 * The transmission-line ladder uses 2 L-cells by default (`N_SEGMENTS` in

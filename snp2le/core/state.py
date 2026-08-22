@@ -19,6 +19,11 @@ class ConverterState:
     iso_resistor: bool = True             # include the Wilkinson isolation resistor
     max_order: int = 6
     enforce_passivity: bool = True
+    # Largest singular value the enforced model may keep.  1.0 is strict passivity, a
+    # higher ceiling trades a bounded violation for accuracy.  It is what the enforcement
+    # works towards, so it only takes effect with enforce_passivity=True.  See
+    # universal.PASSIVITY_CEILING_* for the allowed range.
+    passivity_ceiling: float = 1.0
     f_min: float | None = None            # fit band start [Hz], None = the data's first point
     f_max: float | None = None            # fit band stop  [Hz], None = the data's last point
     source_path: str = ""                 # last loaded .sNp (for save/restore)
@@ -45,7 +50,10 @@ class Results:
     vacask: str = ""
 
     n_poles: int = 0
-    passive: bool = False
+    passive: bool = False                 # sigma_max <= passivity_ceiling
+    sigma_max: float = float("nan")       # largest singular value of the model S-matrix
+    sigma_max_freq: float = float("nan")  # where that peak sits [Hz]
+    passivity_ceiling: float = 1.0        # the ceiling `passive` was judged against
     dc: object = None                     # DCHealth: DC operating-point check (universal mode)
     rms_error: float = float("nan")
     metrics: dict = field(default_factory=dict)

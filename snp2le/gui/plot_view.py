@@ -24,7 +24,7 @@ from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 from matplotlib.backend_bases import _Mode
 
 from .style import JKU_BLUE, JKU_GRAY, JKU_RED
-from .widgets import passivity_text, FitComboBox
+from .widgets import passivity_text, sigma_text, FitComboBox
 from snp2le.core import io
 
 # Curve styling: JKU colours paired with distinct line styles, so the traces
@@ -339,8 +339,10 @@ class PlotView(QtWidgets.QWidget):
         self.stats_box = QtWidgets.QWidget()
         sb = QtWidgets.QHBoxLayout(self.stats_box)
         sb.setContentsMargins(0, 0, 14, 0); sb.setSpacing(16)
-        self.pass_stat = self._stat(); self.order_stat = self._stat()
-        sb.addWidget(self.pass_stat); sb.addWidget(self.order_stat)
+        self.pass_stat = self._stat(); self.sigma_stat = self._stat()
+        self.order_stat = self._stat()
+        sb.addWidget(self.pass_stat); sb.addWidget(self.sigma_stat)
+        sb.addWidget(self.order_stat)
         bar.addWidget(self.stats_box)
         self.export_btn = QtWidgets.QPushButton("Export CSV")
         self.import_btn = QtWidgets.QPushButton("Import simulation")
@@ -398,6 +400,8 @@ class PlotView(QtWidgets.QWidget):
         # mirror the Design tab's passivity + order for the universal macromodel
         if res.mode == "universal":
             self.pass_stat.setText(self._stat_html("passivity", passivity_text(res)))
+            self.sigma_stat.setText(
+                self._stat_html("σ<sub>max</sub>", sigma_text(res)))
             self.order_stat.setText(self._stat_html("order", f"{res.n_poles} poles"))
             self.stats_box.setVisible(True)
         else:
