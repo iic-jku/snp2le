@@ -7,6 +7,10 @@ enforce passivity, emit the SPICE subcircuit, and parse it back into a CircuitIR
 so both netlist dialects render from one representation.  Also reconstructs the
 fitted S-parameters on any frequency grid for the data-vs-model plots.
 
+Passivity is reported as a number, not only as a flag: `max_singular_value` returns
+the largest singular value of the fitted S-matrix over all frequencies, and a fit is
+enforced down to the passivity ceiling rather than only to 1 (see PASSIVITY_CEILING_*).
+
 The passivity-enforcement strategy in `_enforce_passivity` (escalate the sample
 count, then fall back to a lower model order) was inspired by the COBRA project's
 vector-fitting wrapper: https://github.com/DI-PASSIONATE/COBRA
@@ -28,7 +32,10 @@ from . import netlist as _nl
 class FitResult:
     ir: CircuitIR = None
     n_poles: int = 0
-    passive: bool = False
+    passive: bool = False               # sigma_max <= passivity_ceiling
+    sigma_max: float = float("nan")     # largest singular value of the model S-matrix
+    sigma_max_freq: float = float("nan")   # where that peak sits [Hz]
+    passivity_ceiling: float = 1.0      # sigma_max the fit was judged against
     rms_error: float = float("nan")     # fraction (0..1) over all Sij
     vf: object = None                   # the VectorFitting object
     messages: list = field(default_factory=list)
@@ -42,21 +49,100 @@ _PASSIVITY_N_SAMPLES = (200, 800)
 # Otherwise we keep the accurate (near-passive) fit rather than ship a wreck.
 _USABLE_RMS = 0.1
 
+# Passivity ceiling: the largest singular value the enforced model is allowed to keep.
+# sigma_max <= 1 is the passivity condition itself (the model can never deliver more
+# power than it absorbs, at any frequency), so 1.0 is the strict default.  Enforcing a
+# ceiling above 1.0 leaves that much gain at the model's worst frequency and buys back
+# accuracy in exchange, since the perturbation has less to correct.  1.2 is the highest
+# allowed: past roughly 20 % the excess is large enough to grow a transient run away.
+PASSIVITY_CEILING_MIN = 1.0
+PASSIVITY_CEILING_DEFAULT = 1.0
+PASSIVITY_CEILING_MAX = 1.2
 
-def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True) -> FitResult:
-    """Vector-fit `net` and synthesise a lumped-element SPICE subcircuit."""
+# sigma_max grid: log-spaced points over the model's whole frequency range, plus this
+# many extra points inside each violation band scikit-rf reports (the peaks sit there).
+_SIGMA_GRID_POINTS = 400
+_SIGMA_BAND_POINTS = 64
+# The model is evaluated this far outside the fitted band.  A vector fit usually
+# violates passivity where it has no data, below the first and above the last sample,
+# and a transient run excites exactly those frequencies.
+_SIGMA_SPAN_DECADES = 4.0
+
+
+def clamp_passivity_ceiling(value) -> float:
+    """A usable passivity ceiling: a number clamped into
+    [PASSIVITY_CEILING_MIN, PASSIVITY_CEILING_MAX], or the strict default.
+
+    A readable number outside the range clamps to the edge it overshot, so 9.9 gives
+    1.2 and 0.5 gives 1.0.  In the GUI that edge lands straight back in the field, which
+    is how someone who has never read the tooltip finds out what the limits are.
+    Something that is not a number at all (None, text, NaN) has no edge to clamp to, so
+    it returns the strict default instead."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return PASSIVITY_CEILING_DEFAULT
+    if v != v:                                     # NaN, no nearest edge to pick
+        return PASSIVITY_CEILING_DEFAULT
+    return float(min(max(v, PASSIVITY_CEILING_MIN), PASSIVITY_CEILING_MAX))
+
+
+def effective_ceiling(enforce_passivity: bool,
+                      passivity_ceiling=PASSIVITY_CEILING_DEFAULT) -> float:
+    """The sigma_max a fit is held under, and judged against.
+
+    The ceiling only means anything while enforcement is running, since it is the value
+    the perturbation works towards.  With enforcement off nothing is aimed at, so the
+    model is judged against strict passivity and the GUI greys the field out to say so.
+    Keeping the rule here means the GUI, the CLI and the engine cannot disagree on it."""
+    if not enforce_passivity:
+        return PASSIVITY_CEILING_DEFAULT
+    return clamp_passivity_ceiling(passivity_ceiling)
+
+
+def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
+                  passivity_ceiling: float = PASSIVITY_CEILING_DEFAULT) -> FitResult:
+    """Vector-fit `net` and synthesise a lumped-element SPICE subcircuit.
+
+    `passivity_ceiling` is the sigma_max the enforcement brings the model down to.  It
+    applies only with `enforce_passivity=True`, since it is what the perturbation works
+    towards, see `effective_ceiling`."""
     res = FitResult()
+    ceiling = res.passivity_ceiling = effective_ceiling(enforce_passivity,
+                                                        passivity_ceiling)
+    attempted = False
     with contextlib.redirect_stdout(_io.StringIO()), \
             contextlib.redirect_stderr(_io.StringIO()):
         vf = _auto_fit(net, max_order)
         if enforce_passivity:
-            vf, msgs = _enforce_passivity(vf, net)
+            vf, msgs, attempted = _enforce_passivity(vf, net, ceiling)
             res.messages.extend(msgs)
+        res.sigma_max, res.sigma_max_freq = max_singular_value(vf)
 
     res.vf = vf
     res.n_poles = int(len(np.atleast_1d(vf.poles)))
-    res.passive = _is_passive(vf)
+    res.passive = _meets_ceiling(vf, res.sigma_max, ceiling)
     res.rms_error = _rms_error(vf, net)
+    # Report the number whenever there is a violation to report, met or not.  A model
+    # that is passive outright needs no line.  The frequency comes with it: it is what
+    # separates a real hazard from a high-frequency asymptote nothing will excite.
+    if res.sigma_max > PASSIVITY_CEILING_MIN:
+        from .units import format_eng
+        # ASCII here on purpose: this string also goes to a terminal, and a Windows
+        # console in cp1252 renders a Greek sigma as '?'.  The GUI swaps in the symbol
+        # when it draws the line (widgets.with_symbols).
+        where = (f"sigma_max {res.sigma_max:.3f} at "
+                 f"{format_eng(res.sigma_max_freq, 'Hz')}")
+        if enforce_passivity and not attempted:
+            # The ceiling was never binding.  Say so, or the reading is "I asked for
+            # 1.20 and got 1.019", when the answer is that nothing needed correcting.
+            res.messages.append(
+                f"{where} is already below the ceiling {ceiling:.2f}, "
+                f"fit left untouched")
+        else:
+            res.messages.append(
+                f"{where}, {'below' if res.passive else 'ABOVE'} "
+                f"ceiling {ceiling:.2f}")
 
     import tempfile, os
     with tempfile.NamedTemporaryFile("w+", suffix=".cir", delete=False) as fh:
@@ -97,38 +183,69 @@ def _auto_fit(net, max_order: int):
     return vf
 
 
-def _enforce_passivity(vf, net):
-    """Make the model passive, escalating effort only as needed, never shipping a
-    worse model than the original fit.
+def _enforce_at(vf, ceiling: float, n_samples: int):
+    """Perturb `vf` in place until sigma_max <= `ceiling`.
 
-    1. If it is already passive, do nothing.
+    scikit-rf's `passivity_enforce` only knows the strict condition sigma_max <= 1, but
+    sigma_max(S) <= t is exactly sigma_max(S/t) <= 1.  So scale the rational model down
+    by t, run the standard singular-value perturbation, and scale back.  At t = 1.0 both
+    scalings are the identity and this is `passivity_enforce` untouched, which is what
+    keeps the strict path bit-for-bit what it was.
+
+    Scaling every term keeps it one rational function: S(s) = D + sum_k R_k / (s - p_k),
+    so dividing D and every R_k by t divides S by t at every frequency, poles unmoved."""
+    if ceiling != 1.0:
+        for attr in ("residues", "constant_coeff", "proportional_coeff"):
+            setattr(vf, attr, getattr(vf, attr) / ceiling)
+    vf.passivity_enforce(n_samples=n_samples)
+    if ceiling != 1.0:
+        for attr in ("residues", "constant_coeff", "proportional_coeff"):
+            setattr(vf, attr, getattr(vf, attr) * ceiling)
+    return vf
+
+
+def _enforce_passivity(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT):
+    """Bring the model's sigma_max down to `ceiling`, escalating effort only as needed,
+    never shipping a worse model than the original fit.
+
+    1. If it already sits below the ceiling, do nothing.
     2. Enforce from a *pristine copy* of the fit at an escalating sample count
        (this catches narrow violation bands, and replaces scraping scikit-rf's
        warning text, which is brittle).  Each attempt starts from the clean fit
        so perturbations do not compound.
     3. Last resort: one lower-order refit (a smaller model is often easier to
        make passive, at some accuracy cost).
-    A candidate is kept only if it is passive *and* still resembles the data
-    (`rms < _USABLE_RMS`).  Otherwise the accurate near-passive fit is returned.
+    A candidate is kept only if it clears the ceiling *and* still resembles the data
+    (`rms < _USABLE_RMS`).  Otherwise the accurate near-passive fit is returned.  That
+    guard matters more at a raised ceiling, not less: a model whose violation band runs
+    to infinity cannot be fixed by perturbing residues at any ceiling, and without the
+    guard the failed attempt would be shipped in place of a good fit.
 
     Strategy adapted from the COBRA project (https://github.com/DI-PASSIONATE/COBRA).
 
-    Returns (vector_fitting, messages).
+    Returns (vector_fitting, messages, attempted).  `attempted` is False only when the
+    fit already sat below the ceiling and was handed straight back, and it is True on
+    every path that ran the perturbation, including the near-passive one that ran it and
+    kept the original anyway.  The caller reports the False case differently, because
+    "nothing needed doing" is the answer to "why did my ceiling of 1.20 leave the model
+    at 1.019", and the near-passive case must not borrow that wording: there the ceiling
+    was missed, not unneeded.
     """
     import copy
     msgs = []
-    if _is_passive(vf):
-        return vf, msgs
+    if _meets_ceiling(vf, None, ceiling):
+        return vf, msgs, False   # nothing to do
 
     best = [None]                                  # [(rms, vf)] best usable candidate
+    at = "" if ceiling <= PASSIVITY_CEILING_MIN else f" at {ceiling:.2f}"
 
     def keep_if_good(cand, how):
-        if not _is_passive(cand):
+        if not _meets_ceiling(cand, None, ceiling):
             return False
         r = _rms_error(cand, net)
         if r < _USABLE_RMS and (best[0] is None or r < best[0][0]):
             best[0] = (r, cand)
-            msgs.append(f"passivity enforced ({how}, rms={r:.2e})")
+            msgs.append(f"passivity enforced{at} ({how}, rms={r:.2e})")
             return True
         return False
 
@@ -136,14 +253,14 @@ def _enforce_passivity(vf, net):
     for n_samples in _PASSIVITY_N_SAMPLES:
         cand = copy.deepcopy(vf)
         try:
-            cand.passivity_enforce(n_samples=n_samples)
+            _enforce_at(cand, ceiling, n_samples)
         except Exception as exc:                   # noqa: BLE001
             msgs.append(f"passivity enforce failed: {exc}")
             break
         if keep_if_good(cand, f"n_samples={n_samples}"):
-            return best[0][1], msgs
+            return best[0][1], msgs, True
 
-    # last resort: a single lower-order refit (kept only if passive and accurate)
+    # last resort: a single lower-order refit (kept only if it clears the ceiling)
     poles = np.atleast_1d(vf.poles)
     n_cmplx = int(np.count_nonzero(poles.imag)) or (len(poles) // 2)
     k = max(2, int(n_cmplx * 0.66))
@@ -151,15 +268,15 @@ def _enforce_passivity(vf, net):
         cand = VectorFitting(net)
         try:
             cand.vector_fit(n_poles_real=1, n_poles_cmplx=k)
-            if not _is_passive(cand):
-                cand.passivity_enforce(n_samples=_PASSIVITY_N_SAMPLES[-1])
+            if not _meets_ceiling(cand, None, ceiling):
+                _enforce_at(cand, ceiling, _PASSIVITY_N_SAMPLES[-1])
         except Exception:                          # noqa: BLE001
             cand = None
         if cand is not None and keep_if_good(cand, f"reduced order ({k} cmplx)"):
-            return best[0][1], msgs
+            return best[0][1], msgs, True
 
     msgs.append("passivity enforced (near-passive)")
-    return vf, msgs
+    return vf, msgs, True
 
 
 def _is_passive(vf) -> bool:
@@ -167,6 +284,84 @@ def _is_passive(vf) -> bool:
         return bool(vf.is_passive())
     except Exception:                              # noqa: BLE001
         return False
+
+
+def _meets_ceiling(vf, sigma_max, ceiling: float) -> bool:
+    """Does the model sit at or below `ceiling`?
+
+    At the strict ceiling scikit-rf's eigenvalue test decides, because it is exact and
+    finds violation bands too narrow for any sampled grid to see.  Above it the sampled
+    sigma_max is what the question is about, and a peak narrow enough for the grid to
+    miss carries no energy worth refusing a fit over.
+
+    `sigma_max` may be None, which measures it here.  Callers that already have the
+    number pass it in, since the measurement is the expensive half."""
+    if _is_passive(vf):
+        return True
+    if ceiling <= PASSIVITY_CEILING_MIN:
+        return False
+    if sigma_max is None:
+        sigma_max = max_singular_value(vf)[0]
+    return bool(sigma_max == sigma_max and sigma_max <= ceiling)
+
+
+def max_singular_value(vf):
+    """(sigma_max, f_hz): the largest singular value of the fitted S-matrix over all
+    frequencies, and where it occurs.
+
+    sigma_max <= 1 is exactly the passivity condition, so this number says how far a
+    model misses it (1.03 means 3 % of gain at its worst frequency) where `is_passive`
+    only says that it does.  The frequency is worth reporting with it: a peak at DC or
+    inside the fitted band is a real hazard for a transient run, while one out at
+    10^4 times the top data point is the model's high-frequency asymptote and usually
+    means the fit order is too high for the file.  Returns (NaN, NaN) if the model
+    cannot be evaluated."""
+    try:
+        grid = _sigma_grid(vf)
+        n = int(vf.network.nports)
+        s = np.empty((len(grid), n, n), dtype=complex)
+        for i in range(n):
+            for j in range(n):
+                s[:, i, j] = vf.get_model_response(i, j, grid)
+        ok = np.isfinite(s).all(axis=(1, 2))       # one bad point must not void them all
+        if not ok.any():
+            return float("nan"), float("nan")
+        grid, s = grid[ok], s[ok]
+        per_f = np.max(np.linalg.svd(s, compute_uv=False), axis=1)
+        k = int(np.argmax(per_f))
+        return float(per_f[k]), float(grid[k])
+    except Exception:                              # noqa: BLE001
+        return float("nan"), float("nan")
+
+
+def _sigma_grid(vf):
+    """Frequencies at which sigma_max is sampled.
+
+    DC, the data points, a log sweep _SIGMA_SPAN_DECADES either side of the data, and a
+    dense sweep inside every passivity-violation band the half-size test matrix reports,
+    since the peaks sit there.  A band left open at the top is closed at the top of the
+    log sweep, where the model has already settled on its constant term."""
+    f = np.asarray(vf.network.f, dtype=float)
+    f = f[f > 0]
+    if f.size == 0:
+        return np.array([0.0])
+    lo = f[0] * 10.0 ** -_SIGMA_SPAN_DECADES
+    hi = f[-1] * 10.0 ** _SIGMA_SPAN_DECADES
+    parts = [np.array([0.0]), f,
+             np.logspace(np.log10(lo), np.log10(hi), _SIGMA_GRID_POINTS)]
+    try:
+        bands = np.atleast_2d(vf.passivity_test())
+    except Exception:                              # noqa: BLE001
+        bands = np.empty((0, 2))
+    for band in bands:
+        if band.size != 2:                         # no violation: an empty (1, 0) row
+            continue
+        b_lo, b_hi = float(band[0]), float(band[1])
+        if not np.isfinite(b_hi):                  # the band is open at the top
+            b_hi = max(hi, b_lo * 10.0)
+        if b_hi > b_lo:
+            parts.append(np.linspace(b_lo, b_hi, _SIGMA_BAND_POINTS))
+    return np.unique(np.concatenate(parts))
 
 
 def model_sparams(vf, freq_hz):

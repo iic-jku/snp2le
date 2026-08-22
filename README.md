@@ -157,13 +157,54 @@ A bundled example is preloaded on first run. More live in `snp2le/examples/`.
 ### Typical workflow
 
 1. **Load** a Touchstone `.sNp` file from the top bar. The header shows the port count and frequency range.
-2. **Choose a mode.** Universal (set *Max order* and *Enforce passivity*) or Structure-specific (pick a structure and set the *extraction frequency*). Some structures expose an extra option such as *Stages*, *Isolation R* or *Resistive loss*.
+2. **Choose a mode.** Universal (set *Max order*, *Enforce passivity* and the *Passivity ceiling* it works towards) or Structure-specific (pick a structure and set the *extraction frequency*). Some structures expose an extra option such as *Stages*, *Isolation R* or *Resistive loss*.
 3. **Inspect** the result, element values, per-element **tolerances** at the extraction frequency, the drawn schematic, and the generated netlist in the **Design & Schematic** view.
 4. **Compare** the loaded data (grey) against the extracted model (blue) in the **Plot** view (up to four traces, magnitude and phase).
 5. **Export** the netlist. *Export Ngspice* writes a `.spice` file and *Export VACASK* writes an `.inc` file. The `.SUBCKT` is named after the file, so a testbench that instantiates it resolves the include.
 
 > [!TIP]
 > The **Help** button in the top bar opens a full in-app guide to every control.
+
+### Passivity and the passivity ceiling
+
+A macromodel is **passive** when the largest singular value of its S-matrix, sigma_max, stays at or below 1 at every frequency. That is the same statement as "it can never deliver more power than it absorbs". A non-passive model is not merely inaccurate: a transient run can feed on the excess energy and grow without bound, so the simulation diverges or refuses to converge even though its AC response looked fine.
+
+Making a model passive is not free. A vector fit typically violates passivity *outside* the band it was fitted to, and pushing it back below 1 there costs accuracy inside the band. On the bundled `bpf_ihp-sg13g2.s2p` at order 13, the raw fit reaches sigma_max = 1.016 with an RMS error of 2.9e-5, and enforcing passivity takes it to 1.000 at 1.5e-3, which is 50x worse.
+
+The **Passivity ceiling** is how far the enforcement has to go. It is the sigma_max the perturbation works towards, so it buys accuracy back in exchange for a bounded, known violation:
+
+- **Enforce passivity ticked** (the default): the fit is perturbed until it reaches the ceiling. At `1.00` that is strict passivity, exactly what the tool did before the field existed. Raise it to stop short.
+- **Unticked**: nothing is enforced and the raw fit is exported as it is. The ceiling field greys out at `1.00`, since nothing is aiming at it, and sigma_max is still measured and reported so you can see what you are shipping.
+
+A ceiling above what the fit already measures leaves the model untouched rather than *adding* gain to reach it. On `wpd_ihp-sg13g2.s3p` at order 6, where the raw fit sits at 1.083:
+
+| Target | resulting sigma_max | RMS error | vs. the raw fit |
+| --- | --- | --- | --- |
+| not enforced | 1.0826 | 8.7e-04 | the fit itself |
+| `1.00` (strict) | 0.9999 | 2.6e-03 | 2.9x worse |
+| `1.05` | 1.0499 | 1.3e-03 | 1.5x worse |
+| `1.15` | 1.0826 | 8.7e-04 | untouched, already below |
+
+Reasonable ceilings:
+
+| Target | When |
+| --- | --- |
+| `1.00` | transient or long harmonic-balance runs, and anything handed to a colleague |
+| `1.01` to `1.05` | AC or S-parameter sweeps, where a per-cent violation outside your band cannot do anything |
+| up to `1.20` | as a diagnostic while you look at what the fit is doing |
+
+Why those two limits, and what an out-of-range entry does:
+
+- **`1.00` is the floor** because it is the physical criterion itself. A lossless reciprocal structure, an ideal coupler or a lossless line, has sigma_max exactly 1, so a floor below 1 would reject networks that are perfect.
+- **`1.20` is the ceiling** because past roughly 20 % of voltage gain (1.44x in power, +1.6 dB) at the worst frequency there is enough excess energy to grow a transient run without bound. It is also well clear of anything real: across the bundled examples an acceptable fit lands between 1.00 and 1.02, and a broken one jumps straight to 2.18 or 5.24. Nothing useful lives in between.
+- **A number outside the range is replaced by the limit it overshot.** Type `9.9` and the field shows `1.20`, type `0.5` and it shows `1.00`. That is deliberate: the field teaches you the limits without anyone reading this paragraph first. Text that is not a number at all has no limit to snap to, so it falls back to `1.00`. The CLI is stricter and refuses the run outright rather than substituting, since a batch script silently getting a different ceiling than it asked for is worse than a visible error.
+
+**A ceiling is not always reachable.** The perturbation only moves the model's residues, so a violation band that runs to infinity, caused by a non-passive constant term, cannot be corrected at any ceiling. The bundled `tline_100um_ihp-sg13g2.s2p` at order 13 is one: it stays at 5.24 whatever you ask for. When that happens the accurate fit is kept rather than a wrecked one, and the result reads *near-passive*. The fix is a lower **Max order**, not a higher ceiling, since order 6 brings the same file to 1.018.
+
+The **Result** panel reports the measured sigma_max next to the ceiling it was judged against, green inside the ceiling and red outside it, so a raised ceiling never reads as a clean pass without the number that earned it. When there is a violation, the message line under the panel (and the CLI's `note:` line) names the frequency of the peak. Read it before you decide what to do:
+
+- **At 0 Hz or inside your band**: a real hazard. Enforce, or raise the order.
+- **Far above the top data point**, at 10^4 times it or so: that is the model's high-frequency asymptote, not a resonance. It usually means the fit order is too high for the file. The bundled `tline_100um_ihp-sg13g2.s2p` reaches sigma_max = 5.24 at order 13 but only 1.018 at order 6, for the same reason.
 
 ### Run a testbench (simulate)
 
@@ -221,6 +262,7 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `--structure KEY` | structure | structure key (see `list-structures`) |
 | `--order N` | universal | maximum model order (poles) |
 | `--passive` / `--no-passive` | universal | enforce passivity (default on) |
+| `--passivity-ceiling SIGMA` | universal | sigma_max the enforcement works towards, `1.0` to `1.2`, needs `--passive` (default `1.0`) |
 | `--fext FREQ` | structure | extraction frequency, e.g. `7GHz` |
 | `--stages N` | structure | RLGC ladder cells (transmission line) |
 | `--iso-r` / `--no-iso-r` | structure | Wilkinson isolation R or branch-line arm loss |
@@ -244,6 +286,9 @@ snp2le -b convert coupler.s4p --mode universal --order 12 -o coupler.spice
 # structure extraction at 7 GHz, both dialects, print values and tolerances
 snp2le -b convert ind.s2p --mode structure --structure inductor-pi \
     --fext 7GHz --format both --values --tolerances
+
+# enforce passivity only down to 1.05, keeping accuracy that strict enforcement would cost
+snp2le -b convert bpf.s2p --mode universal --order 13 --passivity-ceiling 1.05
 
 # convert the BPF, run the 2-port Xschem testbench, and show data vs model vs sim plots
 snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \
