@@ -37,7 +37,13 @@ def _coupled_groups(ir):
     for a, b, _ in pairs:
         parent[find(a)] = find(b)
     members = {}
-    for n in coupled:
+    # sorted(), not the raw set: iterating a set of names hands the group its
+    # members in an order that follows the strings' hashes, which PYTHONHASHSEED
+    # varies per process.  That order becomes the row order of Lm and so the
+    # accumulation order of the mutual-inductance stamp, which moved the balun's
+    # S-parameters at the 1e-16 level between runs of identical code.  Sorting
+    # makes a conversion reproducible across processes.
+    for n in sorted(coupled):
         members.setdefault(find(n), []).append(n)
     kpair = {frozenset((a, b)): k for a, b, k in pairs}
 
