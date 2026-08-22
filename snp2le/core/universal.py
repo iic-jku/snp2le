@@ -110,12 +110,12 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
     res = FitResult()
     ceiling = res.passivity_ceiling = effective_ceiling(enforce_passivity,
                                                         passivity_ceiling)
-    touched = False
+    attempted = False
     with contextlib.redirect_stdout(_io.StringIO()), \
             contextlib.redirect_stderr(_io.StringIO()):
         vf = _auto_fit(net, max_order)
         if enforce_passivity:
-            vf, msgs, touched = _enforce_passivity(vf, net, ceiling)
+            vf, msgs, attempted = _enforce_passivity(vf, net, ceiling)
             res.messages.extend(msgs)
         res.sigma_max, res.sigma_max_freq = max_singular_value(vf)
 
@@ -133,7 +133,7 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
         # when it draws the line (widgets.with_symbols).
         where = (f"sigma_max {res.sigma_max:.3f} at "
                  f"{format_eng(res.sigma_max_freq, 'Hz')}")
-        if enforce_passivity and not touched:
+        if enforce_passivity and not attempted:
             # The ceiling was never binding.  Say so, or the reading is "I asked for
             # 1.20 and got 1.019", when the answer is that nothing needed correcting.
             res.messages.append(
@@ -223,15 +223,18 @@ def _enforce_passivity(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT):
 
     Strategy adapted from the COBRA project (https://github.com/DI-PASSIONATE/COBRA).
 
-    Returns (vector_fitting, messages, touched), where `touched` is False when the fit
-    already complied and was handed back untouched.  The caller reports that case
-    differently, because "nothing was done" is the answer to "why did my ceiling of 1.20
-    leave the model at 1.019".
+    Returns (vector_fitting, messages, attempted).  `attempted` is False only when the
+    fit already sat below the ceiling and was handed straight back, and it is True on
+    every path that ran the perturbation, including the near-passive one that ran it and
+    kept the original anyway.  The caller reports the False case differently, because
+    "nothing needed doing" is the answer to "why did my ceiling of 1.20 leave the model
+    at 1.019", and the near-passive case must not borrow that wording: there the ceiling
+    was missed, not unneeded.
     """
     import copy
     msgs = []
     if _meets_ceiling(vf, None, ceiling):
-        return vf, msgs, False
+        return vf, msgs, False   # nothing to do
 
     best = [None]                                  # [(rms, vf)] best usable candidate
     at = "" if ceiling <= PASSIVITY_CEILING_MIN else f" at {ceiling:.2f}"

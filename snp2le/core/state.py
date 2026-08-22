@@ -22,7 +22,7 @@ class ConverterState:
     # Largest singular value the enforced model may keep.  1.0 is strict passivity, a
     # higher ceiling trades a bounded violation for accuracy.  It is what the enforcement
     # works towards, so it only takes effect with enforce_passivity=True.  See
-    # universal.PASSIVITY_TARGET_* for the allowed range.
+    # universal.PASSIVITY_CEILING_* for the allowed range.
     passivity_ceiling: float = 1.0
     source_path: str = ""                 # last loaded .sNp (for save/restore)
 
@@ -51,7 +51,7 @@ class Results:
     passive: bool = False                 # sigma_max <= passivity_ceiling
     sigma_max: float = float("nan")       # largest singular value of the model S-matrix
     sigma_max_freq: float = float("nan")  # where that peak sits [Hz]
-    passivity_ceiling: float = 1.0         # the ceiling `passive` was judged against
+    passivity_ceiling: float = 1.0        # the ceiling `passive` was judged against
     dc: object = None                     # DCHealth: DC operating-point check (universal mode)
     rms_error: float = float("nan")
     metrics: dict = field(default_factory=dict)

@@ -173,9 +173,10 @@ class TopBar(QtWidgets.QWidget):
 
         self.passive = QtWidgets.QCheckBox("Enforce passivity"); self.passive.setChecked(True)
         self.passive.setToolTip(
-            "Perturb the fit until its worst singular value reaches the Passivity\n"
-            "ceiling, so a transient run cannot draw energy out of the model. It costs\n"
-            "fit accuracy. Untick to export the raw fit untouched, whatever it measures.")
+            "Perturb the fit until its worst singular value is at or below the\n"
+            "Passivity ceiling, so a transient run cannot draw energy out of the model.\n"
+            "It costs fit accuracy. Untick to export the raw fit untouched, whatever it\n"
+            "measures.")
 
         # Passivity ceiling: the sigma_max the perturbation works towards.  It only means
         # something while enforcement is running, so the field is greyed and pinned to the

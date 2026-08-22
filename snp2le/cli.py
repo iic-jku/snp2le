@@ -133,7 +133,7 @@ def _tail_log(path, header):
 
 def _find_result(sim_data, stem, start):
     """Newest result file freshly written by this run: prefer one named after the testbench,
-    else any data-style file (Ngspice wrdata ceilings vary)."""
+    else any data-style file (Ngspice wrdata targets vary)."""
     if not os.path.isdir(sim_data):
         return None
     named, data = [], []
@@ -195,7 +195,7 @@ def _run_testbench(sch, simulator, show_output, net, timeout):
             os.remove(stale)
         except OSError:
             pass
-    if simulator == "ngspice":                  # wrdata cannot create its ceiling folder
+    if simulator == "ngspice":                  # wrdata cannot create its target folder
         os.makedirs(sim_data_dir(), exist_ok=True)
 
     env = os.environ.copy()
