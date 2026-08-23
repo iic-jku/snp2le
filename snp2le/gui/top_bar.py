@@ -281,14 +281,20 @@ class TopBar(QtWidgets.QWidget):
         self.run_sim = QtWidgets.QPushButton("Run Simulation")
         self.run_sim.setFixedHeight(30)
         # when off, the run suppresses the simulator's interactive console + plot windows
-        self.sim_output = QtWidgets.QCheckBox("Show output")
+        # two lines, like 'Enforce passivity', so the bar stays narrow and the two tick
+        # boxes are the same shape (which is what puts them on the same line)
+        self.sim_output = QtWidgets.QCheckBox("Show\noutput")
         self.sim_output.setChecked(False)
         self.sim_output.setToolTip(
             "Show the simulator's console and plot windows during the run.\n"
             "Uncheck to run quietly (results are still imported into the plot).")
-        # 'successful!' / 'failed!' shown below the checkbox after a run
+        # 'successful!' / 'failed!' shown after a run, in the caption slot above the box
         self.sim_status = QtWidgets.QLabel("")
         self.sim_status.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignBottom)
+        # a field caption, so its slot is exactly as tall as every other caption in the
+        # bar and the tick box below it lines up with 'Enforce passivity' at any DPI.
+        # set_sim_status only overrides colour and weight, never the size.
+        self.sim_status.setProperty("class", "fieldLabel")
         if not xschem.available():
             tip = "Xschem was not found on PATH"
             self.sim_output.setEnabled(False); self.sim_output.setToolTip(tip)
@@ -315,19 +321,13 @@ class TopBar(QtWidgets.QWidget):
         lay.addLayout(self._labeled("", self.load_sch))
         lay.addLayout(self._labeled("Simulator", self.simulator))
         lay.addLayout(self._labeled("", self.run_sim))
-        # 'Show output' sits at the widget row (level with 'Enforce passivity').
-        # The status text drops below it, bottom-aligned with the buttons' bottom edge.
-        # An inner box one button tall holds both: checkbox at top, status at bottom.
+        # 'Show output' is built exactly like 'Enforce passivity' (caption slot, then the
+        # two-line box), which is what puts the two tick boxes on the same line.  The run
+        # status takes the caption slot, empty otherwise: below the box it would have made
+        # the whole bar a line taller, and the colour already reads as a status.
         sim_box = QtWidgets.QVBoxLayout(); sim_box.setSpacing(2)
-        sim_band = QtWidgets.QLabel(""); sim_band.setProperty("class", "fieldLabel")
-        sim_inner = QtWidgets.QWidget(); sim_inner.setFixedHeight(30)
-        il = QtWidgets.QVBoxLayout(sim_inner)
-        il.setContentsMargins(0, 0, 0, 0); il.setSpacing(0)
-        il.addWidget(self.sim_output, 0, QtCore.Qt.AlignTop)
-        il.addStretch(1)
-        il.addWidget(self.sim_status, 0, QtCore.Qt.AlignBottom)
-        sim_box.addWidget(sim_band)
-        sim_box.addWidget(sim_inner)
+        sim_box.addWidget(self.sim_status)
+        sim_box.addWidget(self.sim_output)
         sim_box.addStretch(1)
         lay.addLayout(sim_box)
         lay.addLayout(self._labeled("", self.reset))
@@ -393,7 +393,7 @@ class TopBar(QtWidgets.QWidget):
         green (ok) or red, the button white + bold like the primary buttons."""
         self.sim_status.setText(text)
         self.sim_status.setStyleSheet(
-            f"color:{JKU_GREEN if ok else JKU_RED}; font-size:11px; font-weight:700;")
+            f"color:{JKU_GREEN if ok else JKU_RED}; font-weight:700;")
         self.run_sim.setObjectName("runOk" if ok else "runFail")
         self._repolish(self.run_sim)
 
@@ -401,7 +401,7 @@ class TopBar(QtWidgets.QWidget):
         """Show a neutral in-progress status (e.g. 'running...') in grey, leaving the
         button at its default colour. It doubles as the Stop button while a run is on."""
         self.sim_status.setText(text)
-        self.sim_status.setStyleSheet(f"color:{JKU_GRAY}; font-size:11px; font-weight:600;")
+        self.sim_status.setStyleSheet(f"color:{JKU_GRAY}; font-weight:600;")
         self.run_sim.setObjectName("")
         self._repolish(self.run_sim)
 
