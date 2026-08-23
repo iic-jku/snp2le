@@ -137,10 +137,23 @@ def sigma_text(res) -> str:
     return f"{sigma:.3f} / {getattr(res, 'passivity_ceiling', 1.0):.2f}"
 
 
+# Space above a section heading in the Conversion panel, its own top margin.  The
+# panel layout's spacing sits under it, so the visible gap from the block above is
+# this plus that.  See design_view._ROW_GAP for the other half of the rhythm.
+_HEADING_TOP_GAP = 10
+
+
 def section_title(text: str) -> QtWidgets.QWidget:
+    """A section heading for the Conversion panel: a blue tick and a label.
+
+    The margins are asymmetric on purpose.  A heading belongs close to the rows
+    it introduces and well clear of the block above it, so the panel reads as
+    separate sections rather than one long column.  The bottom margin is the
+    tight side and stays that way.
+    """
     w = QtWidgets.QWidget()
     lay = QtWidgets.QHBoxLayout(w)
-    lay.setContentsMargins(0, 5, 0, 2); lay.setSpacing(8)
+    lay.setContentsMargins(0, _HEADING_TOP_GAP, 0, 2); lay.setSpacing(8)
     tick = QtWidgets.QFrame(); tick.setFixedSize(3, 14)
     tick.setStyleSheet(f"background:{JKU_BLUE};border-radius:1px;")
     lab = QtWidgets.QLabel(text); lab.setProperty("class", "sectionTitle")
