@@ -27,8 +27,8 @@ Institute for Integrated Circuits and Quantum Computing (IICQC), Johannes Kepler
 
 It offers two conversion philosophies:
 
-- **Universal (any N-port).** Vector-fits the S-parameters with [scikit-rf](https://scikit-rf.org) `VectorFitting`, optionally enforces passivity, and synthesises a passive macromodel of R, C and controlled sources. It works for any structure and port count, and is electrically exact but not physically interpretable.
-- **Structure-specific.** Fits a known physical topology, so every component maps to reality (series L, shunt C, coupling k, and so on) at a chosen **extraction frequency**. See [Available structures](https://github.com/iic-jku/snp2le#available-structures).
+- **Universal (any N-port).** Vector-fits the S-parameters with [scikit-rf](https://scikit-rf.org) `VectorFitting`, optionally enforces passivity, and synthesises a passive macromodel of R, C and controlled sources. It works for any structure and port count, and is electrically exact but not physically interpretable. Its resistors are emitted noiseless (`noisy=0`, understood by both Ngspice and VACASK): they exist to reproduce the fitted response, not to model a device, and charging thermal noise against them would report noise that tracks the fit order instead of the structure. A noise budget through a universal model must account for the structure's real loss separately.
+- **Structure-specific.** Fits a known physical topology, so every component maps to reality (series L, shunt C, coupling k, and so on) at a chosen **extraction frequency**. Its resistors model real loss (a Wilkinson's isolation resistor, a coil's conductor loss), so they keep their thermal noise. See [Available structures](https://github.com/iic-jku/snp2le#available-structures).
 
 Either mode fits the file's full frequency range by default, or a **fit range** of your choosing (e.g. only 110 GHz to 170 GHz of a 80 GHz to 240 GHz EM sweep), so the model order is spent on the band the block actually operates in.
 
@@ -217,6 +217,7 @@ The **Result** panel reports the measured sigma_max next to the ceiling it was j
 
 - **At 0 Hz or inside your band**: a real hazard. Enforce, or raise the order.
 - **Far above the top data point**, at 10^4 times it or so: that is the model's high-frequency asymptote, not a resonance. It usually means the fit order is too high for the file. The bundled `tline_100um_ihp-sg13g2.s2p` reaches sigma_max = 5.24 at order 13 but only 1.018 at order 6, for the same reason.
+
 ### Watching a conversion
 
 Every conversion runs on a worker thread, so the window stays usable while it
@@ -242,7 +243,7 @@ Two figures are deliberately absent:
 - **No result summary on the completion line.** The pole count and RMS error are
   in the Result rows a few lines below it.
 
-Three more details worth knowing:
+More details worth knowing:
 
 - Nothing is hidden once a conversion has started: dragging a spin box moves the
   bar and rewrites two labels, where showing and hiding them would strobe.
@@ -320,7 +321,7 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `--iso-r` / `--no-iso-r` | structure | Wilkinson isolation R or branch-line arm loss |
 | `--format ngspice\|vacask\|both` | both | output dialect(s). VACASK writes `.inc` |
 | `-o, --output PATH` | both | output path (single input), names the `.SUBCKT` |
-| `--values` | structure | print the extracted element values |
+| `--values` | both | print the element values (extracted, or the synthesised network's) |
 | `--tolerances` | structure | print per-element tolerances at `f_ext` |
 | `--simulate SCH` | sim | run an Xschem testbench after converting |
 | `--simulator ngspice\|vacask` | sim | simulator for `--simulate` (default: auto from `.sch` name) |
@@ -376,7 +377,7 @@ New structures plug in by subclassing `snp2le.core.structures.base.Structure` an
 ```
 @misc{2026_snp2le,
   author = {Dorrer, Simon},
-  month = july,
+  month = jul,
   year = {2026},
   title = {{GitHub Repository for snp2le: A S-Parameter To Lumped Element Netlist Converter}},
   url = {https://github.com/iic-jku/snp2le},

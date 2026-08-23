@@ -25,7 +25,10 @@ install satisfies the requirement too, since the metapackage depends on
 The flow is always **load, `engine.convert(state, net)`, `Results`, views**:
 
 1. `io.load_touchstone` reads the `.sNp` (scikit-rf); `engine.convert` then drops
-   any 0 Hz sample through `io.without_dc`.
+   any 0 Hz sample through `io.without_dc` and restricts the data to the requested
+   fit band through `io.restrict_band` (`state.f_min` / `state.f_max`, both optional).
+   Everything downstream, the RMS error, the plots and a testbench run's sweep,
+   refers to the fitted band.
 2. `engine.convert(state, net)` runs the chosen mode and returns a `Results`
    dataclass: the IR, both rendered netlists, the data-vs-model S-parameters,
    element values, tolerances and messages.
@@ -126,6 +129,16 @@ pytest
   by showing it. The rule that the ceiling applies only while enforcing lives in
   `universal.effective_ceiling()` alone, so the GUI, the CLI and the engine cannot
   disagree about it.
+* Resistor thermal noise is keyed on `ir.physical` (`netlist.py`): a universal
+  macromodel's resistors are fit artifacts and are emitted with `noisy=0` in both
+  dialects, while a structure model's resistors are real loss and keep their noise.
+  The reasoning and the measured numbers are in the comment block above
+  `netlist._NOISY_OFF`.
+* The bundled `netlist/` examples are `bpf_ihp-sg13g2.s2p` at `--order 13`
+  (`two_port`), `wpd_ihp-sg13g2.s3p` at `--order 13` (`three_port`) and
+  `blc_ihp-sg13g2.s4p` at `--order 8` (`four_port`), exported with `--format both`.
+  The rendered float tails depend on the BLAS the fit ran on, so a regeneration on
+  another platform can differ in the last digits without anything being wrong.
 * A 0 Hz (DC) sample is dropped automatically, since it breaks the
   Y-/ABCD-parameter extraction and the MNA rebuild.
 * The transmission-line ladder uses 2 L-cells by default (`N_SEGMENTS` in

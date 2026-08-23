@@ -298,7 +298,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     else netlist.render_ngspice(res.ir))
         else:
             text = res.vacask if dialect == "vacask" else res.ngspice
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
         # a file name like 'two-port' is not a legal subckt identifier ('-' is the minus
         # operator in SPICE / Spectre), so both the file and the subcircuit were saved
@@ -808,7 +808,7 @@ class MainWindow(QtWidgets.QMainWindow):
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, "Save conversion settings", "snp2le.json", "JSON (*.json)")
         if path:
-            with open(path, "w", encoding="utf-8") as fh:
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(self.state.to_json())
 
     def on_load_design(self):

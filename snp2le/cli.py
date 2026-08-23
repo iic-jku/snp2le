@@ -440,7 +440,7 @@ def cmd_convert(args):
             try:
                 parent = os.path.dirname(os.path.abspath(out))
                 os.makedirs(parent, exist_ok=True)
-                with open(out, "w", encoding="utf-8") as fh:
+                with open(out, "w", encoding="utf-8", newline="\n") as fh:
                     fh.write(text)
             except OSError as exc:
                 print(f"[FAIL] {src} -> {out}: {exc}", file=sys.stderr)

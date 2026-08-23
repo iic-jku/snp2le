@@ -154,7 +154,13 @@ shows a note instead.</li>
 <li><b>Netlist</b>: the generated text for both dialects, with export. <b>Ngspice</b>
 (Berkeley SPICE3, <tt>.spice</tt>) and <b>VACASK</b> (Spectre syntax, <tt>.inc</tt>).
 Transformer coupling is emitted as a builtin <tt>mutual</tt> instance. Device models and
-OSDI loads come from your testbench, not the exported subcircuit. In VACASK the
+OSDI loads come from your testbench, not the exported subcircuit. A universal macromodel's
+resistors carry <tt>noisy=0</tt> (understood by both simulators): they exist to reproduce
+the fitted response, not to model a device, and charging thermal noise against them would
+report noise that tracks the fit order instead of the structure. The model is therefore
+fully noiseless, so a noise budget must account for the structure's real loss separately.
+A structure model's resistors are real loss (an isolation resistor, a coil's conductor
+loss) and keep their noise. In VACASK the
 subcircuit's ground is node <tt>GND</tt>: Spectre has no implicit node-0 ground the way
 SPICE does, so your testbench must declare <tt>ground&nbsp;GND</tt> (Xschem's spectre
 netlist does this automatically). A subcircuit grounded to a bare <tt>0</tt> would float
