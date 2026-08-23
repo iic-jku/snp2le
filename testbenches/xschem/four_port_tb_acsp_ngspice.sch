@@ -234,7 +234,7 @@ set wr_singlescale
 
 * User Constants
 * f_min / f_max come from ../sim_range.spice (.csparam),
-* auto-synced to the loaded Touchstone by snp2le.
+* auto-synced by snp2le to the band it fitted.
 * edit that file for a standalone run.
 
 * Operating Point Analysis

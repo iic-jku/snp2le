@@ -30,6 +30,8 @@ It offers two conversion philosophies:
 - **Universal (any N-port).** Vector-fits the S-parameters with [scikit-rf](https://scikit-rf.org) `VectorFitting`, optionally enforces passivity, and synthesises a passive macromodel of R, C and controlled sources. It works for any structure and port count, and is electrically exact but not physically interpretable.
 - **Structure-specific.** Fits a known physical topology, so every component maps to reality (series L, shunt C, coupling k, and so on) at a chosen **extraction frequency**. See [Available structures](https://github.com/iic-jku/snp2le#available-structures).
 
+Either mode fits the file's full frequency range by default, or a **fit range** of your choosing (e.g. only 110 GHz to 170 GHz of a 80 GHz to 240 GHz EM sweep), so the model order is spent on the band the block actually operates in.
+
 A single dialect-agnostic **Circuit IR** drives both netlist backends and the on-screen schematic, so the outputs always agree. The code is split into a pure-Python, Qt-free `snp2le.core` (fully unit-tested) and a thin `snp2le.gui` on PySide6-Essentials, both driven by one entry point, `engine.convert(state, net)`.
 
 A fit of a large N-port runs for seconds to minutes, so it runs on a worker thread and reports as it goes: the GUI shows what the fit is doing, how long it has been running and a progress bar, then leaves the outcome on screen when it finishes, and the CLI draws the same progress on a terminal. See [Watching a conversion](https://github.com/iic-jku/snp2le#watching-a-conversion).
@@ -167,9 +169,10 @@ A bundled example is preloaded on first run. More live in `snp2le/examples/`.
 
 1. **Load** a Touchstone `.sNp` file from the top bar. The header shows the port count and frequency range.
 2. **Choose a mode.** Universal (set *Max order*, *Enforce passivity* and the *Passivity ceiling* it works towards) or Structure-specific (pick a structure and set the *extraction frequency*). Some structures expose an extra option such as *Stages*, *Isolation R* or *Resistive loss*.
-3. **Inspect** the result, element values, per-element **tolerances** at the extraction frequency, the drawn schematic, and the generated netlist in the **Design & Schematic** view.
-4. **Compare** the loaded data (grey) against the extracted model (blue) in the **Plot** view (up to four traces, magnitude and phase).
-5. **Export** the netlist. *Export Ngspice* writes a `.spice` file and *Export VACASK* writes an `.inc` file. The `.SUBCKT` is named after the file, so a testbench that instantiates it resolves the include.
+3. **Restrict the fit range** (optional, both modes). The *Fit range (GHz)* fields start at the loaded file's own span, so they always name the band being fitted. Enter two plain numbers in GHz (e.g. `110` and `170`) to fit only a sub-band. The *Result* panel shows the band actually fitted, and the RMS error, the tolerances, the plots and a testbench run's sweep all follow it. An edge outside the data is clamped to the data and reported, an empty or inverted band is refused.
+4. **Inspect** the result, element values, per-element **tolerances** at the extraction frequency, the drawn schematic, and the generated netlist in the **Design & Schematic** view.
+5. **Compare** the loaded data (grey) against the extracted model (blue) in the **Plot** view (up to four traces, magnitude and phase).
+6. **Export** the netlist. *Export Ngspice* writes a `.spice` file and *Export VACASK* writes an `.inc` file. The `.SUBCKT` is named after the file, so a testbench that instantiates it resolves the include.
 
 > [!TIP]
 > The **Help** button in the top bar opens a full in-app guide to every control.
@@ -311,6 +314,8 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `--passive` / `--no-passive` | universal | enforce passivity (default on) |
 | `--passivity-ceiling SIGMA` | universal | sigma_max the enforcement works towards, `1.0` to `1.2`, needs `--passive` (default `1.0`) |
 | `--fext FREQ` | structure | extraction frequency, e.g. `7GHz` |
+| `--fmin FREQ` | both | lowest frequency used for the fit (default: the file's first point) |
+| `--fmax FREQ` | both | highest frequency used for the fit (default: the file's last point) |
 | `--stages N` | structure | RLGC ladder cells (transmission line) |
 | `--iso-r` / `--no-iso-r` | structure | Wilkinson isolation R or branch-line arm loss |
 | `--format ngspice\|vacask\|both` | both | output dialect(s). VACASK writes `.inc` |
@@ -334,6 +339,9 @@ snp2le -b convert coupler.s4p --mode universal --order 12 -o coupler.spice
 # structure extraction at 7 GHz, both dialects, print values and tolerances
 snp2le -b convert ind.s2p --mode structure --structure inductor-pi \
     --fext 7GHz --format both --values --tolerances
+
+# fit only the 110 to 170 GHz sub-band of a wider EM sweep
+snp2le -b convert core.s7p --mode universal --order 24 --fmin 110GHz --fmax 170GHz
 
 # enforce passivity only down to 1.05, keeping accuracy that strict enforcement would cost
 snp2le -b convert bpf.s2p --mode universal --order 13 --passivity-ceiling 1.05

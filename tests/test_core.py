@@ -336,6 +336,91 @@ def test_structure_resistors_keep_their_noise():
             assert "noisy" not in text               # real loss keeps its thermal noise
 
 
+# ---------------------------------------------------------------- fit range
+def test_fit_range_restricts_the_data():
+    """A sub-band fit sees only the points inside it, in both modes, and everything
+    downstream (plot payload, model response) is on that same grid."""
+    net = inductor_2port()                       # 0.1 to 20 GHz, 101 points
+    band = ConverterState(mode="universal", max_order=8, f_min=5e9, f_max=10e9)
+    res = engine.convert(band, net)
+    assert res.ok, res.error
+    assert res.band_limited
+    assert res.freq[0] >= 5e9 and res.freq[-1] <= 10e9
+    assert len(res.freq) < len(net.f)
+    assert res.data_s.shape == (len(res.freq), 2, 2)
+    assert res.model_s.shape == (len(res.freq), 2, 2)
+    assert any("fit range" in m for m in res.messages)
+
+    st = ConverterState(mode="structure", structure_key="inductor-pi",
+                        f_extract=7e9, f_min=5e9, f_max=10e9)
+    res = engine.convert(st, net)
+    assert res.ok, res.error
+    assert res.band_limited and res.freq[0] >= 5e9 and res.freq[-1] <= 10e9
+
+
+def test_full_range_is_the_default():
+    """No band given: identical result to before the option existed."""
+    net = inductor_2port()
+    res = engine.convert(ConverterState(mode="universal", max_order=8), net)
+    assert res.ok and not res.band_limited
+    assert len(res.freq) == len(net.f)
+    assert not any("fit range" in m for m in res.messages)
+
+
+def test_fit_range_open_on_one_side():
+    net = inductor_2port()
+    lo = engine.convert(ConverterState(mode="universal", max_order=6, f_min=10e9), net)
+    assert lo.ok and lo.freq[0] >= 10e9 and lo.freq[-1] == net.f[-1]
+    hi = engine.convert(ConverterState(mode="universal", max_order=6, f_max=10e9), net)
+    assert hi.ok and hi.freq[0] == net.f[0] and hi.freq[-1] <= 10e9
+
+
+def test_fit_range_edges_outside_the_data_are_clamped():
+    """A band wider than the file is not an error: it is clamped to the data and noted."""
+    net = inductor_2port()
+    res = engine.convert(ConverterState(mode="universal", max_order=6,
+                                        f_min=1e6, f_max=100e9), net)
+    assert res.ok and not res.band_limited
+    assert len(res.freq) == len(net.f)
+    assert any("below the data" in m for m in res.messages)
+    assert any("above the data" in m for m in res.messages)
+
+
+def test_invalid_fit_range_is_reported():
+    """Inverted, off-the-data and too-thin bands fail with a readable message rather
+    than a model fitted to nonsense."""
+    net = inductor_2port()
+    inverted = engine.convert(
+        ConverterState(mode="universal", f_min=10e9, f_max=5e9), net)
+    assert not inverted.ok and "empty" in inverted.error
+
+    outside = engine.convert(ConverterState(mode="universal", f_min=200e9), net)
+    assert not outside.ok and "outside the data" in outside.error
+
+    thin = engine.convert(
+        ConverterState(mode="universal", f_min=10e9, f_max=10.05e9), net)
+    assert not thin.ok and "at least" in thin.error
+
+
+def test_fit_range_survives_a_design_round_trip():
+    st = ConverterState(mode="universal", f_min=110e9, f_max=170e9)
+    back = ConverterState.from_json(st.to_json())
+    assert (back.f_min, back.f_max) == (110e9, 170e9)
+    assert ConverterState.from_json('{"mode": "universal"}').f_min is None
+
+
+def test_restrict_band_keeps_the_network_intact():
+    """The cropped network is a real skrf Network, not a view: same ports and z0."""
+    net = inductor_2port()
+    out, notes = io.restrict_band(net, 5e9, 10e9)
+    assert out.nports == net.nports
+    assert float(np.real(out.z0.flatten()[0])) == float(np.real(net.z0.flatten()[0]))
+    assert len(out.f) == int(np.count_nonzero((net.f >= 5e9) & (net.f <= 10e9)))
+    assert notes and "fit range" in notes[0]
+    same, notes = io.restrict_band(net, None, None)
+    assert same is net and notes == []
+
+
 # ---------------------------------------------------------------- edge cases
 def test_dc_point_is_dropped():
     net = inductor_2port(with_dc=True)

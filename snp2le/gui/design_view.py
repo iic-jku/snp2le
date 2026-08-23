@@ -71,6 +71,11 @@ class DesignView(QtWidgets.QWidget):
         left.addWidget(section_title("Result"))
         # label_w fits the widest label ("ext. frequency") so the values stay aligned
         self.mode_out = OutputField("mode", "\u2014", label_w=100, equals=False)
+        self.band_out = OutputField("fit range", "\u2014", label_w=100, equals=False)
+        self.band_out.setToolTip(
+            "Frequency band the model was fitted to. It is the loaded file's full range "
+            "unless a Fit range is set in the top bar. The RMS error, the tolerances and "
+            "the plots all refer to this band.")
         self.rms_out = OutputField("RMS error", "\u2014", label_w=100, equals=False)
         self.pass_out = OutputField("passivity", "\u2014", label_w=100, equals=False)
         self.sigma_out = OutputField("sigma_max", "\u2014", label_w=100, equals=False)
@@ -87,7 +92,7 @@ class DesignView(QtWidgets.QWidget):
             "Untick 'Enforce passivity' in the top bar to raise the bound and keep the "
             "more accurate fit.")
         self.order_out = OutputField("order / Q", "\u2014", label_w=100, equals=False)
-        for i, w in enumerate((self.mode_out, self.rms_out, self.pass_out,
+        for i, w in enumerate((self.mode_out, self.band_out, self.rms_out, self.pass_out,
                                self.sigma_out, self.order_out)):
             if i:
                 left.addSpacing(_ROW_GAP)      # air between the rows, not under the heading
@@ -156,6 +161,18 @@ class DesignView(QtWidgets.QWidget):
                 w.deleteLater()
 
     @staticmethod
+    def _band_text(f):
+        """The fitted band as one compact string, e.g. '144\u2013168 GHz'.
+
+        The unit prefix is printed once when both edges share it."""
+        if f is None or len(f) == 0:
+            return "\u2014"
+        lo, hi = format_eng(float(f[0]), "Hz"), format_eng(float(f[-1]), "Hz")
+        if lo.partition(" ")[2] == hi.partition(" ")[2]:
+            lo = lo.partition(" ")[0]
+        return f"{lo}\u2013{hi}"
+
+    @staticmethod
     def _tol_color(pct):
         if pct < 2.0:
             return STATUS_GREEN            # model fits this value at f_ext
@@ -174,6 +191,12 @@ class DesignView(QtWidgets.QWidget):
     def update_results(self, res):
         self.mode_out.set_value("universal" if res.mode == "universal"
                                 else "structure")
+        self.band_out.set_value(self._band_text(res.freq) if res.ok else "\u2014")
+        # a sub-band is a deliberate choice, so mark it rather than letting it read
+        # as the file's own range
+        self.band_out.value.setStyleSheet(
+            f"color:{STATUS_AMBER};font-weight:600;"
+            if (res.ok and res.band_limited) else "")
         if res.rms_error == res.rms_error:               # not NaN
             self.rms_out.set_value(f"{res.rms_error:.2e}")
         else:

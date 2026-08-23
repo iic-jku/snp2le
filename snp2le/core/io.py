@@ -64,6 +64,78 @@ def without_dc(net: skrf.Network) -> skrf.Network:
     return net[keep]
 
 
+# A band with fewer samples than this cannot support a meaningful fit, so it is
+# rejected with a message instead of producing a model built on 2 points.
+_MIN_BAND_POINTS = 4
+
+
+def _band_text(lo, hi) -> str:
+    """The requested band as a phrase, e.g. "110 GHz to 170 GHz", "from 110 GHz",
+    "up to 170 GHz". An open side is named as open rather than filled in with a
+    number the user never asked for."""
+    from .units import format_eng
+    if lo is not None and hi is not None:
+        return f"{format_eng(lo, 'Hz')} to {format_eng(hi, 'Hz')}"
+    if lo is not None:
+        return f"from {format_eng(lo, 'Hz')}"
+    return f"up to {format_eng(hi, 'Hz')}"
+
+
+def restrict_band(net, f_min=None, f_max=None):
+    """Return (`net` cropped to [f_min, f_max] in Hz, notes).
+
+    `None` (or 0) on either side means "open on that side", so the default is the
+    full file. The band is validated against the data: a requested edge that lies
+    outside the file is clamped to it and reported in `notes`, an empty or inverted
+    band raises ValueError so the caller can show the reason instead of fitting a
+    nonsensical subset. `notes` is a list of strings for the UI and the log.
+    """
+    from .units import format_eng
+    notes = []
+    if net is None or len(net.f) == 0:
+        return net, notes
+    lo = None if f_min in (None, 0) else float(f_min)
+    hi = None if f_max in (None, 0) else float(f_max)
+    if lo is None and hi is None:
+        return net, notes
+
+    f = np.asarray(net.f, dtype=float)
+    d0, d1 = float(f[0]), float(f[-1])
+    if lo is not None and hi is not None and lo >= hi:
+        raise ValueError(f"fit range is empty: f_min ({format_eng(lo, 'Hz')}) must be "
+                         f"below f_max ({format_eng(hi, 'Hz')})")
+    if (lo is not None and lo > d1) or (hi is not None and hi < d0):
+        raise ValueError(
+            f"requested fit range {_band_text(lo, hi)} lies outside the data "
+            f"({format_eng(d0, 'Hz')} to {format_eng(d1, 'Hz')})")
+    if lo is not None and lo < d0:
+        notes.append(f"f_min {format_eng(lo, 'Hz')} is below the data; "
+                     f"fitting from {format_eng(d0, 'Hz')}")
+    if hi is not None and hi > d1:
+        notes.append(f"f_max {format_eng(hi, 'Hz')} is above the data; "
+                     f"fitting up to {format_eng(d1, 'Hz')}")
+
+    keep = np.ones(f.shape, dtype=bool)
+    if lo is not None:
+        keep &= f >= lo
+    if hi is not None:
+        keep &= f <= hi
+    n_keep = int(np.count_nonzero(keep))
+    if n_keep < _MIN_BAND_POINTS:
+        raise ValueError(
+            f"only {n_keep} data point(s) in the requested fit range "
+            f"({_band_text(lo, hi)}), at least "
+            f"{_MIN_BAND_POINTS} are needed (the file has {len(f)} points over "
+            f"{format_eng(d0, 'Hz')} to {format_eng(d1, 'Hz')})")
+    if n_keep == len(f):
+        return net, notes
+    out = net[keep]
+    notes.append(f"fit range {format_eng(float(out.f[0]), 'Hz')} to "
+                 f"{format_eng(float(out.f[-1]), 'Hz')} "
+                 f"({n_keep} of {len(f)} points)")
+    return out, notes
+
+
 def load_ngspice_sim(path: str) -> dict:
     """Parse an Ngspice S-parameter table into a plain dict for the plot overlay.
 

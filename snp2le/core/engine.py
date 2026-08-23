@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """engine.py - the conversion pipeline (pure Python, no Qt).
 
-convert(state, net) runs the chosen mode, renders both netlist dialects from the
-resulting CircuitIR, and assembles the data-vs-model S-parameters for the plot
-view.  Both the GUI and the CLI call this one function.
+convert(state, net) restricts the data to the requested fit band (state.f_min /
+state.f_max, both optional), runs the chosen mode, renders both netlist dialects
+from the resulting CircuitIR, and assembles the data-vs-model S-parameters for the
+plot view.  Everything downstream (RMS error, tolerances, plots) therefore refers
+to the fitted band.  Both the GUI and the CLI call this one function.
 
 An optional `progress` callable, `cb(fraction, message)`, is reported to along
 the way.  The weights below are the relative cost of each stage, measured on the
@@ -52,6 +54,14 @@ def convert(state, net, progress=None) -> Results:
     from . import io as _io
     track.enter("prepare")
     net = _io.without_dc(net)            # a 0 Hz sample breaks the extraction math
+    n_file = len(net.f)
+    try:                                 # optional sub-band: fit only what the user asked for
+        net, band_notes = _io.restrict_band(net, state.f_min, state.f_max)
+    except (TypeError, ValueError) as exc:     # invalid band, or a non-number from a design
+        res.ok = False
+        res.error = str(exc)
+        return res
+    res.band_limited = len(net.f) < n_file
 
     res.freq = net.f
     res.n_ports = net.nports
@@ -67,6 +77,7 @@ def convert(state, net, progress=None) -> Results:
         res.error = str(exc)
         return res
 
+    res.messages = list(band_notes) + list(res.messages)   # the band first, it frames the rest
     track.enter("netlist")
     res.ngspice = _nl.render_ngspice(res.ir)
     res.vacask = _nl.render_vacask(res.ir)
@@ -118,8 +129,9 @@ def _convert_structure(state, net, res, track):
                                        state.iso_resistor)
     pos = net.f[net.f > 0]
     if pos.size and (state.f_extract < pos[0] or state.f_extract > pos[-1]):
+        where = "the fit range" if res.band_limited else "the data"
         res.messages.append(
-            f"ext. frequency {format_eng(state.f_extract, 'Hz')} outside the data; "
+            f"ext. frequency {format_eng(state.f_extract, 'Hz')} outside {where}; "
             f"extracted at {format_eng(metrics.get('f_extract'), 'Hz')}")
     _nl.clamp_ir(ir)                          # one clamped model: netlist == overlay == table
     res.ir = ir

@@ -120,6 +120,10 @@ QTabBar::tab:selected {{ color: {JKU_BLUE}; border-bottom: 2px solid {JKU_BLUE};
 
 /* ---- check / radio ---- */
 QRadioButton, QCheckBox {{ spacing: 6px; }}
+/* The two wrapped tick boxes in the top bar ('Enforce passivity', 'Show output') put
+   their indicator at the top of the box rather than centred on both text lines, so it
+   sits on the same line as the buttons and fields beside it. */
+QCheckBox#wrapCheck::indicator {{ subcontrol-origin: padding; subcontrol-position: top left; }}
 
 /* ---- footer ---- */
 #footer {{ background: #ffffff; border-top: 1px solid {PANEL_BORDER}; }}

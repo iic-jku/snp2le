@@ -10,6 +10,9 @@
     snp2le -b convert ind.s2p --mode structure --structure inductor-pi \\
         --fext 7GHz --format both --values --tolerances
 
+    # fit only the 110 to 170 GHz sub-band of a wider EM sweep
+    snp2le -b convert core.s7p --mode universal --order 24 --fmin 110GHz --fmax 170GHz
+
     # enforce passivity only down to 1.05, keeping accuracy strict enforcement would cost
     snp2le -b convert bpf.s2p --mode universal --order 13 --passivity-ceiling 1.05
 
@@ -216,14 +219,15 @@ def _find_result(sim_data, stem, start):
     return max(pool)[1] if pool else None
 
 
-def _run_testbench(sch, simulator, show_output, net, timeout):
+def _run_testbench(sch, simulator, show_output, sweep, timeout):
     """Run an Xschem testbench with `simulator` and return the imported result path, or None.
 
-    Both Ngspice and VACASK are launched detached by xschem (which returns at once with an
-    empty console), so the outcome is read the same way for both: sync the sweep to the loaded
-    data, then poll for the result while the simulator process is alive.  When the process has
-    exited with no result the run failed, and VACASK's captured log and .aborted marker give
-    the specific cause."""
+    `sweep` is the (f_min, f_max) the exported model was fitted over, which is what the
+    testbench sweeps.  Both Ngspice and VACASK are launched detached by xschem (which
+    returns at once with an empty console), so the outcome is read the same way for both:
+    sync the sweep to the fitted band, then poll for the result while the simulator process
+    is alive.  When the process has exited with no result the run failed, and VACASK's
+    captured log and .aborted marker give the specific cause."""
     import subprocess
     import time
     from snp2le.core import xschem
@@ -237,11 +241,11 @@ def _run_testbench(sch, simulator, show_output, net, timeout):
 
     prog, args, cwd = xschem.simulate_command(sch, show_output=show_output, simulator=simulator)
     os.makedirs(os.path.join(cwd, "simulations"), exist_ok=True)
-    if net is not None:                                      # the sweep follows the loaded data
+    if sweep is not None:                                    # the sweep follows the fit
         try:
-            xschem.write_sim_range(cwd, float(net.f[0]), float(net.f[-1]))
+            xschem.write_sim_range(cwd, float(sweep[0]), float(sweep[1]))
         except (TypeError, IndexError, ValueError, OSError) as exc:
-            print(f"[WARN] could not sync the testbench sweep to the loaded data "
+            print(f"[WARN] could not sync the testbench sweep to the fitted band "
                   f"(the last-written sim_range is used instead): {exc}", file=sys.stderr)
 
     # Where the testbench writes its result: read from the testbench itself (Ngspice
@@ -395,7 +399,6 @@ def cmd_convert(args):
     formats = ["ngspice", "vacask"] if args.format == "both" else [args.format]
     rc = 0
     last_res = None
-    last_net = None
     for src in paths:
         try:
             net = io.load_touchstone(src)
@@ -407,7 +410,8 @@ def cmd_convert(args):
             mode=args.mode, structure_key=args.structure,
             max_order=args.order, enforce_passivity=args.passive,
             passivity_ceiling=p_ceiling,
-            f_extract=args.fext, n_segments=args.stages, iso_resistor=args.iso_r)
+            f_extract=args.fext, n_segments=args.stages, iso_resistor=args.iso_r,
+            f_min=args.fmin, f_max=args.fmax)
         bar = _progress_for(args, os.path.basename(src))
         t_start = time.monotonic()
         try:
@@ -420,7 +424,7 @@ def cmd_convert(args):
             print(f"[FAIL] {src}: {res.error}", file=sys.stderr)
             rc = 1
             continue
-        last_res, last_net = res, net
+        last_res = res
         for dialect in formats:
             out = _out_path(src, args.output, dialect, len(paths), len(formats))
             if res.ir is not None:
@@ -479,7 +483,10 @@ def cmd_convert(args):
             print(f"[WARN] simulating with {simr} but only {'/'.join(formats)} was exported; "
                   f"the testbench may not find its DUT netlist (use --format {simr} or both)",
                   file=sys.stderr)
-        result = _run_testbench(args.simulate, simr, args.show_output, last_net, args.timeout)
+        sweep = None                    # the model is only valid where it was fitted
+        if last_res.freq is not None and len(last_res.freq):
+            sweep = (float(last_res.freq[0]), float(last_res.freq[-1]))
+        result = _run_testbench(args.simulate, simr, args.show_output, sweep, args.timeout)
         if result:
             try:
                 sim = io.load_ngspice_sim(result)
@@ -531,6 +538,13 @@ def build_parser():
                    help="extraction frequency, e.g. 7GHz (structure)")
     c.add_argument("--stages", type=_stages, default=2,
                    help="RLGC ladder cells, 1 to 10 (tline-rlgc)")
+    # fit band (both modes): restrict the data the model is fitted to
+    c.add_argument("--fmin", type=_freq, default=None, metavar="FREQ",
+                   help="lowest frequency used for the fit, e.g. 110GHz "
+                        "(default: the file's first point)")
+    c.add_argument("--fmax", type=_freq, default=None, metavar="FREQ",
+                   help="highest frequency used for the fit, e.g. 170GHz "
+                        "(default: the file's last point)")
     c.add_argument("--iso-r", dest="iso_r", action="store_true", default=True,
                    help="include the Wilkinson isolation R or branch-line arm loss")
     c.add_argument("--no-iso-r", dest="iso_r", action="store_false")

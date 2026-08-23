@@ -24,6 +24,8 @@ class ConverterState:
     # works towards, so it only takes effect with enforce_passivity=True.  See
     # universal.PASSIVITY_CEILING_* for the allowed range.
     passivity_ceiling: float = 1.0
+    f_min: float | None = None            # fit band start [Hz], None = the data's first point
+    f_max: float | None = None            # fit band stop  [Hz], None = the data's last point
     source_path: str = ""                 # last loaded .sNp (for save/restore)
 
     def to_json(self) -> str:
@@ -58,6 +60,7 @@ class Results:
     value_rows: list = field(default_factory=list)   # (name, value, unit)
     value_drift: dict = field(default_factory=dict)  # {label: band-drift %} per value
     messages: list = field(default_factory=list)
+    band_limited: bool = False            # the fit used a sub-band of the loaded file
 
     # plotting payload
     freq: object = None                   # data frequencies [Hz]
