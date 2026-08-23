@@ -20,11 +20,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import io as _io
 import contextlib
+import math
+import threading
 import numpy as np
 
 from skrf.vectorFitting import VectorFitting
 
 from .ir import CircuitIR
+from .progress import null_progress
 from . import netlist as _nl
 
 
@@ -68,6 +71,20 @@ _SIGMA_BAND_POINTS = 64
 # and a transient run excites exactly those frequencies.
 _SIGMA_SPAN_DECADES = 4.0
 
+# How this function's own 0..1 progress splits across its phases.  auto_fit
+# dominates, and it dominates harder when passivity enforcement is off, so that
+# boundary moves with the flag instead of leaving a dead zone in the bar.  The
+# sigma_max sweep gets its own slice: it evaluates the model over a few hundred
+# frequencies for every response, so on an N-port it is not a rounding error.
+_END_FIT_PASSIVE = 0.60
+_END_FIT_PLAIN = 0.80
+_END_PASSIVITY = 0.84
+_END_SIGMA = 0.92
+_END_SCORING = 0.96
+_FIT_POLL_S = 0.15              # how often the watcher below samples the fit
+_FIT_ITERS_SCALE = 9.0          # iterations at which the reported fraction hits ~2/3
+_FIT_MAX_REPORTED = 0.97        # a saturating curve must never claim to be finished
+
 
 def clamp_passivity_ceiling(value) -> float:
     """A usable passivity ceiling: a number clamped into
@@ -101,24 +118,36 @@ def effective_ceiling(enforce_passivity: bool,
 
 
 def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
-                  passivity_ceiling: float = PASSIVITY_CEILING_DEFAULT) -> FitResult:
+                  passivity_ceiling: float = PASSIVITY_CEILING_DEFAULT,
+                  progress=None) -> FitResult:
     """Vector-fit `net` and synthesise a lumped-element SPICE subcircuit.
 
     `passivity_ceiling` is the sigma_max the enforcement brings the model down to.  It
     applies only with `enforce_passivity=True`, since it is what the perturbation works
-    towards, see `effective_ceiling`."""
+    towards, see `effective_ceiling`.
+
+    `progress` is an optional `cb(fraction, message)` covering this call alone, from 0
+    (nothing fitted) to 1 (subcircuit parsed and scored)."""
+    report = progress or null_progress
+    end_fit = _END_FIT_PASSIVE if enforce_passivity else _END_FIT_PLAIN
     res = FitResult()
     ceiling = res.passivity_ceiling = effective_ceiling(enforce_passivity,
                                                         passivity_ceiling)
     attempted = False
+    # These rebind sys.stdout/sys.stderr process-wide, not per thread, and the GUI now
+    # runs this on a worker, so the whole application is muted for the duration of the
+    # fit.  See doc/architecture.md, "Notes / limitations.
     with contextlib.redirect_stdout(_io.StringIO()), \
             contextlib.redirect_stderr(_io.StringIO()):
-        vf = _auto_fit(net, max_order)
+        vf = _auto_fit(net, max_order, _span(report, 0.0, end_fit))
         if enforce_passivity:
-            vf, msgs, attempted = _enforce_passivity(vf, net, ceiling)
+            vf, msgs, attempted = _enforce_passivity(
+                vf, net, ceiling, _span(report, end_fit, _END_PASSIVITY))
             res.messages.extend(msgs)
+        report(_END_PASSIVITY, "measuring the passivity margin")
         res.sigma_max, res.sigma_max_freq = max_singular_value(vf)
 
+    report(_END_SIGMA, "scoring the fit")
     res.vf = vf
     res.n_poles = int(len(np.atleast_1d(vf.poles)))
     res.passive = _meets_ceiling(vf, res.sigma_max, ceiling)
@@ -144,6 +173,7 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
                 f"{where}, {'below' if res.passive else 'ABOVE'} "
                 f"ceiling {ceiling:.2f}")
 
+    report(_END_SCORING, "synthesising the subcircuit")
     import tempfile, os
     with tempfile.NamedTemporaryFile("w+", suffix=".cir", delete=False) as fh:
         tmp = fh.name
@@ -164,10 +194,45 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
     # order-5 point where the raw realisation otherwise mis-places the resonances.
     res.ir = _nl.balance_state_gains(_nl.rescale_state_resistors(
         _nl.parse_spice_subckt(spice_text, name="s_equivalent"), target=1.0))
+    report(1.0, f"{res.n_poles} poles, rms {res.rms_error:.2e}")
     return res
 
 
-def _auto_fit(net, max_order: int):
+def _span(report, lo, hi):
+    """A `cb(fraction, message)` that maps a phase's own 0..1 onto [lo, hi]."""
+    def scaled(fraction, message=""):
+        report(lo + (hi - lo) * min(1.0, max(0.0, float(fraction))), message)
+    return scaled
+
+
+@contextlib.contextmanager
+def _fit_watch(vf, report):
+    """Report auto_fit's progress from the fit's own iteration history.
+
+    auto_fit is one blocking call with no callback, but it appends to
+    `vf.d_res_history` once per pole-relocation iteration.  Polling that list is a real
+    progress signal and needs no log scraping, which is the brittle route
+    `_enforce_passivity` already avoids.  The iteration count is not known in advance
+    (that is the point of auto_fit), so the fraction follows a saturating curve and
+    stops short of 1 rather than pretending to know."""
+    stop = threading.Event()
+
+    def loop():
+        while not stop.wait(_FIT_POLL_S):
+            n = len(getattr(vf, "d_res_history", None) or ())
+            frac = min(_FIT_MAX_REPORTED, 1.0 - math.exp(-n / _FIT_ITERS_SCALE))
+            report(frac, f"vector fitting, {n} iteration{'' if n == 1 else 's'}")
+
+    watcher = threading.Thread(target=loop, name="snp2le-fit-watch", daemon=True)
+    watcher.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        watcher.join(timeout=1.0)
+
+
+def _auto_fit(net, max_order: int, report=null_progress):
     """Run scikit-rf auto_fit with the model order bounded by `max_order`.
 
     auto_fit grows the model adaptively up to `model_order_max`, so capping that
@@ -176,10 +241,13 @@ def _auto_fit(net, max_order: int):
     forcing the initial pole count made the model harder to make passive.)
     """
     vf = VectorFitting(net)
-    try:
-        vf.auto_fit(model_order_max=max(2, int(max_order)))
-    except TypeError:                              # different scikit-rf signature
-        vf.auto_fit()
+    report(0.0, "vector fitting")
+    with _fit_watch(vf, report):
+        try:
+            vf.auto_fit(model_order_max=max(2, int(max_order)))
+        except TypeError:                          # different scikit-rf signature
+            vf.auto_fit()
+    report(1.0, "vector fitting done")
     return vf
 
 
@@ -204,7 +272,8 @@ def _enforce_at(vf, ceiling: float, n_samples: int):
     return vf
 
 
-def _enforce_passivity(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT):
+def _enforce_passivity(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT,
+                       report=null_progress):
     """Bring the model's sigma_max down to `ceiling`, escalating effort only as needed,
     never shipping a worse model than the original fit.
 
@@ -233,7 +302,9 @@ def _enforce_passivity(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT):
     """
     import copy
     msgs = []
+    report(0.0, "checking passivity")
     if _meets_ceiling(vf, None, ceiling):
+        report(1.0, "already below the ceiling")
         return vf, msgs, False   # nothing to do
 
     best = [None]                                  # [(rms, vf)] best usable candidate
@@ -250,7 +321,9 @@ def _enforce_passivity(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT):
         return False
 
     # escalate the sample count, enforcing from the clean fit each time
-    for n_samples in _PASSIVITY_N_SAMPLES:
+    for i, n_samples in enumerate(_PASSIVITY_N_SAMPLES):
+        report(i / (len(_PASSIVITY_N_SAMPLES) + 1),
+               f"enforcing passivity, {n_samples} samples")
         cand = copy.deepcopy(vf)
         try:
             _enforce_at(cand, ceiling, n_samples)
@@ -265,6 +338,8 @@ def _enforce_passivity(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT):
     n_cmplx = int(np.count_nonzero(poles.imag)) or (len(poles) // 2)
     k = max(2, int(n_cmplx * 0.66))
     if k < n_cmplx:
+        report(len(_PASSIVITY_N_SAMPLES) / (len(_PASSIVITY_N_SAMPLES) + 1),
+               f"refitting at a lower order ({k} complex poles)")
         cand = VectorFitting(net)
         try:
             cand.vector_fit(n_poles_real=1, n_poles_cmplx=k)
@@ -364,13 +439,19 @@ def _sigma_grid(vf):
     return np.unique(np.concatenate(parts))
 
 
-def model_sparams(vf, freq_hz):
-    """Reconstruct the fitted S-parameters S[f, i, j] on a frequency grid."""
+def model_sparams(vf, freq_hz, progress=None):
+    """Reconstruct the fitted S-parameters S[f, i, j] on a frequency grid.
+
+    One model evaluation per response, so an 8-port costs 64 of them and is worth
+    reporting per response rather than as one silent block."""
     f = np.asarray(freq_hz, dtype=float)
     n = vf.network.nports
     S = np.zeros((len(f), n, n), dtype=complex)
     for i in range(n):
         for j in range(n):
+            if progress is not None:
+                done = i * n + j
+                progress(done / (n * n), f"model response S{i + 1}{j + 1}")
             S[:, i, j] = vf.get_model_response(i, j, f)
     return S
 

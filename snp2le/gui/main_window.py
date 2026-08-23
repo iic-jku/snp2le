@@ -1,13 +1,19 @@
 # SPDX-FileCopyrightText: 2026 Simon Dorrer
 # SPDX-License-Identifier: Apache-2.0
-"""main_window.py - assembles the UI and is the controller."""
+"""main_window.py - assembles the UI and is the controller.
+
+The conversion does not run here.  `recompute()` hands the state to a FitRunner,
+which converts on a worker thread and calls back into `_on_fit_finished`, so a
+30 s vector fit no longer freezes the window.  While it runs, `_fit_clock`
+samples the worker's progress into the indicator each view hosts.
+"""
 from __future__ import annotations
 import os
 import time
 from PySide6 import QtCore, QtWidgets
 
 from snp2le.core.state import ConverterState
-from snp2le.core import io, engine, netlist, xschem
+from snp2le.core import io, netlist, xschem
 
 from .top_bar import TopBar
 from .design_view import DesignView
@@ -15,6 +21,12 @@ from .plot_view import PlotView
 from .help_dialog import HelpDialog
 from .log_dialog import LogWindow
 from .footer import Footer
+from .fit_runner import FitRunner
+
+# A fit at least this long is one the user may have walked away from, so its
+# completion also flashes the taskbar entry when the window is not in front.
+# Below it, the outcome is on screen before anyone could look away.
+_ALERT_AFTER_S = 2.0
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -43,6 +55,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._examples_dir = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "examples")
         self._last_export_dir = {}        # per-dialect remembered export folder
+        self._res = None                  # last finished conversion (what Export writes)
         self._sch_path = ""               # selected Xschem testbench
         self._last_sch_dir = ""           # remembered .sch folder
         self._sim_proc = None             # running xschem QProcess
@@ -81,6 +94,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self._timer = QtCore.QTimer(self); self._timer.setSingleShot(True)
         self._timer.setInterval(120); self._timer.timeout.connect(self.recompute)
 
+        # The conversion runs on a worker thread and the UI samples its progress
+        # here.  80 ms is under the ~100 ms where a moving bar starts to look
+        # stepped, and each tick is one lock-guarded read, not a fit.
+        self._fit = FitRunner(self)
+        self._fit_clock = QtCore.QTimer(self)
+        self._fit_clock.setInterval(80)
+        self._fit_clock.timeout.connect(self._tick_fit_progress)
+
         self._wire()
         self.top.set_ports(self.net.nports)
         self.recompute()
@@ -96,6 +117,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.reset_clicked.connect(self.on_reset)
         self.design.save_clicked.connect(self.on_save_design)
         self.design.load_clicked.connect(self.on_load_design)
+        self._fit.started.connect(self._on_fit_started)
+        self._fit.finished.connect(self._on_fit_finished)
         # pop the plots out -> show Design view. Dock them back -> return to Plot
         self.plots.popped_out.connect(lambda: self.top.set_view("design"))
         self.plots.docked.connect(lambda: self.top.set_view("plot"))
@@ -114,6 +137,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_change(self):
         self._pull()
+        # The recompute is debounced, so for the next ~120 ms nothing is running
+        # and _res still holds the previous settings' model.  Grey Export now, or
+        # a quick click in that window would silently write the old netlist.
+        self._set_exports_enabled(False)
         self._timer.start()
 
     def on_view_change(self, view):
@@ -144,6 +171,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.reset_controls()
         # drop the simulation overlay and any popped-out plot window
         self.plots.reset()
+        for indicator in self._fit_indicators():   # and the previous fit's outcome line
+            indicator.clear()
+        self._res = None
         # forget the selected testbench
         self._sch_path = ""
         self._last_sch_dir = ""
@@ -204,12 +234,19 @@ class MainWindow(QtWidgets.QMainWindow):
         return default if os.path.isdir(default) else os.getcwd()
 
     def on_export(self, dialect):
-        res = engine.convert(self.state, self.net)
-        if not res.ok:                                    # no usable netlist to write
-            QtWidgets.QMessageBox.warning(
-                self, "Export netlist",
-                "The current conversion did not succeed, so there is nothing to export:\n"
-                f"{res.error}")
+        # Export what finished, never a fresh conversion: re-fitting here would
+        # freeze the window for as long as the fit that just ran, and could write
+        # a netlist that disagrees with the values and plots on screen.
+        res = self._res
+        if res is None or not res.ok:
+            if self._fit.busy():
+                detail = "The conversion is still running."
+            elif res is not None:
+                detail = f"The last conversion did not succeed:\n{res.error}"
+            else:
+                detail = "No conversion has finished yet."
+            QtWidgets.QMessageBox.warning(self, "Export netlist",
+                                          f"There is nothing to export.\n{detail}")
             return
         ext = "inc" if dialect == "vacask" else "spice"   # VACASK include file (.inc)
         # default name: <source>_le, falling back to the subcircuit's own name
@@ -769,6 +806,8 @@ class MainWindow(QtWidgets.QMainWindow):
         detached VACASK process or a polling timer cannot outlive the UI."""
         try:
             self._timer.stop()                            # the recompute debounce
+            self._fit_clock.stop()                        # the progress sampler
+            self._fit.shutdown()                          # and the conversion worker
             self._cancel_sim()                            # run/import timers + detached VACASK
         except Exception:                                 # noqa: BLE001
             pass
@@ -776,9 +815,69 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # ---- the pipeline ----------------------------------------------------
     def recompute(self):
+        """Start a conversion.  It runs on a worker; `_on_fit_finished` renders it."""
         self.design.set_file_info(io.info_for(self.net).summary)
-        res = engine.convert(self.state, self.net)
-        if res.mode == "structure":            # mirror the freq actually used (it may
-            self.top.show_fext(res.metrics.get("f_extract"))   # have been auto-detected)
+        self._fit.request(self.state, self.net)
+
+    def _fit_indicators(self):
+        """Every progress indicator to drive.  One per view, so a running fit stays
+        visible whichever tab is in front, and neither costs any window height."""
+        return (self.design.fit_progress, self.plots.fit_progress)
+
+    def _set_exports_enabled(self, enabled):
+        """Export is only offered while `_res` matches what the controls say."""
+        for button in (self.top.exp_ng, self.top.exp_va):
+            button.setEnabled(bool(enabled))
+
+    def _on_fit_started(self):
+        for indicator in self._fit_indicators():
+            indicator.start()
+        self._fit_clock.start()
+        self._set_exports_enabled(False)       # no finished model to write right now
+
+    def _tick_fit_progress(self):
+        state = self._fit.snapshot()
+        for indicator in self._fit_indicators():
+            indicator.update_progress(state)
+
+    def _on_fit_finished(self, res):
+        """Render a finished conversion and leave its outcome on the indicators."""
+        self._fit_clock.stop()
+        progress = self._fit.snapshot()        # final message, fraction and elapsed
+        if res is None:                        # the worker died without a Results
+            self._finish_indicators(False, "conversion failed")
+            return
+        self._res = res
+        superseded = self._fit.has_pending()   # a newer request is already queued
+        if res.mode == "structure" and not superseded:
+            # Mirror the frequency actually used (it may have been auto-detected).
+            # Skipped when superseded: this result's f_ext is already stale, and
+            # writing it back would stamp on the value the user just typed.
+            self.top.show_fext(res.metrics.get("f_extract"))
         self.design.update_results(res)
         self.plots.update_results(res)
+        self._set_exports_enabled(bool(res.ok) and not superseded)
+        # No result summary here: the pole count and RMS error are rendered a few
+        # rows below this line by update_results, and repeating them would push the
+        # failure reason (which has nowhere else to go) off the end of the label.
+        self._finish_indicators(res.ok,
+                                "conversion complete" if res.ok
+                                else f"conversion failed: {res.error}",
+                                progress.elapsed)
+        self._alert_if_unwatched(progress.elapsed)
+
+    def _finish_indicators(self, ok, message, elapsed=None):
+        for indicator in self._fit_indicators():
+            indicator.finish(ok, message, elapsed)
+
+    def _alert_if_unwatched(self, elapsed):
+        """Flash the taskbar entry when a slow conversion finished out of sight.
+
+        The indicator already carries the outcome for anyone looking at the window.
+        This is for the fit long enough to walk away from: it reaches the user
+        without them having to come back and check.  A result that a newer
+        request is about to replace is not worth calling anyone back for.
+        """
+        if elapsed < _ALERT_AFTER_S or self.isActiveWindow() or self._fit.has_pending():
+            return
+        QtWidgets.QApplication.alert(self, 3000)
