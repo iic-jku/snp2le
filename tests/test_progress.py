@@ -225,3 +225,36 @@ def test_a_failed_conversion_still_returns_a_result():
                          _example("wpd_ihp-sg13g2.s3p"), progress=cb)
     assert not res.ok and res.error
     assert [f for f, _ in seen] == sorted(f for f, _ in seen)
+
+
+# ---- defensive paths -----------------------------------------------------
+def test_a_tick_before_any_stage_is_ignored():
+    """`sub()` hands its callback out before the stage runs; a report that arrives
+    before `enter` must not be scaled against a stage that was never chosen."""
+    seen, cb = _recorder()
+    track = StageTracker(cb, PLAN)
+    track.tick(0.5)
+    assert seen == []
+
+
+def test_snapshot_before_start_is_empty_not_a_crash():
+    """The UI's display timer can fire before the first conversion begins."""
+    snap = ProgressReporter(clock=_Clock()).snapshot()
+    assert snap.elapsed == 0.0 and not snap.running and snap.fraction == 0.0
+
+
+@pytest.mark.parametrize("value,expected", [
+    (float("nan"), 0.0), (None, 0.0), ("nonsense", 0.0),
+    (-3.0, 0.0), (7.5, 1.0), (0.25, 0.25),
+])
+def test_a_nonsense_fraction_cannot_reach_the_bar(value, expected):
+    """The fraction crosses a thread boundary into a QProgressBar, so anything a
+    core routine can produce (a NaN from a zero-length sweep, a stray None) has to
+    land inside 0..1 rather than raise or paint garbage."""
+    seen, cb = _recorder()
+    rep = ProgressReporter(clock=_Clock())
+    rep.start()
+    rep(value, "")
+    assert rep.snapshot().fraction == expected
+    StageTracker(cb, (("only", 1, "only"),)).enter("only")
+    assert 0.0 <= seen[0][0] <= 1.0

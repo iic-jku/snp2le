@@ -32,7 +32,7 @@ It offers two conversion philosophies:
 
 A single dialect-agnostic **Circuit IR** drives both netlist backends and the on-screen schematic, so the outputs always agree. The code is split into a pure-Python, Qt-free `snp2le.core` (fully unit-tested) and a thin `snp2le.gui` on PySide6-Essentials, both driven by one entry point, `engine.convert(state, net)`.
 
-A fit of a large N-port runs for seconds to minutes, so it runs on a worker thread and reports as it goes: the GUI shows a progress bar with elapsed and remaining time and leaves the outcome on screen when it finishes, and the CLI draws the same progress on a terminal. See [Watching a conversion](https://github.com/iic-jku/snp2le#watching-a-conversion).
+A fit of a large N-port runs for seconds to minutes, so it runs on a worker thread and reports as it goes: the GUI shows what the fit is doing, how long it has been running and a progress bar, then leaves the outcome on screen when it finishes, and the CLI draws the same progress on a terminal. See [Watching a conversion](https://github.com/iic-jku/snp2le#watching-a-conversion).
 
 <p align="center">
   <a href="https://raw.githubusercontent.com/iic-jku/snp2le/main/doc/fig/snp2le_gui_bpf.png"><img src="https://raw.githubusercontent.com/iic-jku/snp2le/main/doc/fig/snp2le_gui_bpf.png" alt="snp2le GUI, band-pass filter" width="85%"></a><br>
@@ -104,9 +104,11 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 ├─ 📁 tests/                  pytest suite
 │  ├─ test_core.py
 │  ├─ test_gui_fit_progress.py  headless non-blocking-conversion regressions
+│  ├─ test_gui_passivity_ceiling.py  headless passivity-ceiling control
 │  ├─ test_gui_sim_flow.py    headless GUI run/poll/import regressions
-│  ├─ test_progress.py        progress reporting, ETA and the fit watcher
+│  ├─ test_progress.py        progress reporting and the fit watcher
 │  ├─ test_qt_essentials.py   guards the Essentials-only dependency
+│  ├─ test_reproducibility.py same input, same model, across processes
 │  └─ test_xschem.py
 ├─ 📁 LICENSES/               license texts the REUSE check resolves against
 │  └─ Apache-2.0.txt

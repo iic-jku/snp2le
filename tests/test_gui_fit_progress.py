@@ -285,3 +285,21 @@ def test_a_failed_conversion_reads_red_and_keeps_its_clock(win, monkeypatch):
         assert STATUS_RED in indicator.elapsed.styleSheet()
         assert indicator.bar.value() == 400, "a failed run must not read as complete"
     _settle(win)
+
+
+def test_a_crashing_worker_does_not_take_the_window_down(win, monkeypatch):
+    """engine.convert turns conversion failures into ok=False, so a raise here is
+    something unexpected.  It must still land as a failed result on the UI, not as
+    an exception in a thread nobody is watching."""
+    def boom(state, net, progress=None):
+        raise RuntimeError("the fit exploded")
+
+    monkeypatch.setattr(fit_runner.engine, "convert", boom)
+    _settle(win)
+    win.recompute()
+    _settle(win)
+    assert win._res is not None and not win._res.ok
+    assert "exploded" in win._res.error
+    for indicator in win._fit_indicators():
+        assert "conversion failed" in indicator.message.toolTip()
+    assert not win.top.exp_ng.isEnabled(), "a crashed fit must not leave Export live"
