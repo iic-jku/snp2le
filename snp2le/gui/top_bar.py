@@ -4,7 +4,7 @@
 
 Dark title bar: snp2le logo + title, then (right) View selector + Help.
 Light controls row: Load .sNp, Mode (Universal / Structure), Structure, Max
-order, Enforce passivity, Passivity ceiling, Fit range.  Structures that do not match
+order, Enforce passivity, Passivity ceiling, Fit range (GHz).  Structures that do not match
 the loaded port count are greyed out so an invalid choice can never be made, and the
 passivity ceiling is greyed out (pinned to its strict default) while passivity is not
 enforced.
@@ -170,9 +170,11 @@ class TopBar(QtWidgets.QWidget):
             self.iso_r.fontMetrics().horizontalAdvance("Resistive loss") + 28)
 
         self.order = QtWidgets.QSpinBox(); self.order.setRange(2, 40); self.order.setValue(6)
-        self.order.setFixedWidth(92)
+        self.order.setFixedWidth(66)          # two digits plus the arrows, no more
 
-        self.passive = QtWidgets.QCheckBox("Enforce passivity"); self.passive.setChecked(True)
+        # two lines: the bar is wide enough as it is, and the box reads the same
+        self.passive = QtWidgets.QCheckBox("Enforce\npassivity")
+        self.passive.setChecked(True)
         self.passive.setToolTip(
             "Perturb the fit until its worst singular value is at or below the\n"
             "Passivity ceiling, so a transient run cannot draw energy out of the model.\n"
@@ -229,15 +231,19 @@ class TopBar(QtWidgets.QWidget):
         self.mode_stack.addWidget(self.uni_page); self.mode_stack.addWidget(self.struct_page)
 
         # fit range: the band of the loaded file the model is fitted to.  It applies to
-        # both modes, so it sits outside the mode stack.  Empty field = open on that side.
+        # both modes, so it sits outside the mode stack.  Both fields are in GHz (the
+        # unit is in the group label, so there is nothing to type but the number) and
+        # are filled with the loaded file's own span, so the band on screen is always
+        # the band being fitted.  An emptied field means "open on that side".
         self._f_min_hz = None
         self._f_max_hz = None
-        self.f_min = QtWidgets.QLineEdit(); self.f_min.setFixedWidth(78)
-        self.f_max = QtWidgets.QLineEdit(); self.f_max.setFixedWidth(78)
+        self._band_shown = ["", ""]        # text last written, to spot an untouched field
+        self.f_min = QtWidgets.QLineEdit(); self.f_min.setFixedWidth(56)
+        self.f_max = QtWidgets.QLineEdit(); self.f_max.setFixedWidth(56)
         self.f_min.setPlaceholderText("start"); self.f_max.setPlaceholderText("stop")
-        band_tip = ("Frequency band the model is fitted to (both modes).\n"
-                    "Leave empty for the loaded file's full range.\n"
-                    "Accepts engineering notation, e.g. 110 GHz.")
+        band_tip = ("Frequency band the model is fitted to, in GHz (both modes).\n"
+                    "Starts at the loaded file's own range, e.g. 120 to 200.\n"
+                    "Narrow it to spend the model order on the band you operate in.")
         for w in (self.f_min, self.f_max):
             w.setToolTip(band_tip)
         band = QtWidgets.QWidget()
@@ -245,7 +251,7 @@ class TopBar(QtWidgets.QWidget):
         bl.setContentsMargins(0, 0, 0, 0); bl.setSpacing(4)
         to_lbl = QtWidgets.QLabel("to"); to_lbl.setProperty("class", "fieldLabel")
         bl.addWidget(self.f_min); bl.addWidget(to_lbl); bl.addWidget(self.f_max)
-        self.band_box = self._labeled_widget("Fit range", band)
+        self.band_box = self._labeled_widget("Fit range (GHz)", band)
         self.band_box.setToolTip(band_tip)
 
         # fixed vertical divider between the conversion controls and the action buttons
@@ -300,9 +306,9 @@ class TopBar(QtWidgets.QWidget):
         lay.addLayout(self._labeled("Structure", self.structure))
         lay.addWidget(self.mode_stack)         # f_ext+option (structure) or order+passivity
         lay.addWidget(self.band_box)           # fit range (both modes)
-        lay.addSpacing(24)
+        lay.addSpacing(12)                     # same gap on both sides of the divider
         lay.addWidget(self.sep)                # fixed divider, always visible
-        lay.addSpacing(24)
+        lay.addSpacing(12)
         lay.addStretch(1)
         lay.addLayout(self._labeled("", self.exp_ng))
         lay.addLayout(self._labeled("", self.exp_va))
@@ -540,44 +546,89 @@ class TopBar(QtWidgets.QWidget):
             self._f_extract_hz = v
             self.changed.emit()
 
+    @staticmethod
+    def _ghz_text(hz) -> str:
+        """A frequency as the plain GHz number the field shows, e.g. 1.2e11 -> '120'."""
+        return f"{float(hz) / 1e9:.6g}"
+
+    @staticmethod
+    def _parse_ghz(text):
+        """A field entry in GHz as Hz, or None if it is not a positive number.
+
+        The unit lives in the group label, so a bare number is the expected input.  A
+        trailing unit somebody typed out of habit is accepted rather than rejected, and
+        a decimal comma is read like a decimal point (as the ceiling field does)."""
+        t = str(text).strip().replace(",", ".")
+        for suffix in ("GHz", "Ghz", "ghz", "G", "g"):
+            if t.endswith(suffix):
+                t = t[: -len(suffix)].strip()
+                break
+        try:
+            hz = float(t) * 1e9
+        except ValueError:
+            return None
+        return hz if hz > 0 else None
+
     def _set_band(self, f_min, f_max):
         """Set the fit-range fields + stored values (no recompute).  None clears a
-        field, which means "open on that side" (the loaded file's own edge)."""
-        for hz, field, attr in ((f_min, self.f_min, "_f_min_hz"),
-                                (f_max, self.f_max, "_f_max_hz")):
+        field, which means "open on that side" (the loaded file's own edge).
+
+        The stored value keeps the full precision it came in with while the field shows
+        a rounded GHz number, so redisplaying a file's own edge can never crop the first
+        or last sample off the fit."""
+        for i, (hz, field, attr) in enumerate(((f_min, self.f_min, "_f_min_hz"),
+                                               (f_max, self.f_max, "_f_max_hz"))):
             try:
                 hz = None if hz in (None, 0) else float(hz)
             except (TypeError, ValueError):     # a hand-edited design: leave that side open
                 hz = None
             setattr(self, attr, hz)
-            field.setText("" if hz is None else format_eng(hz, "Hz"))
+            self._band_shown[i] = "" if hz is None else self._ghz_text(hz)
+            field.setText(self._band_shown[i])
             field.setProperty("error", False)
             self._repolish(field)
+
+    def show_band(self, f_min, f_max):
+        """Mirror the loaded file's own span into the fit-range fields (no recompute),
+        so they are never empty and always name the band that will be fitted."""
+        self._set_band(f_min, f_max)
 
     def _on_band(self):
         """Parse both fit-range fields on edit, recompute only on a valid, changed band.
 
-        An empty field is a valid input (that side follows the data).  Unparsable text
-        turns the field red and the last good value is kept, exactly like f_ext.  Whether
-        the band itself makes sense against the loaded file is decided by the converter,
-        which reports it in the Conversion panel."""
+        Entries are in GHz.  An emptied field is a valid input (that side follows the
+        data).  Text that is not a number turns the field red and the last good value is
+        kept, exactly like f_ext.  A field still holding exactly what was written into it
+        keeps its stored value untouched, so the rounding in the display never becomes
+        the band.  Whether the band itself makes sense against the loaded file is decided
+        by the converter, which reports it in the Conversion panel."""
         band = []
-        for field, attr in ((self.f_min, "_f_min_hz"), (self.f_max, "_f_max_hz")):
+        for i, (field, attr) in enumerate(((self.f_min, "_f_min_hz"),
+                                           (self.f_max, "_f_max_hz"))):
             text = field.text().strip()
-            if not text:
+            if text == self._band_shown[i]:          # untouched, keep the exact value
+                band.append(getattr(self, attr))
+                ok = True
+            elif not text:
                 band.append(None)
                 ok = True
             else:
-                try:
-                    v = parse_eng(text)
-                except ValueError:
-                    v = None
-                ok = v is not None and v > 0
+                v = self._parse_ghz(text)
+                ok = v is not None
                 band.append(v if ok else getattr(self, attr))
             field.setProperty("error", not ok)
             self._repolish(field)
-        if tuple(band) != (self._f_min_hz, self._f_max_hz):
-            self._f_min_hz, self._f_max_hz = band
+        changed = tuple(band) != (self._f_min_hz, self._f_max_hz)
+        self._f_min_hz, self._f_max_hz = band
+        # Normalise the display whatever happened, not only on a change: re-entering the
+        # same frequency as '150 GHz' would otherwise leave the unit standing in the field.
+        for i, (hz, field) in enumerate(((band[0], self.f_min), (band[1], self.f_max))):
+            if field.property("error"):
+                continue                                     # leave rejected text to fix
+            self._band_shown[i] = "" if hz is None else self._ghz_text(hz)
+            if field.text().strip() != self._band_shown[i]:
+                field.setText(self._band_shown[i])           # '150 GHz' -> '150'
+        if changed:
             self.changed.emit()
 
     def values(self) -> dict:

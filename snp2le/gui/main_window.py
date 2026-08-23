@@ -84,6 +84,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._wire()
         self.top.set_ports(self.net.nports)
+        self._seed_band()                      # the fit range starts at the file's span
         self.recompute()
 
     def _wire(self):
@@ -114,6 +115,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.passivity_ceiling = v["passivity_ceiling"]
         self.state.f_min = v["f_min"]
         self.state.f_max = v["f_max"]
+
+    def _seed_band(self, keep=False):
+        """Put the loaded file's own frequency span into the Fit range fields.
+
+        The fields are never left empty: on a fresh file they name its full span, which
+        is exactly the band that will be fitted, so what is on screen and what the model
+        sees are the same thing.  `keep=True` fills only the sides a loaded design left
+        open, so an explicit band in a design file survives.  Ends with a `_pull`, since
+        the state has to follow the controls."""
+        net = getattr(self, "net", None)
+        if net is None or not len(net.f):
+            return
+        lo, hi = float(net.f[0]), float(net.f[-1])
+        if keep:
+            v = self.top.values()
+            lo = v["f_min"] if v["f_min"] is not None else lo
+            hi = v["f_max"] if v["f_max"] is not None else hi
+        self.top.show_band(lo, hi)             # no recompute, the caller does that
+        self._pull()
 
     def on_change(self):
         self._pull()
@@ -163,6 +183,7 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception:                         # noqa: BLE001
             self.net = io.demo_network()
         self.top.set_ports(self.net.nports)
+        self._seed_band()                      # back to the reloaded file's own span
         self.top.set_view("design")
         self.recompute()
 
@@ -192,6 +213,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.top.set_ports(self.net.nports)   # may auto-switch the structure to fit
         self._pull()                          # sync state from the (re-fitted) controls
+        self._seed_band()                     # the new file's span, not the old band
         self.recompute()
 
     def _export_dir(self, dialect):
@@ -770,6 +792,7 @@ class MainWindow(QtWidgets.QMainWindow):
             except Exception:                             # noqa: BLE001
                 pass
         self.top.set_values(self.state)        # sync the controls to the loaded design
+        self._seed_band(keep=True)             # its band wins, the file fills any gap
         self.recompute()
 
     def closeEvent(self, event):

@@ -76,13 +76,15 @@ term, cannot be corrected at any ceiling. <tt>tline_100um_ihp-sg13g2.s2p</tt> at
 stays at 5.24 whatever you ask for. The accurate fit is then kept rather than a wrecked
 one and the result reads <i>near-passive</i>. The fix is a lower <b>Max order</b>, not a
 higher ceiling, since order 6 brings the same file to 1.018.</p></li>
-<li><b>Fit range</b> (both modes): the band of the loaded file the model is fitted to.
-Leave both fields empty for the full file, or enter a start and/or a stop frequency in
-engineering notation (e.g. <i>110&nbsp;GHz</i> to <i>170&nbsp;GHz</i>) to fit only a
-sub-band. Spending the model order on the band you actually operate in gives a much better
-fit there than spreading it over a wide EM sweep, at the price of a model that says nothing
-outside the band. An edge outside the data is clamped to the data and reported, an empty or
-inverted band is refused. The band applies to everything downstream: the RMS error, the
+<li><b>Fit range (GHz)</b> (both modes): the band of the loaded file the model is fitted
+to, as two plain numbers in GHz (the unit is in the label, so there is nothing to type but
+the number). Loading a file puts its own span in the fields, so they always name the band
+being fitted, and the default is still the whole file. Narrow them to fit a sub-band, e.g.
+<i>110</i> to <i>170</i>. Spending the model order on the band you actually operate in
+gives a much better fit there than spreading it over a wide EM sweep, at the price of a
+model that says nothing outside the band. An edge outside the data is clamped to the data
+and reported, an empty or inverted band is refused, and clearing a field leaves that side
+at the file's own edge. The band applies to everything downstream: the RMS error, the
 tolerances, the plots, and the sweep written into a testbench run. The <b>Result</b> panel
 shows the band actually fitted, highlighted while it is a sub-band.</li>
 <li><b>Model option</b> (shown only for the structure it belongs to):
