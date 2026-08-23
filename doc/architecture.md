@@ -56,7 +56,11 @@ track real work rather than count steps:
   fraction follows a saturating curve and deliberately stops short of 1.
 
 On the GUI side, `gui/fit_runner.py` runs `engine.convert` on a `QThread` and
-`gui/fit_status.py` renders the strip under the control row. Two rules there:
+`gui/fit_status.py` renders the indicator. It is hosted twice, in the Design
+view's Conversion panel and (compact) in the Plot view's header row, so a
+running fit is visible on either tab without either view growing: both hosts had
+spare room. `MainWindow._fit_indicators` is the list the tick drives. Two rules
+there:
 
 * **One fit at a time, newest wins.** A request arriving mid-fit is remembered,
   not queued, so dragging a spin box starts one more conversion, not one per

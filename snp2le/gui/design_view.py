@@ -14,6 +14,7 @@ from snp2le.core.units import format_eng
 from .style import JKU_GRAY, STATUS_GREEN, STATUS_AMBER, STATUS_RED
 from .widgets import (OutputField, section_title, MathLabel, passivity_text,
                       sigma_text, with_symbols)
+from .fit_status import FitProgress
 from .schematic_widget import SchematicWidget
 
 
@@ -53,6 +54,11 @@ class DesignView(QtWidgets.QWidget):
         self.file_lbl = QtWidgets.QLabel("No file loaded")
         self.file_lbl.setProperty("class", "hint"); self.file_lbl.setWordWrap(True)
         left.addWidget(self.file_lbl)
+
+        # Progress of the conversion of that file, directly under its name and
+        # directly above the Result rows it ends up filling in.
+        self.fit_progress = FitProgress()
+        left.addWidget(self.fit_progress)
 
         left.addWidget(section_title("Result"))
         # label_w fits the widest label ("ext. frequency") so the values stay aligned

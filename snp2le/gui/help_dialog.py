@@ -88,15 +88,20 @@ higher ceiling, since order 6 brings the same file to 1.018.</p></li>
 <li><b>View</b>: switch between <i>Design &amp; Schematic</i> and <i>Plot</i>.</li>
 </ul>
 
-<h3>Progress strip</h3>
-<p>The slim row under the controls reports the conversion. While one runs it shows what
-the fit is doing, the elapsed time, an estimate of the time left, and a progress bar.
-When it ends the bar goes and the line becomes the outcome, green
-(<i>conversion complete: 12 poles, rms 3.1e-03</i>) or red with the reason. That line
-stays until the next conversion starts, so nothing has to be watched or clicked to
-learn how a fit went.</p>
+<h3>Conversion progress</h3>
+<p>Progress shows in the <b>Conversion</b> panel, under the loaded file name and just
+above the <i>Result</i> rows it fills in, and again in the <b>Plot</b> view's header row
+so switching tabs does not lose sight of a running fit. While one runs it shows what the
+fit is doing, how long it has been running, and a progress bar. When it ends the bar goes
+and the line becomes the outcome, green (<i>conversion complete (4.2&nbsp;s)</i>) or red
+with the reason, and it stays until the next conversion starts.</p>
 <ul>
 <li>The window stays usable while a fit runs: the conversion is not on the UI thread.</li>
+<li>No time-left estimate is shown. The progress fraction is not linear in time, since
+there is no way to know in advance how many iterations the fit will take, so any figure
+derived from it would be guesswork.</li>
+<li>The completion line carries only the elapsed time. The pole count and RMS error are
+in the <i>Result</i> rows below it.</li>
 <li>Changing controls during a fit does not queue one conversion per change. The running
 fit finishes, then the newest settings are converted, once.</li>
 <li>A long fit that ends while you are in another window flashes the taskbar entry.</li>

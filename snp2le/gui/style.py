@@ -59,8 +59,7 @@ QPushButton#chip:hover {{ background: rgba(255,255,255,0.20); }}
 [class="hint"] {{ color: {JKU_GRAY}; font-size: 11px; }}
 [class="tableHead"] {{ color: {JKU_GRAY}; font-size: 10px; font-weight: 600; }}
 
-/* ---- conversion progress strip ---- */
-#fitbar {{ background: #ffffff; border-bottom: 1px solid {PANEL_BORDER}; }}
+/* ---- conversion progress indicator (inside the panels, no bar of its own) ---- */
 #fitTime {{ color: {JKU_GRAY}; font-size: 11px; }}
 QProgressBar#fitProgress {{ background: {LIGHT_BG}; border: none; border-radius: 4px; }}
 QProgressBar#fitProgress::chunk {{ background: {JKU_BLUE}; border-radius: 4px; }}

@@ -86,7 +86,7 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │  │  ├─ __init__.py
 │  │  ├─ design_view.py       results, values, tolerances, schematic
 │  │  ├─ fit_runner.py        runs engine.convert on a worker thread
-│  │  ├─ fit_status.py        the conversion progress / outcome strip
+│  │  ├─ fit_status.py        the conversion progress / outcome indicator
 │  │  ├─ main_window.py       the controller
 │  │  ├─ plot_view.py         four S-parameter / extracted-param plots
 │  │  ├─ top_bar.py           load, mode, structure, options, run
@@ -215,15 +215,29 @@ The **Result** panel reports the measured sigma_max next to the ceiling it was j
 ### Watching a conversion
 
 Every conversion runs on a worker thread, so the window stays usable while it
-runs. The strip under the control row is the only place you need to look:
+runs. Progress shows in the **Conversion** panel, under the loaded file name and
+directly above the Result rows it fills in, and is mirrored into the **Plot**
+view's header row so switching tabs does not lose sight of a running fit:
 
 | While it runs | When it ends |
 | --- | --- |
-| what the fit is doing (`vector fitting, 7 iterations`, `solving 240 of 401 frequencies`) | `conversion complete: 12 poles, rms 3.1e-03  (24.6 s)` in green |
-| elapsed time, and remaining time once it can be estimated | `conversion failed: <reason>` in red |
+| what the fit is doing (`vector fitting, 7 iterations`, `solving 240 of 401 frequencies`) | `conversion complete (24.6 s)` in green |
+| how long it has been running | `conversion failed: <reason>` in red |
 | a progress bar tracking the real work, not a step count | the line stays until the next conversion starts |
 
-Three details worth knowing:
+Both indicators sit inside panels that already existed, so neither costs any
+window height.
+
+Two figures are deliberately absent:
+
+- **No estimated time left.** The fraction is not linear in time and cannot be:
+  the fit stage reports a saturating curve, because how many iterations
+  `auto_fit` will take is not knowable in advance. Any remaining-time number
+  derived from it would be guesswork dressed as a measurement.
+- **No result summary on the completion line.** The pole count and RMS error are
+  in the Result rows a few lines below it.
+
+Three more details worth knowing:
 
 - The bar only appears after ~0.35 s, so a fast structure extraction does not
   flicker it on and off while you turn a spin box.

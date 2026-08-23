@@ -14,11 +14,16 @@ sit around that contract:
 
 - `StageTracker` maps a stage's own 0..1 progress onto the overall fraction, so
   each step reports its progress without knowing what the others cost.
-- `ProgressReporter` is a thread-safe sink that also keeps elapsed time and an
-  ETA.  A GUI samples `snapshot()` on its own timer instead of being called from
-  the worker thread, which keeps Qt signal traffic out of the worker and lets
-  the elapsed display tick even while the fit sits inside one long scikit-rf
-  call.
+- `ProgressReporter` is a thread-safe sink that also keeps elapsed time.  A GUI
+  samples `snapshot()` on its own timer instead of being called from the worker
+  thread, which keeps Qt signal traffic out of the worker and lets the elapsed
+  display tick even while the fit sits inside one long scikit-rf call.
+
+There is deliberately no time-remaining estimate.  The fraction is not linear in
+time and cannot be: the universal fit reports a saturating curve because how many
+iterations `auto_fit` will take is not knowable in advance.  Dividing elapsed by
+such a fraction produces a number with the shape of a measurement and none of the
+authority, so the reporter does not compute one and no view shows one.
 
 Progress is optional everywhere: `convert(state, net)` with no `progress=`
 argument behaves exactly as it did before.
@@ -27,12 +32,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import threading
 import time
-
-# Below this fraction an ETA is noise (a fraction of a second divided by a
-# fraction of a percent), so `snapshot()` reports nan instead of a wild number.
-_ETA_MIN_FRACTION = 0.04
-_ETA_MIN_ELAPSED = 0.6          # s, do not guess before there is a measurement
-_ETA_SMOOTHING = 0.35           # EMA weight of the newest estimate
 
 
 def null_progress(fraction: float, message: str = "") -> None:
@@ -46,7 +45,6 @@ class ProgressState:
     fraction: float = 0.0
     message: str = ""
     elapsed: float = 0.0
-    eta: float = float("nan")     # seconds left, nan while it cannot be estimated
     ok: bool = True               # outcome of the last finished run
 
 
@@ -127,7 +125,7 @@ class StageTracker:
 
 
 class ProgressReporter:
-    """Thread-safe progress sink with elapsed time and an ETA.
+    """Thread-safe progress sink with elapsed time.
 
     The worker thread calls the instance (it *is* the `callback`), the UI thread
     reads `snapshot()`.  Every field is guarded by one lock, so a reading is
@@ -146,7 +144,6 @@ class ProgressReporter:
         # that began at t=0 as one that never began.
         self._t0 = None
         self._t_end = None
-        self._eta = float("nan")
 
     def start(self, message="starting"):
         with self._lock:
@@ -156,7 +153,6 @@ class ProgressReporter:
             self._ok = True
             self._t0 = self._clock()
             self._t_end = None
-            self._eta = float("nan")
 
     def __call__(self, fraction, message=""):
         with self._lock:
@@ -165,7 +161,6 @@ class ProgressReporter:
             self._fraction = _clamp(fraction)
             if message:
                 self._message = message
-            self._eta = self._estimate_eta()
 
     def finish(self, ok=True, message=""):
         with self._lock:
@@ -173,7 +168,6 @@ class ProgressReporter:
             self._ok = bool(ok)
             self._fraction = 1.0
             self._t_end = self._clock()
-            self._eta = float("nan")
             if message:
                 self._message = message
 
@@ -186,17 +180,7 @@ class ProgressReporter:
                 elapsed = max(0.0, end - self._t0)
             return ProgressState(running=self._running, fraction=self._fraction,
                                  message=self._message, elapsed=elapsed,
-                                 eta=self._eta, ok=self._ok)
-
-    # ---- internals (called with the lock held) ---------------------------
-    def _estimate_eta(self):
-        elapsed = self._clock() - self._t0
-        if self._fraction < _ETA_MIN_FRACTION or elapsed < _ETA_MIN_ELAPSED:
-            return float("nan")
-        raw = elapsed * (1.0 - self._fraction) / self._fraction
-        if self._eta != self._eta:            # nan: this is the first usable estimate
-            return raw
-        return _ETA_SMOOTHING * raw + (1.0 - _ETA_SMOOTHING) * self._eta
+                                 ok=self._ok)
 
 
 def _clamp(x):

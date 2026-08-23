@@ -5,7 +5,7 @@
 The conversion does not run here.  `recompute()` hands the state to a FitRunner,
 which converts on a worker thread and calls back into `_on_fit_finished`, so a
 30 s vector fit no longer freezes the window.  While it runs, `_fit_clock`
-samples the worker's progress into the strip under the control row.
+samples the worker's progress into the indicator each view hosts.
 """
 from __future__ import annotations
 import os
@@ -22,7 +22,6 @@ from .help_dialog import HelpDialog
 from .log_dialog import LogWindow
 from .footer import Footer
 from .fit_runner import FitRunner
-from .fit_status import FitStatusBar
 
 # A fit at least this long is one the user may have walked away from, so its
 # completion also flashes the taskbar entry when the window is not in front.
@@ -88,8 +87,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.design = DesignView()
         self.plots = PlotView()
         self.stack.addWidget(self.design); self.stack.addWidget(self.plots)
-        self.fit_status = FitStatusBar()
-        lay.addWidget(self.top); lay.addWidget(self.fit_status); lay.addWidget(self.stack, 1)
+        lay.addWidget(self.top); lay.addWidget(self.stack, 1)
         self.footer = Footer(); lay.addWidget(self.footer)
         self.setCentralWidget(root)
 
@@ -173,7 +171,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.reset_controls()
         # drop the simulation overlay and any popped-out plot window
         self.plots.reset()
-        self.fit_status.clear()                   # and the previous fit's outcome line
+        for indicator in self._fit_indicators():   # and the previous fit's outcome line
+            indicator.clear()
         self._res = None
         # forget the selected testbench
         self._sch_path = ""
@@ -820,25 +819,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.design.set_file_info(io.info_for(self.net).summary)
         self._fit.request(self.state, self.net)
 
+    def _fit_indicators(self):
+        """Every progress indicator to drive.  One per view, so a running fit stays
+        visible whichever tab is in front, and neither costs any window height."""
+        return (self.design.fit_progress, self.plots.fit_progress)
+
     def _set_exports_enabled(self, enabled):
         """Export is only offered while `_res` matches what the controls say."""
         for button in (self.top.exp_ng, self.top.exp_va):
             button.setEnabled(bool(enabled))
 
     def _on_fit_started(self):
-        self.fit_status.start()
+        for indicator in self._fit_indicators():
+            indicator.start()
         self._fit_clock.start()
         self._set_exports_enabled(False)       # no finished model to write right now
 
     def _tick_fit_progress(self):
-        self.fit_status.update_progress(self._fit.snapshot())
+        state = self._fit.snapshot()
+        for indicator in self._fit_indicators():
+            indicator.update_progress(state)
 
     def _on_fit_finished(self, res):
-        """Render a finished conversion and leave its outcome on the strip."""
+        """Render a finished conversion and leave its outcome on the indicators."""
         self._fit_clock.stop()
         progress = self._fit.snapshot()        # final message, fraction and elapsed
         if res is None:                        # the worker died without a Results
-            self.fit_status.finish(False, "conversion failed")
+            self._finish_indicators(False, "conversion failed")
             return
         self._res = res
         superseded = self._fit.has_pending()   # a newer request is already queued
@@ -850,17 +857,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.design.update_results(res)
         self.plots.update_results(res)
         self._set_exports_enabled(bool(res.ok) and not superseded)
-        self.fit_status.finish(
-            res.ok,
-            f"conversion complete: {progress.message}" if res.ok
-            else f"conversion failed: {res.error}",
-            progress.elapsed)
+        # No result summary here: the pole count and RMS error are rendered a few
+        # rows below this line by update_results, and repeating them would push the
+        # failure reason (which has nowhere else to go) off the end of the label.
+        self._finish_indicators(res.ok,
+                                "conversion complete" if res.ok
+                                else f"conversion failed: {res.error}",
+                                progress.elapsed)
         self._alert_if_unwatched(progress.elapsed)
+
+    def _finish_indicators(self, ok, message, elapsed=None):
+        for indicator in self._fit_indicators():
+            indicator.finish(ok, message, elapsed)
 
     def _alert_if_unwatched(self, elapsed):
         """Flash the taskbar entry when a slow conversion finished out of sight.
 
-        The strip already carries the outcome for anyone looking at the window.
+        The indicator already carries the outcome for anyone looking at the window.
         This is for the fit long enough to walk away from: it reaches the user
         without them having to come back and check.  A result that a newer
         request is about to replace is not worth calling anyone back for.

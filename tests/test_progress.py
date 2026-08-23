@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """test_progress.py - the conversion progress plumbing, without Qt.
 
-Covers the three things a progress bar can get wrong and nobody notices until a
-user is watching a 30 s fit: a fraction that jumps backwards, an ETA invented
-from one noisy sample, and a fit phase that reports nothing at all because the
+Covers the things a progress bar can get wrong and nobody notices until a user
+is watching a 30 s fit: a fraction that jumps backwards, a reading assembled from
+two half-updated reports, and a fit phase that reports nothing at all because the
 underlying library has no callback.  Run with:  pytest -q
 """
 import os
@@ -118,16 +118,13 @@ def test_reporter_tracks_elapsed_and_freezes_it_on_finish():
     assert snap.elapsed == pytest.approx(4.0) and not snap.running and snap.ok
 
 
-def test_eta_is_withheld_until_it_can_be_estimated():
-    clock = _Clock()
-    rep = ProgressReporter(clock=clock)
+def test_no_time_remaining_is_offered():
+    """The fraction is not linear in time, so the reporter must not publish an
+    estimate derived from it.  See the module docstring in core/progress.py."""
+    rep = ProgressReporter(clock=_Clock())
     rep.start()
-    clock.t = 0.2                                    # too early to guess
-    rep(0.5, "")
-    assert rep.snapshot().eta != rep.snapshot().eta   # nan
-    clock.t = 4.0
-    rep(0.5, "")                                     # half done after 4 s -> ~4 s left
-    assert rep.snapshot().eta == pytest.approx(4.0)
+    rep(0.5, "halfway")
+    assert not hasattr(rep.snapshot(), "eta")
 
 
 def test_reports_after_finish_are_ignored():

@@ -1,31 +1,54 @@
 # SPDX-FileCopyrightText: 2026 Simon Dorrer
 # SPDX-License-Identifier: Apache-2.0
-"""fit_status.py - the conversion progress strip under the control row.
+"""fit_status.py - the conversion progress indicator.
 
-One slim always-present row: what the fit is doing on the left, elapsed time,
-time left, and a determinate progress bar on the right.  When the fit ends the
-bar goes and the message becomes the outcome, green or red, and it stays there
-until the next fit starts.  That standing line is the completion notice: nothing
-has to be watched while a fit runs, and nothing has to be clicked to learn how
-it went.
+One compact widget: what the fit is doing, how long it has been running, and a
+bar tracking it.  When the fit ends the bar goes and the line becomes the
+outcome, green or red, and it stays there until the next fit starts.  That
+standing line is the completion notice: nothing has to be watched while a fit
+runs, and nothing has to be clicked to learn how it went.
 
-The strip never changes height and never re-lays-out, so a fit that finishes in
-80 ms cannot make the window flicker:
+It lives inside panels that already exist rather than in a bar of its own: in
+the Design view under the loaded-file line, where the RMS error and pole count
+it summarises sit a few rows below, and in the Plot view's header row next to
+the passivity and order figures mirrored from that same panel.  Both hosts had
+the room, so the indicator costs no window height.
 
-- every widget keeps its space when hidden (`setRetainSizeWhenHidden`)
-- the bar only appears once the fit has run past `_BAR_DELAY_S`, which is the
-  point where a user starts wondering whether anything is happening
-- the numeric fields are fixed-width, so a jump from '9.9 s' to '10.0 s' does
-  not shift the text next to it
+Two things it deliberately does not show:
+
+- **No estimated time left.**  The fraction is not linear in time and cannot be:
+  the fit stage reports a saturating curve because `auto_fit`'s iteration count
+  is not knowable in advance.  A remaining-time figure derived from it would be
+  a number the code cannot stand behind.
+- **No result summary on completion.**  "conversion complete (4.2 s)" is the
+  whole line, because the pole count and RMS error are already on screen in the
+  panel below it.
+
+It never changes height, so a fit that finishes in 80 ms cannot make the panel
+flicker: every widget keeps its space when hidden, and the bar only appears once
+the fit has run past `_BAR_DELAY_S`, the point where a user starts wondering
+whether anything is happening at all.
 """
 from __future__ import annotations
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from snp2le.core.progress import format_duration
 from .style import JKU_GRAY, STATUS_GREEN, STATUS_RED
 
 # A fit shorter than this never shows a bar: it is done before the eye resolves it.
 _BAR_DELAY_S = 0.35
+
+# Compact mode sits in the Plot view's header row, which already carries a title,
+# four selectors, a legend, three figures and three buttons.  Every part of it is
+# therefore a fixed width and the message elides into its own: a label that grew
+# with its text would push the buttons sideways on every report, and off the edge
+# of a laptop screen entirely.
+#
+# That width comes from Qt's own metrics for the line that must always be legible,
+# not from a pixel count, so it holds on any platform font and DPI.  Longer
+# running messages elide, and the tooltip carries the full text.
+_COMPACT_FITS = "conversion complete"
+_COMPACT_BAR = (78, 6)
 
 
 def _retain(widget):
@@ -36,42 +59,48 @@ def _retain(widget):
     return widget
 
 
-class FitStatusBar(QtWidgets.QWidget):
-    """Progress and outcome of the running conversion."""
+class FitProgress(QtWidgets.QWidget):
+    """Progress and outcome of the running conversion.
 
-    def __init__(self, parent=None):
+    `compact` picks the layout for the host.  A panel column gets the message and
+    the clock on one line with a full-width bar under it.  A header row that is
+    already full of controls gets all three on one line with a short bar.
+    """
+
+    def __init__(self, compact=False, parent=None):
         super().__init__(parent)
-        self.setObjectName("fitbar")
-        self.setFixedHeight(26)
-        lay = QtWidgets.QHBoxLayout(self)
-        lay.setContentsMargins(16, 0, 16, 0)
-        lay.setSpacing(12)
-
+        self._compact = compact
         self.message = QtWidgets.QLabel("")
         self.message.setObjectName("fitMessage")
-
         self.elapsed = _retain(QtWidgets.QLabel(""))
         self.elapsed.setObjectName("fitTime")
-        self.elapsed.setFixedWidth(58)
+        self.elapsed.setFixedWidth(44 if compact else 52)
         self.elapsed.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-
-        self.eta = _retain(QtWidgets.QLabel(""))
-        self.eta.setObjectName("fitTime")
-        self.eta.setFixedWidth(92)
-        self.eta.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
 
         self.bar = _retain(QtWidgets.QProgressBar())
         self.bar.setObjectName("fitProgress")
         self.bar.setRange(0, 1000)               # per-mille, so the bar creeps smoothly
         self.bar.setValue(0)
         self.bar.setTextVisible(False)
-        self.bar.setFixedSize(190, 8)
 
-        lay.addWidget(self.message)
-        lay.addStretch(1)
-        lay.addWidget(self.elapsed)
-        lay.addWidget(self.eta)
-        lay.addWidget(self.bar)
+        if compact:
+            lay = QtWidgets.QHBoxLayout(self)
+            lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(6)
+            self.message.setFixedWidth(
+                self.message.fontMetrics().horizontalAdvance(_COMPACT_FITS) + 6)
+            self.bar.setFixedSize(*_COMPACT_BAR)
+            lay.addWidget(self.message)
+            lay.addWidget(self.elapsed)
+            lay.addWidget(self.bar)
+        else:
+            lay = QtWidgets.QVBoxLayout(self)
+            lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(3)
+            self.bar.setFixedHeight(4)
+            row = QtWidgets.QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0); row.setSpacing(8)
+            row.addWidget(self.message); row.addStretch(1); row.addWidget(self.elapsed)
+            lay.addLayout(row)
+            lay.addWidget(self.bar)
         self.clear()
 
     # ---- states ----------------------------------------------------------
@@ -79,8 +108,8 @@ class FitStatusBar(QtWidgets.QWidget):
         """Idle and silent: no fit has run, or the window was just reset."""
         self._set_message("", JKU_GRAY)
         self.bar.setValue(0)
-        for w in (self.bar, self.elapsed, self.eta):
-            w.setVisible(False)
+        self.bar.setVisible(False)
+        self.elapsed.setVisible(False)
 
     def start(self, message="starting"):
         """A fit has begun.  The bar itself waits for `_BAR_DELAY_S`."""
@@ -89,8 +118,6 @@ class FitStatusBar(QtWidgets.QWidget):
         self.bar.setVisible(False)
         self.elapsed.setText("")
         self.elapsed.setVisible(True)
-        self.eta.setText("")
-        self.eta.setVisible(True)
 
     def update_progress(self, state):
         """Render one `ProgressState` sampled from the running fit."""
@@ -99,21 +126,29 @@ class FitStatusBar(QtWidgets.QWidget):
         self._set_message(state.message or "converting", JKU_GRAY)
         self.bar.setValue(int(round(state.fraction * 1000)))
         self.elapsed.setText(format_duration(state.elapsed))
-        self.eta.setText("" if state.eta != state.eta      # nan: not estimable yet
-                         else f"~{format_duration(state.eta)} left")
         self.bar.setVisible(state.elapsed >= _BAR_DELAY_S)
 
     def finish(self, ok, message, elapsed=None):
-        """Show the outcome and leave it standing until the next fit."""
+        """Show the outcome and leave it standing until the next fit.
+
+        The panel reads 'conversion complete (4.2 s)' on one line.  Compact keeps
+        the time in its own fixed-width field instead, so the elapsed figure can
+        never be the part that elides away.
+        """
         text = message or ("conversion complete" if ok else "conversion failed")
-        if elapsed is not None:
-            text = f"{text}  ({format_duration(elapsed)})"
+        show_clock = self._compact and elapsed is not None
+        if elapsed is not None and not self._compact:
+            text = f"{text} ({format_duration(elapsed)})"
         self._set_message(text, STATUS_GREEN if ok else STATUS_RED)
-        for w in (self.bar, self.elapsed, self.eta):
-            w.setVisible(False)
+        self.bar.setVisible(False)
+        self.elapsed.setText(format_duration(elapsed) if show_clock else "")
+        self.elapsed.setVisible(show_clock)
 
     # ---- internals -------------------------------------------------------
     def _set_message(self, text, color):
-        self.message.setText(text)
         self.message.setStyleSheet(f"color:{color}; font-size:11px; font-weight:600;")
-        self.message.setToolTip(text)
+        self.message.setToolTip(text)            # the full text, before any eliding
+        if self._compact:                        # fixed width, so elide rather than clip
+            text = QtGui.QFontMetrics(self.message.font()).elidedText(
+                text, QtCore.Qt.ElideRight, self.message.width())
+        self.message.setText(text)

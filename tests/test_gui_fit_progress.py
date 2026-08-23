@@ -64,18 +64,27 @@ def test_the_first_fit_runs_off_the_event_loop(win):
     assert win.top.exp_ng.isEnabled() and win.top.exp_va.isEnabled()
 
 
-def test_the_strip_reports_the_outcome(win):
-    """The standing outcome line is the completion notice: no polling needed."""
-    text = win.fit_status.message.text()
-    assert text.startswith("conversion complete")
-    assert "poles" in text or "element" in text
-    # isHidden(), not isVisible(): the window is never show()n in a headless run,
-    # so isVisible() is False for every child regardless of what was asked for.
-    assert win.fit_status.bar.isHidden(), "the bar must go when the fit ends"
+def test_both_views_report_the_outcome(win):
+    """The standing outcome line is the completion notice: no polling needed.
+
+    Both views carry one, so switching tabs mid-fit does not lose sight of it.
+    The line stays a bare outcome plus the elapsed time: the pole count and RMS
+    error live in the Result rows below it, and are not repeated here."""
+    for indicator in win._fit_indicators():
+        text = indicator.message.toolTip()       # full text, the label may elide it
+        assert text.startswith("conversion complete"), text
+        assert "poles" not in text and "rms" not in text, f"summary repeated: {text}"
+        # The elapsed time is on the line in the panel and in its own field in the
+        # header row, where a long message would otherwise elide the number away.
+        shown = text + indicator.elapsed.text()
+        assert " s" in shown or ":" in shown, f"no elapsed time: {shown!r}"
+        # isHidden(), not isVisible(): the window is never show()n in a headless
+        # run, so isVisible() is False for every child whatever was asked for.
+        assert indicator.bar.isHidden(), "the bar must go when the fit ends"
 
 
 def test_a_running_fit_shows_progress_and_keeps_the_ui_alive(win, monkeypatch):
-    """While a fit runs the event loop still turns and the strip moves."""
+    """While a fit runs the event loop still turns and the indicator moves."""
     real = engine.convert
 
     def slow(state, net, progress=None):
@@ -93,7 +102,8 @@ def test_a_running_fit_shows_progress_and_keeps_the_ui_alive(win, monkeypatch):
         _app().processEvents()
         snap = win._fit.snapshot()
         if snap.running:
-            seen_running.append((snap.fraction, not win.fit_status.bar.isHidden()))
+            seen_running.append((snap.fraction,
+                                 not win.design.fit_progress.bar.isHidden()))
         time.sleep(0.05)
     _settle(win)
     assert seen_running, "the event loop never ran during the fit"
@@ -163,11 +173,11 @@ def test_export_uses_the_finished_fit(win, monkeypatch):
 def test_reset_clears_the_outcome_line(win):
     """Reset drops the previous outcome, then the reloaded example reports its own."""
     win.on_reset()
-    # on_reset clears the strip and immediately recomputes, so what is on screen
+    # on_reset clears the indicators and recomputes at once, so what is on screen
     # here is the new run, never the finished line from before it.
-    assert not win.fit_status.message.text().startswith("conversion complete")
+    assert not win.design.fit_progress.message.text().startswith("conversion complete")
     _settle(win)
-    assert win.fit_status.message.text().startswith("conversion complete")
+    assert win.design.fit_progress.message.text().startswith("conversion complete")
 
 
 def test_shutdown_while_a_fit_runs_is_safe(win, monkeypatch):
@@ -225,3 +235,29 @@ def test_a_superseded_result_keeps_the_typed_extraction_frequency(win, monkeypat
     win._on_fit_finished(stale)
     assert win.top._f_extract_hz == pytest.approx(12e9)
     assert not win.top.exp_ng.isEnabled(), "a superseded model must not be exportable"
+
+
+def test_no_time_left_is_ever_shown(win, monkeypatch):
+    """The fraction is not linear in time, so a remaining-time figure would be a
+    number the code cannot stand behind.  Nothing must render one."""
+    real = engine.convert
+
+    def slow(state, net, progress=None):
+        if progress is not None:
+            progress(0.5, "halfway")
+        time.sleep(0.8)
+        return real(state, net, progress=progress)
+
+    monkeypatch.setattr(fit_runner.engine, "convert", slow)
+    win.recompute()
+    _app().processEvents()
+    seen = []
+    deadline = time.time() + _TIMEOUT
+    while time.time() < deadline and win._fit.busy():
+        _app().processEvents()
+        for indicator in win._fit_indicators():
+            seen.append(indicator.message.text() + "|" + indicator.elapsed.text())
+        time.sleep(0.05)
+    _settle(win)
+    assert seen, "the fit never rendered"
+    assert not any("left" in s for s in seen), "a remaining-time figure was shown"
