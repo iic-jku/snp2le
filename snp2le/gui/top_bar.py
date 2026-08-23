@@ -314,10 +314,12 @@ class TopBar(QtWidgets.QWidget):
         lay.addLayout(self._labeled("Structure", self.structure))
         lay.addWidget(self.mode_stack)         # f_ext+option (structure) or order+passivity
         lay.addWidget(self.band_box)           # fit range (both modes)
-        lay.addSpacing(12)                     # same gap on both sides of the divider
+        # the same 12 px on both sides of the divider, so the action buttons start as
+        # close to it as the fit range ends on the other side
+        lay.addSpacing(12)
         lay.addWidget(self.sep)                # fixed divider, always visible
-        lay.addSpacing(12)                     # the action side starts as close as the
-        lay.addLayout(self._labeled("", self.exp_ng))   # fit range ends on the other side
+        lay.addSpacing(12)
+        lay.addLayout(self._labeled("", self.exp_ng))
         lay.addLayout(self._labeled("", self.exp_va))
         lay.addLayout(self._labeled("", self.load_sch))
         lay.addLayout(self._labeled("Simulator", self.simulator))
