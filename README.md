@@ -221,9 +221,9 @@ view's header row so switching tabs does not lose sight of a running fit:
 
 | While it runs | When it ends |
 | --- | --- |
-| what the fit is doing (`vector fitting, 7 iterations`, `solving 240 of 401 frequencies`) | `conversion complete (24.6 s)` in green |
-| how long it has been running | `conversion failed: <reason>` in red |
-| a progress bar tracking the real work, not a step count | the line stays until the next conversion starts |
+| what the fit is doing (`vector fitting, 7 iterations`, `solving 240 of 401 frequencies`) | `conversion complete` in green |
+| how long it has been running | the total time, in green next to it |
+| a progress bar tracking the real work, not a step count | the bar, full, and all of it stays until the next conversion starts |
 
 Both indicators sit inside panels that already existed, so neither costs any
 window height.
@@ -239,8 +239,10 @@ Two figures are deliberately absent:
 
 Three more details worth knowing:
 
-- The bar only appears after ~0.35 s, so a fast structure extraction does not
-  flicker it on and off while you turn a spin box.
+- Nothing is hidden once a conversion has started: dragging a spin box moves the
+  bar and rewrites two labels, where showing and hiding them would strobe.
+- A failed conversion reads red and leaves the bar where it stopped rather than
+  filling it, since the attempt did not complete.
 - Changing controls during a fit does not queue one conversion per change. The
   running fit finishes, then the newest settings are converted, once.
 - If a long fit finishes while you are in another window, the taskbar entry

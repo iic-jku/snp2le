@@ -92,9 +92,11 @@ higher ceiling, since order 6 brings the same file to 1.018.</p></li>
 <p>Progress shows in the <b>Conversion</b> panel, under the loaded file name and just
 above the <i>Result</i> rows it fills in, and again in the <b>Plot</b> view's header row
 so switching tabs does not lose sight of a running fit. While one runs it shows what the
-fit is doing, how long it has been running, and a progress bar. When it ends the bar goes
-and the line becomes the outcome, green (<i>conversion complete (4.2&nbsp;s)</i>) or red
-with the reason, and it stays until the next conversion starts.</p>
+fit is doing, how long it has been running, and a progress bar. When it ends the line
+becomes the outcome and the bar stays where it stopped: green
+<i>conversion complete</i> with the total time beside it and the bar full, or red with
+the reason and the bar left where the attempt got to. It stands there until the next
+conversion starts.</p>
 <ul>
 <li>The window stays usable while a fit runs: the conversion is not on the UI thread.</li>
 <li>No time-left estimate is shown. The progress fraction is not linear in time, since

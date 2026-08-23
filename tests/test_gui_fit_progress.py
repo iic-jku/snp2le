@@ -24,6 +24,7 @@ QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 
 from snp2le.core import engine                            # noqa: E402
 from snp2le.gui import fit_runner                         # noqa: E402
+from snp2le.gui.style import STATUS_GREEN, STATUS_RED     # noqa: E402
 from snp2le.gui.main_window import MainWindow             # noqa: E402
 
 _TIMEOUT = 60.0                     # generous: a fit on a slow CI box is still a fit
@@ -76,11 +77,15 @@ def test_both_views_report_the_outcome(win):
         assert "poles" not in text and "rms" not in text, f"summary repeated: {text}"
         # The elapsed time is on the line in the panel and in its own field in the
         # header row, where a long message would otherwise elide the number away.
-        shown = text + indicator.elapsed.text()
-        assert " s" in shown or ":" in shown, f"no elapsed time: {shown!r}"
+        clock = indicator.elapsed.text()
+        assert " s" in clock or ":" in clock, f"no elapsed time: {clock!r}"
         # isHidden(), not isVisible(): the window is never show()n in a headless
         # run, so isVisible() is False for every child whatever was asked for.
-        assert indicator.bar.isHidden(), "the bar must go when the fit ends"
+        assert not indicator.bar.isHidden(), "the finished bar must stay on screen"
+        assert indicator.bar.value() == indicator.bar.maximum(), "the bar must read full"
+        assert not indicator.elapsed.isHidden(), "the clock must stay on screen"
+        for widget in (indicator.message, indicator.elapsed):
+            assert STATUS_GREEN in widget.styleSheet(), "the outcome must read green"
 
 
 def test_a_running_fit_shows_progress_and_keeps_the_ui_alive(win, monkeypatch):
@@ -261,3 +266,22 @@ def test_no_time_left_is_ever_shown(win, monkeypatch):
     _settle(win)
     assert seen, "the fit never rendered"
     assert not any("left" in s for s in seen), "a remaining-time figure was shown"
+
+
+def test_a_failed_conversion_reads_red_and_keeps_its_clock(win, monkeypatch):
+    """Failure colours the same two fields red and leaves the bar where it got to,
+    rather than filling it: the attempt did not complete."""
+    from snp2le.core.state import Results
+    _settle(win)
+    monkeypatch.setattr(win.design, "update_results", lambda res: None)
+    monkeypatch.setattr(win.plots, "update_results", lambda res: None)
+    for indicator in win._fit_indicators():
+        indicator.start()
+        indicator.bar.setValue(400)
+    win._on_fit_finished(Results(ok=False, mode="universal", error="no network"))
+    for indicator in win._fit_indicators():
+        assert "conversion failed" in indicator.message.toolTip()
+        assert STATUS_RED in indicator.message.styleSheet()
+        assert STATUS_RED in indicator.elapsed.styleSheet()
+        assert indicator.bar.value() == 400, "a failed run must not read as complete"
+    _settle(win)

@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """fit_status.py - the conversion progress indicator.
 
-One compact widget: what the fit is doing, how long it has been running, and a
-bar tracking it.  When the fit ends the bar goes and the line becomes the
-outcome, green or red, and it stays there until the next fit starts.  That
-standing line is the completion notice: nothing has to be watched while a fit
-runs, and nothing has to be clicked to learn how it went.
+One compact widget: what the fit is doing on the left, how long it has been
+running on the right, and a bar under (or beside) them tracking it.  When the
+fit ends the line becomes the outcome and the bar stays where it stopped, full
+on a completed conversion.  Green throughout on success, red on failure, and it
+stands there until the next fit starts: that is the completion notice, so
+nothing has to be watched while a fit runs and nothing has to be clicked to
+learn how it went.
 
 It lives inside panels that already exist rather than in a bar of its own: in
 the Design view under the loaded-file line, where the RMS error and pole count
@@ -20,23 +22,19 @@ Two things it deliberately does not show:
   the fit stage reports a saturating curve because `auto_fit`'s iteration count
   is not knowable in advance.  A remaining-time figure derived from it would be
   a number the code cannot stand behind.
-- **No result summary on completion.**  "conversion complete (4.2 s)" is the
-  whole line, because the pole count and RMS error are already on screen in the
-  panel below it.
+- **No result summary on completion.**  The line is the verdict and the clock,
+  because the pole count and RMS error are already on screen in the panel below.
 
-It never changes height, so a fit that finishes in 80 ms cannot make the panel
-flicker: every widget keeps its space when hidden, and the bar only appears once
-the fit has run past `_BAR_DELAY_S`, the point where a user starts wondering
-whether anything is happening at all.
+Nothing here is ever hidden once a conversion has started, which is what keeps a
+run of fast fits calm: dragging a spin box moves the bar's value and rewrites two
+labels, where showing and hiding them would strobe.  The widget also never
+changes height, so a fit that finishes in 80 ms cannot make the panel jump.
 """
 from __future__ import annotations
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from snp2le.core.progress import format_duration
 from .style import JKU_GRAY, STATUS_GREEN, STATUS_RED
-
-# A fit shorter than this never shows a bar: it is done before the eye resolves it.
-_BAR_DELAY_S = 0.35
 
 # Compact mode sits in the Plot view's header row, which already carries a title,
 # four selectors, a legend, three figures and three buttons.  Every part of it is
@@ -105,18 +103,19 @@ class FitProgress(QtWidgets.QWidget):
 
     # ---- states ----------------------------------------------------------
     def clear(self):
-        """Idle and silent: no fit has run, or the window was just reset."""
+        """Idle and silent: no fit has run yet, or the window was just reset."""
         self._set_message("", JKU_GRAY)
+        self._set_elapsed("", JKU_GRAY)
         self.bar.setValue(0)
         self.bar.setVisible(False)
         self.elapsed.setVisible(False)
 
     def start(self, message="starting"):
-        """A fit has begun.  The bar itself waits for `_BAR_DELAY_S`."""
+        """A fit has begun.  Everything stays on screen from here on."""
         self._set_message(message, JKU_GRAY)
+        self._set_elapsed("", JKU_GRAY)
         self.bar.setValue(0)
-        self.bar.setVisible(False)
-        self.elapsed.setText("")
+        self.bar.setVisible(True)
         self.elapsed.setVisible(True)
 
     def update_progress(self, state):
@@ -124,25 +123,24 @@ class FitProgress(QtWidgets.QWidget):
         if not state.running:
             return
         self._set_message(state.message or "converting", JKU_GRAY)
+        self._set_elapsed(format_duration(state.elapsed), JKU_GRAY)
         self.bar.setValue(int(round(state.fraction * 1000)))
-        self.elapsed.setText(format_duration(state.elapsed))
-        self.bar.setVisible(state.elapsed >= _BAR_DELAY_S)
 
     def finish(self, ok, message, elapsed=None):
         """Show the outcome and leave it standing until the next fit.
 
-        The panel reads 'conversion complete (4.2 s)' on one line.  Compact keeps
-        the time in its own fixed-width field instead, so the elapsed figure can
-        never be the part that elides away.
+        A completed conversion fills the bar; a failed one leaves it where it
+        stopped, which is the honest picture of how far the attempt got.  The
+        clock keeps the total either way, in the outcome's colour.
         """
-        text = message or ("conversion complete" if ok else "conversion failed")
-        show_clock = self._compact and elapsed is not None
-        if elapsed is not None and not self._compact:
-            text = f"{text} ({format_duration(elapsed)})"
-        self._set_message(text, STATUS_GREEN if ok else STATUS_RED)
-        self.bar.setVisible(False)
-        self.elapsed.setText(format_duration(elapsed) if show_clock else "")
-        self.elapsed.setVisible(show_clock)
+        colour = STATUS_GREEN if ok else STATUS_RED
+        self._set_message(message or ("conversion complete" if ok
+                                      else "conversion failed"), colour)
+        self._set_elapsed("" if elapsed is None else format_duration(elapsed), colour)
+        if ok:
+            self.bar.setValue(self.bar.maximum())
+        self.bar.setVisible(True)
+        self.elapsed.setVisible(elapsed is not None)
 
     # ---- internals -------------------------------------------------------
     def _set_message(self, text, color):
@@ -152,3 +150,7 @@ class FitProgress(QtWidgets.QWidget):
             text = QtGui.QFontMetrics(self.message.font()).elidedText(
                 text, QtCore.Qt.ElideRight, self.message.width())
         self.message.setText(text)
+
+    def _set_elapsed(self, text, color):
+        self.elapsed.setStyleSheet(f"color:{color}; font-size:11px; font-weight:600;")
+        self.elapsed.setText(text)
