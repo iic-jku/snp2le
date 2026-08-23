@@ -9,6 +9,7 @@ must reach ConverterState.  These tests drive the real MainWindow offscreen
 """
 import os
 import sys
+import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -24,10 +25,31 @@ from snp2le.core.state import ConverterState            # noqa: E402
 from snp2le.gui.main_window import MainWindow           # noqa: E402
 
 
+_TIMEOUT = 60.0                     # generous: a fit on a slow CI box is still a fit
+
+
+def _settle(window, timeout=_TIMEOUT):
+    """Pump the event loop until no conversion is running.
+
+    Conversions run on a worker thread (see gui/fit_runner.py), so `_res` only holds
+    this call's result once the finished handler has run.  Same helper as the one in
+    test_gui_fit_progress.py."""
+    app = QtWidgets.QApplication.instance()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        app.processEvents()
+        if not window._fit.busy():
+            app.processEvents()             # let the finished handler run
+            return window
+        time.sleep(0.01)
+    raise AssertionError("the conversion never finished")
+
+
 @pytest.fixture(scope="module")
 def win():
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     w = MainWindow()
+    _settle(w)
     yield w
     w.close()
     app.processEvents()
@@ -37,8 +59,10 @@ def win():
 def top(win):
     """The top bar with the bundled example loaded, restored after every test."""
     win.on_reset()
+    _settle(win)
     yield win.top
     win.on_reset()
+    _settle(win)
 
 
 def _enter(top, f_min=None, f_max=None):
@@ -64,6 +88,7 @@ def test_a_plain_number_is_read_as_ghz(win, top):
     win._pull()
     assert (win.state.f_min, win.state.f_max) == (140e9, 170e9)
     win.recompute()
+    _settle(win)
     assert win._res.band_limited
     assert win._res.freq[0] == 140e9 and win._res.freq[-1] == 170e9
 
@@ -90,6 +115,7 @@ def test_clearing_a_field_leaves_that_side_open(win, top):
     win._pull()
     assert win.state.f_min is None
     win.recompute()
+    _settle(win)
     assert win._res.freq[0] == win.net.f[0]            # follows the data again
 
 
@@ -105,6 +131,7 @@ def test_loading_another_file_seeds_that_file_s_span(win, top, tmp_path):
     win.net = io.load_touchstone(stem + ".s2p")
     win._seed_band()
     win.recompute()
+    _settle(win)
     assert (top.f_min.text(), top.f_max.text()) == ("1", "20")
     assert win._res.ok and not win._res.band_limited
 
@@ -131,6 +158,7 @@ def test_the_displayed_rounding_never_crops_the_fit(win, top):
     win.net = skrf.Network(frequency=f, s=0.1 * np.ones((33, 2, 2)), z0=50)
     win._seed_band()
     win.recompute()
+    _settle(win)
     assert top.f_min.text() == "0.1" and top.f_max.text() == "20"
     assert top.values()["f_min"] == float(win.net.f[0])
     assert len(win._res.freq) == 33 and not win._res.band_limited
@@ -138,5 +166,6 @@ def test_the_displayed_rounding_never_crops_the_fit(win, top):
     _enter(top, None, "15")                            # edit only the stop field
     win._pull()
     win.recompute()
+    _settle(win)
     assert win.state.f_min == float(win.net.f[0])      # the untouched side stays exact
     assert win._res.freq[0] == win.net.f[0]

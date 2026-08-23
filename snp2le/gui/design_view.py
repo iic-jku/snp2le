@@ -14,7 +14,16 @@ from snp2le.core.units import format_eng
 from .style import JKU_GRAY, STATUS_GREEN, STATUS_AMBER, STATUS_RED
 from .widgets import (OutputField, section_title, MathLabel, passivity_text,
                       sigma_text, with_symbols)
+from .fit_status import FitProgress
 from .schematic_widget import SchematicWidget
+
+
+# Vertical rhythm of the Conversion panel.  The gap *under* a heading comes from
+# the panel layout's own spacing and is deliberately left alone, since a heading
+# should sit close to what it introduces.  This opens only the gaps that read as
+# cramped: between consecutive rows here, and above a heading via
+# widgets._HEADING_TOP_GAP.
+_ROW_GAP = 3
 
 
 def _panel(title):
@@ -54,6 +63,11 @@ class DesignView(QtWidgets.QWidget):
         self.file_lbl.setProperty("class", "hint"); self.file_lbl.setWordWrap(True)
         left.addWidget(self.file_lbl)
 
+        # Progress of the conversion of that file, directly under its name and
+        # directly above the Result rows it ends up filling in.
+        self.fit_progress = FitProgress()
+        left.addWidget(self.fit_progress)
+
         left.addWidget(section_title("Result"))
         # label_w fits the widest label ("ext. frequency") so the values stay aligned
         self.mode_out = OutputField("mode", "\u2014", label_w=100, equals=False)
@@ -78,12 +92,15 @@ class DesignView(QtWidgets.QWidget):
             "Untick 'Enforce passivity' in the top bar to raise the bound and keep the "
             "more accurate fit.")
         self.order_out = OutputField("order / Q", "\u2014", label_w=100, equals=False)
-        for w in (self.mode_out, self.band_out, self.rms_out, self.pass_out, self.sigma_out,
-                  self.order_out):
+        for i, w in enumerate((self.mode_out, self.band_out, self.rms_out, self.pass_out,
+                               self.sigma_out, self.order_out)):
+            if i:
+                left.addSpacing(_ROW_GAP)      # air between the rows, not under the heading
             left.addWidget(w)
 
         left.addWidget(section_title("Element values"))
-        self.values_host = QtWidgets.QVBoxLayout(); self.values_host.setSpacing(4)
+        self.values_host = QtWidgets.QVBoxLayout()
+        self.values_host.setSpacing(4 + _ROW_GAP)
         left.addLayout(self.values_host)
 
         self.tol_title = section_title("Tolerances")
@@ -103,9 +120,11 @@ class DesignView(QtWidgets.QWidget):
             "cannot fit. Frequency dispersion away from the ext. frequency is visible in "
             "the plots.")
         left.addWidget(self.tol_caption)
-        self.tol_host = QtWidgets.QVBoxLayout(); self.tol_host.setSpacing(4)
+        self.tol_host = QtWidgets.QVBoxLayout()
+        self.tol_host.setSpacing(4 + _ROW_GAP)
         left.addLayout(self.tol_host)
 
+        left.addSpacing(_ROW_GAP)
         self.msg_lbl = QtWidgets.QLabel("")
         self.msg_lbl.setStyleSheet(f"color:{JKU_GRAY};font-size:10px;"); self.msg_lbl.setWordWrap(True)
         left.addWidget(self.msg_lbl)

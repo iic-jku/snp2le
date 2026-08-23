@@ -33,6 +33,48 @@ The flow is always **load, `engine.convert(state, net)`, `Results`, views**:
    `Results`, so what you see and what you export always agree.
 
 
+## Progress and threading
+
+`engine.convert(state, net, progress=None)` takes an optional
+`callback(fraction, message)` and reports an overall 0..1 along the way.
+`core/progress.py` holds the two pieces around that contract: `StageTracker`
+maps a stage's own 0..1 onto its weighted slice of the whole run (the weights
+live in `engine._PLAN_UNIVERSAL` / `_PLAN_STRUCTURE`), and `ProgressReporter` is
+a thread-safe sink that also keeps elapsed time and an ETA. Core stays Qt-free:
+the reporter is plain `threading`.
+
+Two parts of the pipeline report from inside, which is what makes the fraction
+track real work rather than count steps:
+
+* `mna.rlc_sparams` reports per frequency (one MNA solve each), which dominates
+  a structure-mode conversion over a wide EM sweep.
+* `universal._fit_watch` reports during `auto_fit`. scikit-rf offers no callback
+  there, but it appends to `vf.d_res_history` once per pole-relocation
+  iteration, so a watcher thread polls that length. It is a real signal and
+  needs no log scraping, which is the brittle route `_enforce_passivity`
+  already avoids. The iteration count is not known in advance, so the reported
+  fraction follows a saturating curve and deliberately stops short of 1.
+
+On the GUI side, `gui/fit_runner.py` runs `engine.convert` on a `QThread` and
+`gui/fit_status.py` renders the indicator. It is hosted twice, in the Design
+view's Conversion panel and (compact) in the Plot view's header row, so a
+running fit is visible on either tab without either view growing: both hosts had
+spare room. `MainWindow._fit_indicators` is the list the tick drives. Two rules
+there:
+
+* **One fit at a time, newest wins.** A request arriving mid-fit is remembered,
+  not queued, so dragging a spin box starts one more conversion, not one per
+  value. `MainWindow._res` caches the finished `Results`, and Export writes
+  that instead of re-converting on the GUI thread.
+* **Progress is sampled, not pushed.** The worker updates the reporter and
+  `MainWindow._fit_clock` reads `snapshot()` every 80 ms. No Qt signal crosses
+  the thread boundary except `finished`, and the elapsed display keeps ticking
+  even while the fit sits inside one long scikit-rf call.
+
+A QThread destroyed while running aborts the process, so `FitRunner.shutdown()`
+waits, and parks a worker that outlives the wait in `fit_runner._ORPHANS`.
+
+
 ## Adding a structure
 
 Subclass `snp2le.core.structures.base.Structure`, implement `extract(net, ...)`
@@ -88,3 +130,18 @@ pytest
   Y-/ABCD-parameter extraction and the MNA rebuild.
 * The transmission-line ladder uses 2 L-cells by default (`N_SEGMENTS` in
   `snp2le/core/structures/tline.py`) and can be set from 1 to 10 stages.
+* `fit_universal` wraps the fit in `contextlib.redirect_stdout/stderr` to
+  swallow scikit-rf's chatter, and those rebind `sys.stdout` / `sys.stderr` for
+  the whole process, not for one thread. That was harmless while the fit blocked
+  the GUI thread (nothing else could run). Now that it runs on a worker, the
+  redirect is live for the GUI thread too, so anything it writes to stderr
+  during a fit is discarded, most visibly the traceback PySide6 prints when a
+  slot raises. Conversions run one at a time, so the redirects never nest.
+  Kept as is on purpose: every alternative (a `warnings.catch_warnings`, a
+  logging filter) is equally process-global, and a thread-aware stream proxy
+  would mean replacing `sys.stderr` from library import. Note the consequence
+  when debugging a GUI problem that only shows up during a fit.
+* A conversion cannot be cancelled once started. The long call inside it
+  (`VectorFitting.auto_fit`) is not interruptible, so a Stop button could not
+  honour its own label. Superseding requests are coalesced instead, and the
+  window stays usable meanwhile.

@@ -29,9 +29,12 @@ import argparse
 import glob
 import os
 import re
+import shutil
 import sys
+import time
 
 from snp2le.core import io, engine, units, netlist, universal
+from snp2le.core.progress import format_duration
 from snp2le.core.state import ConverterState
 from snp2le.core.structures import structure_items
 
@@ -39,6 +42,66 @@ from snp2le.core.structures import structure_items
 _NON_DATA = {".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out", ".svg", ".png",
              ".ps", ".pdf", ".sch", ".aborted"}
 _DATA_EXTS = {".txt", ".data", ".dat", ".csv"}
+
+
+class _ProgressLine:
+    """A one-line progress bar redrawn in place on stderr.
+
+    Only used on a terminal.  Piped or redirected output gets the ordinary
+    status lines and nothing else, so logs, CI transcripts and `snp2le ... >
+    file` stay diffable instead of filling with carriage returns.  It writes to
+    stderr so a piped stdout keeps carrying only the [ OK ] lines.
+    """
+
+    _WIDTH = 22                      # characters of bar, excluding the brackets
+    _MIN_INTERVAL = 0.1              # s between redraws, ~10 Hz is smooth enough
+
+    def __init__(self, label, stream=None):
+        self._label = label
+        # Bind the stream now, not per write.  fit_universal redirects sys.stderr
+        # for the whole fit to swallow scikit-rf's chatter, so a late lookup would
+        # send the bar into that StringIO during the one phase worth watching.
+        self._stream = stream or sys.stderr
+        self._t0 = time.monotonic()
+        self._last = 0.0
+        self._width = 0              # characters written by the last redraw
+
+    def __call__(self, fraction, message=""):
+        now = time.monotonic()
+        if now - self._last < self._MIN_INTERVAL and fraction < 1.0:
+            return
+        self._last = now
+        filled = int(round(self._WIDTH * max(0.0, min(1.0, fraction))))
+        bar = "#" * filled + "-" * (self._WIDTH - filled)
+        line = (f"  {self._label} [{bar}] {fraction * 100:3.0f}%  "
+                f"{format_duration(now - self._t0)}  {message}")
+        self._write(line[:max(20, shutil.get_terminal_size((80, 24)).columns - 1)])
+
+    def close(self):
+        """Erase the line so the next print starts on a clean row."""
+        if self._width:
+            self._stream.write("\r" + " " * self._width + "\r")
+            self._stream.flush()
+        self._width = 0
+
+    def _write(self, line):
+        pad = max(0, self._width - len(line))
+        self._stream.write("\r" + line + " " * pad)
+        self._stream.flush()
+        self._width = len(line)
+
+
+def _progress_for(args, label):
+    """A `_ProgressLine` for this run, or None when progress is not wanted.
+
+    `--progress` / `--no-progress` decide it outright; unset means show it on a
+    terminal only.  `--quiet` silences it like every other status output.
+    """
+    if args.quiet or args.progress is False:
+        return None
+    if args.progress is None and not sys.stderr.isatty():
+        return None
+    return _ProgressLine(label)
 
 
 def _freq(text):
@@ -349,7 +412,14 @@ def cmd_convert(args):
             passivity_ceiling=p_ceiling,
             f_extract=args.fext, n_segments=args.stages, iso_resistor=args.iso_r,
             f_min=args.fmin, f_max=args.fmax)
-        res = engine.convert(state, net)
+        bar = _progress_for(args, os.path.basename(src))
+        t_start = time.monotonic()
+        try:
+            res = engine.convert(state, net, progress=bar)
+        finally:
+            if bar is not None:
+                bar.close()
+        elapsed = time.monotonic() - t_start
         if not res.ok:
             print(f"[FAIL] {src}: {res.error}", file=sys.stderr)
             rc = 1
@@ -385,7 +455,8 @@ def cmd_convert(args):
                     extra = f"rms={res.rms_error:.2e}  poles={res.n_poles}{sig}{dc}"
                 else:
                     extra = f"f_ext={units.format_eng(res.metrics.get('f_extract'), 'Hz')}"
-                print(f"[ OK ] {src} -> {out}  ({dialect}, {extra})")
+                print(f"[ OK ] {src} -> {out}  ({dialect}, {extra}, "
+                      f"{format_duration(elapsed)})")
         # a singular DC operating point makes the netlist unsimulable, so always warn
         if res.dc is not None and not res.dc.ok:
             print(f"[WARN] {src}: DC operating point may be singular "
@@ -483,6 +554,10 @@ def build_parser():
     c.add_argument("--values", action="store_true", help="print the extracted element values")
     c.add_argument("--tolerances", action="store_true", help="print per-element tolerances")
     c.add_argument("--quiet", action="store_true", help="suppress the per-file status line")
+    c.add_argument("--progress", action="store_true", default=None,
+                   help="show a progress bar while converting (default: only on a terminal)")
+    c.add_argument("--no-progress", dest="progress", action="store_false",
+                   help="never show the progress bar")
     # simulate a testbench and plot
     c.add_argument("--simulate", metavar="SCH", help="run an Xschem testbench after converting")
     c.add_argument("--simulator", choices=["ngspice", "vacask"], default=None,

@@ -25,6 +25,7 @@ from matplotlib.backend_bases import _Mode
 
 from .style import JKU_BLUE, JKU_GRAY, JKU_RED
 from .widgets import passivity_text, sigma_text, FitComboBox
+from .fit_status import FitProgress
 from snp2le.core import io
 
 # Curve styling: JKU colours paired with distinct line styles, so the traces
@@ -334,6 +335,10 @@ class PlotView(QtWidgets.QWidget):
             bar.addWidget(_legend_swatch(color, ls))
             bar.addWidget(self._hint(name)); bar.addSpacing(8)
         bar.addStretch(1)
+        # Conversion progress, so switching to this tab does not lose sight of a
+        # running fit.  Compact: this row is already full of controls.
+        self.fit_progress = FitProgress(compact=True)
+        bar.addWidget(self.fit_progress); bar.addSpacing(14)
         # universal-mode status mirrored from the Design tab (passivity + order),
         # placed just before Export CSV, hidden in structure mode
         self.stats_box = QtWidgets.QWidget()

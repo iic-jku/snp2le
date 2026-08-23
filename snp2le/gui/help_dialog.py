@@ -99,6 +99,29 @@ shows the band actually fitted, highlighted while it is a sub-band.</li>
 <li><b>View</b>: switch between <i>Design &amp; Schematic</i> and <i>Plot</i>.</li>
 </ul>
 
+<h3>Conversion progress</h3>
+<p>Progress shows in the <b>Conversion</b> panel, under the loaded file name and just
+above the <i>Result</i> rows it fills in, and again in the <b>Plot</b> view's header row
+so switching tabs does not lose sight of a running fit. While one runs it shows what the
+fit is doing, how long it has been running, and a progress bar. When it ends the line
+becomes the outcome and the bar stays where it stopped: green
+<i>conversion complete</i> with the total time beside it and the bar full, or red with
+the reason and the bar left where the attempt got to. It stands there until the next
+conversion starts.</p>
+<ul>
+<li>The window stays usable while a fit runs: the conversion is not on the UI thread.</li>
+<li>No time-left estimate is shown. The progress fraction is not linear in time, since
+there is no way to know in advance how many iterations the fit will take, so any figure
+derived from it would be guesswork.</li>
+<li>The completion line carries only the elapsed time. The pole count and RMS error are
+in the <i>Result</i> rows below it.</li>
+<li>Changing controls during a fit does not queue one conversion per change. The running
+fit finishes, then the newest settings are converted, once.</li>
+<li>A long fit that ends while you are in another window flashes the taskbar entry.</li>
+<li><b>Export</b> writes the conversion that finished, so it is greyed out while one is
+running.</li>
+</ul>
+
 <h3>Design &amp; Schematic</h3>
 <ul>
 <li><b>Result</b>: fit/extraction quality. RMS error against the data, passivity,
