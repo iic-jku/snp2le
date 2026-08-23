@@ -316,9 +316,8 @@ class TopBar(QtWidgets.QWidget):
         lay.addWidget(self.band_box)           # fit range (both modes)
         lay.addSpacing(12)                     # same gap on both sides of the divider
         lay.addWidget(self.sep)                # fixed divider, always visible
-        lay.addSpacing(12)
-        lay.addStretch(1)
-        lay.addLayout(self._labeled("", self.exp_ng))
+        lay.addSpacing(12)                     # the action side starts as close as the
+        lay.addLayout(self._labeled("", self.exp_ng))   # fit range ends on the other side
         lay.addLayout(self._labeled("", self.exp_va))
         lay.addLayout(self._labeled("", self.load_sch))
         lay.addLayout(self._labeled("Simulator", self.simulator))
@@ -333,6 +332,10 @@ class TopBar(QtWidgets.QWidget):
         sim_box.addStretch(1)
         lay.addLayout(sim_box)
         lay.addLayout(self._labeled("", self.reset))
+        # spare width goes to the right edge.  Held between the divider and Export it
+        # would open a gap there that grows with the window, and the two sides of the
+        # divider are meant to look the same.
+        lay.addStretch(1)
 
         self.mode.currentIndexChanged.connect(self._on_change)
         self.structure.currentIndexChanged.connect(self._on_change)

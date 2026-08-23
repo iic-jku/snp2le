@@ -65,6 +65,30 @@ def test_the_tick_boxes_sit_on_the_button_line(bar):
         assert cb.objectName() == "wrapCheck"
 
 
+def test_the_divider_has_the_same_gap_on_both_sides(bar):
+    """The conversion controls end and the action buttons start the same distance from
+    the vertical divider.  The spare width of a wide window belongs at the right edge,
+    not in that gap, which is why the stretch sits after Reset."""
+    # its own bar, sized with room to spare: at the natural width every gap is tight
+    # anyway, so a stretch in the wrong place only shows up in a window that has slack.
+    # A separate instance also keeps the shared fixture's geometry untouched.
+    wide = TopBar()
+    wide.resize(wide.sizeHint().width() + 400, wide.sizeHint().height())
+    wide.show()
+    QtWidgets.QApplication.instance().processEvents()
+    row = wide.layout().itemAt(1).widget()
+
+    def span(w):
+        x = w.mapTo(row, QtCore.QPoint(0, 0)).x()
+        return x, x + w.width()
+
+    field_end = span(wide.f_max)[1]
+    div_start, div_end = span(wide.sep)
+    export_start = span(wide.exp_ng)[0]
+    wide.close()
+    assert div_start - field_end == export_start - div_end
+
+
 def test_both_tick_box_labels_stay_wrapped(bar):
     """Unwrapping either one costs about 45 px of bar width, which is the whole point
     of the shape.  Compare against the same text on one line rather than a pixel
