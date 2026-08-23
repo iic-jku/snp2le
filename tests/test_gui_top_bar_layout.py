@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 
 QtWidgets = pytest.importorskip("PySide6.QtWidgets")
+QtCore = pytest.importorskip("PySide6.QtCore")
 
 from snp2le.gui.style import build_stylesheet                  # noqa: E402
 from snp2le.gui.top_bar import TopBar                          # noqa: E402
@@ -51,6 +52,17 @@ def test_the_two_tick_boxes_share_a_line(bar):
     passive_y, passive_h = _indicator_y(bar.passive, row)
     output_y, output_h = _indicator_y(bar.sim_output, row)
     assert (passive_y, passive_h) == (output_y, output_h)
+
+
+def test_the_tick_boxes_sit_on_the_button_line(bar):
+    """Their top edge is the buttons' top edge.  A wrapped label centres the indicator
+    against both lines by default, which drops it 8 px below everything else in the row,
+    so the two boxes carry #wrapCheck and style.py pins the indicator to the top."""
+    row = bar.layout().itemAt(1).widget()
+    button_y = bar.run_sim.mapTo(row, QtCore.QPoint(0, 0)).y()
+    for cb in (bar.passive, bar.sim_output):
+        assert _indicator_y(cb, row)[0] == button_y
+        assert cb.objectName() == "wrapCheck"
 
 
 def test_both_tick_box_labels_stay_wrapped(bar):

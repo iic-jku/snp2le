@@ -174,6 +174,7 @@ class TopBar(QtWidgets.QWidget):
 
         # two lines: the bar is wide enough as it is, and the box reads the same
         self.passive = QtWidgets.QCheckBox("Enforce\npassivity")
+        self.passive.setObjectName("wrapCheck")      # indicator at the top, see style.py
         self.passive.setChecked(True)
         self.passive.setToolTip(
             "Perturb the fit until its worst singular value is at or below the\n"
@@ -284,6 +285,7 @@ class TopBar(QtWidgets.QWidget):
         # two lines, like 'Enforce passivity', so the bar stays narrow and the two tick
         # boxes are the same shape (which is what puts them on the same line)
         self.sim_output = QtWidgets.QCheckBox("Show\noutput")
+        self.sim_output.setObjectName("wrapCheck")   # indicator at the top, see style.py
         self.sim_output.setChecked(False)
         self.sim_output.setToolTip(
             "Show the simulator's console and plot windows during the run.\n"
