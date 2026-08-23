@@ -89,6 +89,20 @@ def test_the_divider_has_the_same_gap_on_both_sides(bar):
     assert div_start - field_end == export_start - div_end
 
 
+def test_no_other_row_sets_the_window_floor(bar):
+    """The control strip is the widest row in the window, so it is what the window's
+    width is for.  The plot view's own control row used to be wider (1767 px against
+    1710) and the difference showed up as dead space at the right of this bar, since
+    nothing there could shrink."""
+    from snp2le.gui.plot_view import PlotView
+    plots = PlotView()
+    try:
+        assert plots.minimumSizeHint().width() <= bar.minimumSizeHint().width()
+    finally:
+        plots.close()
+        plots.deleteLater()
+
+
 def test_both_tick_box_labels_stay_wrapped(bar):
     """Unwrapping either one costs about 45 px of bar width, which is the whole point
     of the shape.  Compare against the same text on one line rather than a pixel

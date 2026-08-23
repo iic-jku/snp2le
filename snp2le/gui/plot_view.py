@@ -328,6 +328,11 @@ class PlotView(QtWidgets.QWidget):
             # metrics, so it fits on any platform font. The legend after the
             # selectors shifts left to match
             cb = FitComboBox("Rseries / Rshunt")
+            # ...but it may shrink if the window is narrower than this row would like.
+            # Without a smaller minimum the four of them pin a floor under the whole
+            # window (1767 px, wider than any other row needs), and the extra width shows
+            # up as dead space in the top bar rather than as anything useful here.
+            cb.setMinimumWidth(cb.fontMetrics().horizontalAdvance("Ldiff / Q") + 40)
             cb.currentIndexChanged.connect(self._render)
             self.selectors.append(cb); bar.addWidget(cb)
         bar.addSpacing(14)
