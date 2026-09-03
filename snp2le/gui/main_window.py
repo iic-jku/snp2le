@@ -9,6 +9,7 @@ samples the worker's progress into the indicator each view hosts.
 """
 from __future__ import annotations
 import os
+import sys
 import time
 from PySide6 import QtCore, QtWidgets
 
@@ -30,7 +31,10 @@ _ALERT_AFTER_S = 2.0
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, snp_path=None):
+        """`snp_path` is a Touchstone file named on the command line (`snp2le design.s4p`),
+        loaded in place of the bundled example so a tool such as setupEM can open the GUI
+        on the EM result it just wrote.  None opens the example, exactly as before."""
         super().__init__()
         self.setWindowTitle("S-Parameter To Lumped Element Netlist Converter")
         from .logo import logo_icon
@@ -51,7 +55,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.resize(1500, 940)
 
         self.state = ConverterState()
-        # seed with a bundled example, or fall back to the synthetic demo
+        # seed with the launch file (see _load_launch_file), or fall back to the demo
         self._examples_dir = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "examples")
         self._last_export_dir = {}        # per-dialect remembered export folder
@@ -74,12 +78,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim_log_path = None         # VACASK console log (its output is redirected here)
         self._log_win = None              # 'Show output' window that tails the VACASK log
         self._log_timer = None            # refreshes that window while the run is in progress
-        example = os.path.join(self._examples_dir, "blc_ihp-sg13g2.s4p")
-        try:
-            self.net = io.load_touchstone(example)
-            self.state.source_path = example
-        except Exception:                     # noqa: BLE001
-            self.net = io.demo_network()
+        # The file the session opens on, and that Reset returns to.  Absolute, so the
+        # Load dialog's start folder and a saved design survive a working-directory
+        # change (the dialog itself always hands back absolute paths).
+        self._launch_path = os.path.abspath(snp_path) if snp_path else ""
+        error = self._load_launch_file()
+        if error:
+            # The window is not on screen yet, and a modal dialog needs the event
+            # loop, so report it from the first event-loop turn.
+            QtCore.QTimer.singleShot(0, lambda: self._report_launch_error(error))
 
         root = QtWidgets.QWidget(); root.setObjectName("root")
         lay = QtWidgets.QVBoxLayout(root); lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(0)
@@ -203,15 +210,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if xschem.available():
             self.top.load_sch.setToolTip("")
             self.top.run_sim.setToolTip("")
-        # reload the bundled example, exactly as on launch
+        # reload the launch file, exactly as on launch
         self.state = ConverterState()
         self._pull()                              # sync state from the reset controls
-        example = os.path.join(self._examples_dir, "blc_ihp-sg13g2.s4p")
-        try:
-            self.net = io.load_touchstone(example)
-            self.state.source_path = example
-        except Exception:                         # noqa: BLE001
-            self.net = io.demo_network()
+        self._load_launch_file()                  # a launch file that failed was dropped
         self.top.set_ports(self.net.nports)
         self._seed_band()                      # back to the reloaded file's own span
         self.top.set_view("design")
@@ -221,6 +223,39 @@ class MainWindow(QtWidgets.QMainWindow):
         HelpDialog(self).exec()
 
     # ---- file loading ----------------------------------------------------
+    def _load_launch_file(self):
+        """Load the file the session opens on into `self.net` and `state.source_path`.
+
+        That is the command-line file when one was given, else the bundled example, and
+        Reset comes back here so a session launched on a file returns to that file.  A
+        launch file that cannot be read is dropped in favour of the example, so Reset does
+        not fail on it again, and the reason is returned for the caller to report (also
+        written to stderr, for a shell launch).  With no readable example either, a broken
+        install, the synthetic demo network is used.  Returns None when the launch file
+        loaded."""
+        error = None
+        if self._launch_path:
+            try:
+                self.net = io.load_touchstone(self._launch_path)
+                self.state.source_path = self._launch_path
+                return None
+            except Exception as exc:                      # noqa: BLE001
+                error = f"Could not load {self._launch_path}:\n{exc}"
+                self._launch_path = ""
+                sys.stderr.write("snp2le: " + error.replace("\n", " ") + "\n")
+        example = os.path.join(self._examples_dir, "blc_ihp-sg13g2.s4p")
+        try:
+            self.net = io.load_touchstone(example)
+            self.state.source_path = example
+        except Exception:                                 # noqa: BLE001
+            self.net = io.demo_network()
+        return error
+
+    def _report_launch_error(self, error):
+        """The message box for a launch file that could not be loaded."""
+        QtWidgets.QMessageBox.warning(
+            self, "Load failed", f"{error}\n\nThe bundled example is loaded instead.")
+
     def on_load_snp(self):
         # start in the folder of the last loaded file, else the examples folder
         start_dir = self._examples_dir

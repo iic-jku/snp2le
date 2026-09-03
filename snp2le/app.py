@@ -55,7 +55,9 @@ def _install_message_filter():
     _default[0] = QtCore.qInstallMessageHandler(_filter)
 
 
-def main():
+def main(snp_path=None):
+    """Launch the GUI.  `snp_path` is the Touchstone file of the `snp2le <file.sNp>`
+    form, opened in place of the bundled example.  None opens the example."""
     _set_windows_app_id()
     _install_message_filter()
     apply_style()
@@ -63,7 +65,7 @@ def main():
     app.setApplicationName("snp2le")
     app.setWindowIcon(logo_icon())
     app.setStyleSheet(build_stylesheet())
-    win = MainWindow()
+    win = MainWindow(snp_path)
     win.show()
     sys.exit(app.exec())
 

@@ -94,7 +94,7 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │  │  ├─ top_bar.py           load, mode, structure, options, run
 │  │  └─ ...                  help_dialog.py, style.py, widgets.py, and more
 │  ├─ __init__.py             package version
-│  ├─ __main__.py             single entry point (GUI, or -b for the CLI)
+│  ├─ __main__.py             single entry point (GUI, GUI on a file, or -b for the CLI)
 │  ├─ app.py                  the GUI launcher (__main__ starts it)
 │  └─ cli.py                  the batch CLI behind -b
 ├─ 📁 testbenches/
@@ -107,10 +107,12 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │  ├─ test_core.py
 │  ├─ test_gui_fit_progress.py  headless non-blocking-conversion regressions
 │  ├─ test_gui_fit_range.py   headless fit-range control
+│  ├─ test_gui_launch_file.py  headless GUI opened on a command-line file
 │  ├─ test_gui_passivity_ceiling.py  headless passivity-ceiling control
 │  ├─ test_gui_sim_flow.py    headless GUI run/poll/import regressions
 │  ├─ test_gui_top_bar_layout.py  headless control-strip layout invariants
 │  ├─ test_gui_view_switch.py  headless View switch (both views on screen)
+│  ├─ test_main_dispatch.py   the entry point's argument dispatch (no Qt)
 │  ├─ test_progress.py        progress reporting and the fit watcher
 │  ├─ test_qt_essentials.py   guards the Essentials-only dependency
 │  ├─ test_reproducibility.py same input, same model, across processes
@@ -158,10 +160,13 @@ pip install -e .
 
 ```bash
 snp2le              # after installing (pip / pipx)
+snp2le design.s4p   # the same, opened on that Touchstone file
 python -m snp2le    # from the repo root of a source checkout, no install needed
 ```
 
-A bundled example is preloaded on first run. More live in `snp2le/examples/`.
+A bundled example is preloaded when no file is named. More live in `snp2le/examples/`.
+
+Naming a `.sNp` file on the command line opens the GUI on it instead of the example, with the port count, the fit range and the first conversion taken from that file. This is how a tool that just wrote the file hands it over, for example the *Model Fit* button of [setupEM](https://github.com/VolkerMuehlhaus/setupEM) after an AWS Palace run. *Reset* returns to that file rather than to the example. A file that cannot be read is reported in a dialog (and on stderr) and the example is loaded in its place, so the window opens either way.
 
 > [!NOTE]
 > Start it as a module (`python -m snp2le`), not `python snp2le/app.py`. The launcher
@@ -170,7 +175,7 @@ A bundled example is preloaded on first run. More live in `snp2le/examples/`.
 
 ### Typical workflow
 
-1. **Load** a Touchstone `.sNp` file from the top bar. The header shows the port count and frequency range.
+1. **Load** a Touchstone `.sNp` file from the top bar, or name it on the command line (`snp2le design.s4p`, see above). The header shows the port count and frequency range.
 2. **Choose a mode.** Universal (set *Max order*, *Enforce passivity* and the *Passivity ceiling* it works towards) or Structure-specific (pick a structure and set the *extraction frequency*). Some structures expose an extra option such as *Stages*, *Isolation R* or *Resistive loss*.
 3. **Restrict the fit range** (optional, both modes). The *Fit range (GHz)* fields start at the loaded file's own span, so they always name the band being fitted. Enter two plain numbers in GHz (e.g. `110` and `170`) to fit only a sub-band. The *Result* panel shows the band actually fitted, and the RMS error, the tolerances, the plots and a testbench run's sweep all follow it. An edge outside the data is clamped to the data and reported, an empty or inverted band is refused.
 4. **Inspect** the result, element values, per-element **tolerances** at the extraction frequency, the drawn schematic, and the generated netlist in the **Design & Schematic** view.
@@ -305,7 +310,7 @@ snp2le -b list-structures
 snp2le -b convert <file.sNp> [options]
 ```
 
-From a source checkout without installing, use `python -m snp2le -b ...` in place of `snp2le -b`.
+From a source checkout without installing, use `python -m snp2le -b ...` in place of `snp2le -b`. Without `-b`, a single file argument opens the GUI on that file instead (see [Run the GUI](https://github.com/iic-jku/snp2le#run-the-gui)).
 
 ### `convert` options
 

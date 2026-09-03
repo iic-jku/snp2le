@@ -16,7 +16,10 @@ with the rest of your design, without re-running the field solve.</p>
 <h3>Top bar</h3>
 <ul>
 <li><b>Load .sNp</b>: open any Touchstone file. The header shows the port count and
-frequency range.</li>
+frequency range. A file named on the command line (<tt>snp2le design.s4p</tt>) is loaded
+at start-up in place of the bundled example, which is how a tool such as setupEM hands
+over the result it just wrote, and <b>Reset</b> returns to that file. A file that cannot
+be read is reported and the example is loaded instead.</li>
 <li><b>Mode</b>:
   <ul>
   <li><b>Universal</b> (any N-port): vector-fits the S-parameters into a passive

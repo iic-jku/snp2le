@@ -3,7 +3,12 @@
 """snp2le entry point.
 
     snp2le                 launch the graphical interface (default)
+    snp2le <file.sNp>      launch it with that Touchstone file loaded
     snp2le -b <command>    batch (command-line) mode
+
+The file form is for the tool that produced the file, for example setupEM's Model Fit
+button after a Palace run: the GUI opens on that file instead of the bundled example,
+and its Reset returns to it.
 
 Batch mode forwards everything after -b to the command-line parser, for example:
 
@@ -17,6 +22,7 @@ import sys
 _USAGE = (
     "snp2le - S-parameter to lumped-element netlist converter\n\n"
     "  snp2le                 launch the graphical interface\n"
+    "  snp2le <file.sNp>      launch it with that Touchstone file loaded\n"
     "  snp2le -b <command>    batch (command-line) mode, for example:\n"
     "      snp2le -b convert design.s2p --mode structure --structure inductor-pi\n"
     "      snp2le -b list-structures\n"
@@ -25,7 +31,7 @@ _USAGE = (
 
 
 def main(argv=None):
-    """Dispatch: no arguments opens the GUI, -b / --batch runs the command line."""
+    """Dispatch: no arguments or one file opens the GUI, -b / --batch runs the command line."""
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] in ("-b", "--batch"):
         from snp2le import cli
@@ -37,8 +43,16 @@ def main(argv=None):
         from snp2le import __version__
         sys.stdout.write(f"snp2le {__version__}\n")
         return 0
+    if len(argv) == 1 and not argv[0].startswith("-"):
+        from snp2le import app            # one file: launch the GUI with it loaded
+        return app.main(argv[0])
     if argv:
-        sys.stderr.write("snp2le: unrecognised arguments (use -b for command-line mode)\n\n")
+        if all(not a.startswith("-") for a in argv):
+            msg = (f"expected one Touchstone file, got {len(argv)} "
+                   "(use -b convert to batch-convert several)")
+        else:
+            msg = "unrecognised arguments (use -b for command-line mode)"
+        sys.stderr.write(f"snp2le: {msg}\n\n")
         sys.stderr.write(_USAGE)
         return 2
     from snp2le import app                # no arguments: launch the GUI
