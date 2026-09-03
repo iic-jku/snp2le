@@ -61,7 +61,7 @@ track real work rather than count steps:
 On the GUI side, `gui/fit_runner.py` runs `engine.convert` on a `QThread` and
 `gui/fit_status.py` renders the indicator. It is hosted twice, in the Design
 view's Conversion panel and (compact) in the Plot view's header row, so a
-running fit is visible on either tab without either view growing: both hosts had
+running fit is visible in either view without either one growing: both hosts had
 spare room. `MainWindow._fit_indicators` is the list the tick drives. Two rules
 there:
 
@@ -158,3 +158,6 @@ pytest
   (`VectorFitting.auto_fit`) is not interruptible, so a Stop button could not
   honour its own label. Superseding requests are coalesced instead, and the
   window stays usable meanwhile.
+* The title bar's **View** switch is a row of exclusive buttons (`widgets.SegmentedSwitch`), one per view, rather than a drop-down: a drop-down keeps its other entries behind a popup, so nothing on the opening screen said the Plot view existed.
+  `TopBar.set_view()` emits `view_changed` exactly as a click does, which is what carries the window along with the plot pop-out, dock, reset and simulation-import paths, and it stays silent when the requested view is already selected.
+  A `&` in a segment label has to be doubled, since a button label reads it as a mnemonic marker and swallows it.

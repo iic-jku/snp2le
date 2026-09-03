@@ -96,13 +96,17 @@ shows the band actually fitted, highlighted while it is a sub-band.</li>
   coupler's arms (one arm Q matched to the device's loss), lifting its otherwise ideal
   reflection and isolation terms toward the measured values.</li>
   </ul></li>
-<li><b>View</b>: switch between <i>Design &amp; Schematic</i> and <i>Plot</i>.</li>
+<li><b>View</b>: the two-segment switch at the right of the title bar, holding
+<i>Design&nbsp;&amp;&nbsp;Schematic</i> and <i>Plot</i> side by side. The view you are on
+is the filled one, and one click moves to the other. It follows the plots too: popping
+them out into their own window leaves the design on screen, docking them brings the plot
+view back, and an imported simulation switches to it so the overlay is visible.</li>
 </ul>
 
 <h3>Conversion progress</h3>
 <p>Progress shows in the <b>Conversion</b> panel, under the loaded file name and just
 above the <i>Result</i> rows it fills in, and again in the <b>Plot</b> view's header row
-so switching tabs does not lose sight of a running fit. While one runs it shows what the
+so switching views does not lose sight of a running fit. While one runs it shows what the
 fit is doing, how long it has been running, and a progress bar. When it ends the line
 becomes the outcome and the bar stays where it stopped: green
 <i>conversion complete</i> with the total time beside it and the bar full, or red with

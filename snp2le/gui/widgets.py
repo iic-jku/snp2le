@@ -92,6 +92,72 @@ class FitComboBox(QtWidgets.QComboBox):
         return self._hint()
 
 
+class SegmentedSwitch(QtWidgets.QWidget):
+    """A row of mutually exclusive buttons, one per destination.
+
+    Used for the title bar's view switch, where a drop-down used to sit.  A
+    drop-down keeps its other entries behind a popup and looks like the setting
+    fields beside it, so nothing on the opening screen says a second view exists.
+    Segments say it without being opened, and switching costs one click instead
+    of a click, a popup and a second click.
+
+    `changed` carries the selected key and fires on a programmatic `set_current`
+    too, which is what the drop-down's `currentIndexChanged` did and what the
+    plot pop-out and dock round trip relies on to move the window with it.
+    """
+
+    changed = QtCore.Signal(str)
+
+    def __init__(self, items, parent=None):
+        """`items` is (key, label, tooltip) per segment, left to right."""
+        super().__init__(parent)
+        lay = QtWidgets.QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(0)
+        self._keys = [key for key, _, _ in items]
+        self._buttons = {}
+        # an exclusive group keeps exactly one segment selected, so a second click
+        # on the current one leaves it where it is rather than clearing the switch
+        self._group = QtWidgets.QButtonGroup(self)
+        for i, (key, label, tip) in enumerate(items):
+            # a button label's '&' marks the next character as a mnemonic and is
+            # swallowed, so it has to be doubled to reach the screen
+            b = QtWidgets.QPushButton(label.replace("&", "&&"))
+            b.setObjectName("viewSeg")
+            # style.py rounds the outer corners of the end segments and drops the
+            # borders neighbours would share, so the row reads as one outlined
+            # control with the fill as the only boundary inside it
+            b.setProperty("seg", "first" if i == 0 else
+                          ("last" if i == len(items) - 1 else "mid"))
+            b.setCheckable(True)
+            b.setToolTip(tip)
+            self._group.addButton(b, i)
+            self._buttons[key] = b
+            lay.addWidget(b)
+        # seeded before the connect: the first segment being selected on opening is
+        # the initial state, not a change anything should be told about
+        self._buttons[self._keys[0]].setChecked(True)
+        self._group.buttonToggled.connect(self._on_toggled)
+
+    def _on_toggled(self, button, checked):
+        # a change toggles two buttons, and the one going off says nothing new
+        if checked:
+            self.changed.emit(self._keys[self._group.id(button)])
+
+    def current(self):
+        """The selected key."""
+        return self._keys[self._group.checkedId()]
+
+    def set_current(self, key):
+        """Select `key`.  Emits `changed` unless it is selected already."""
+        b = self._buttons.get(key)
+        if b is not None and not b.isChecked():
+            b.setChecked(True)
+
+    def button(self, key):
+        """The segment for `key`, e.g. to measure or enable it."""
+        return self._buttons[key]
+
+
 def passivity_text(res) -> str:
     """The passivity status for a result.  Shared by the design and plot views so they
     always agree.

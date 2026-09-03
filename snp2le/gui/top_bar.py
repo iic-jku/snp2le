@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """top_bar.py - control strip.
 
-Dark title bar: snp2le logo + title, then (right) View selector + Help.
+Dark title bar: snp2le logo + title, then (right) the two-segment View switch
+(Design & Schematic | Plot) + Help.
 Light controls row: Load .sNp, Mode (Universal / Structure), Structure, Max
 order, Enforce passivity, Passivity ceiling, Fit range (GHz).  Structures that do not match
 the loaded port count are greyed out so an invalid choice can never be made, and the
@@ -20,7 +21,7 @@ from snp2le.core.units import parse_eng, format_eng
 from snp2le.core.universal import (PASSIVITY_CEILING_DEFAULT, PASSIVITY_CEILING_MAX,
                                    PASSIVITY_CEILING_MIN, clamp_passivity_ceiling)
 from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN, JKU_RED, PANEL_BORDER, DISABLED_FG
-from .widgets import FitComboBox
+from .widgets import FitComboBox, SegmentedSwitch
 
 _DISABLED_GREY = QtGui.QColor(DISABLED_FG)     # greyed-out dropdown items
 
@@ -106,10 +107,16 @@ class TopBar(QtWidgets.QWidget):
         ver = QtWidgets.QLabel(f"v{__version__}"); ver.setObjectName("version")
         lay.addWidget(logo); lay.addWidget(title); lay.addWidget(ver); lay.addStretch(1)
         vlab = QtWidgets.QLabel("View"); vlab.setObjectName("viewLabel")
-        self.view = FitComboBox("Design & Schematic")
-        self.view.addItems(["Design & Schematic", "Plot"])
-        self.view.currentIndexChanged.connect(
-            lambda _: self.view_changed.emit("design" if self.view.currentIndex() == 0 else "plot"))
+        # Both views on screen at once, so the plots are visible as a destination
+        # before anything is clicked.  As a drop-down they were one more white
+        # field among the settings and the Plot entry only existed once opened.
+        self.view = SegmentedSwitch([
+            ("design", "Design & Schematic",
+             "Result, element values, tolerances, schematic and netlist."),
+            ("plot", "Plot",
+             "Loaded data against the extracted model, and any imported simulation."),
+        ])
+        self.view.changed.connect(self.view_changed.emit)
         self.help = QtWidgets.QPushButton("?  Help"); self.help.setObjectName("chip")
         self.help.clicked.connect(self.help_clicked.emit)
         lay.addWidget(vlab); lay.addWidget(self.view); lay.addSpacing(8); lay.addWidget(self.help)
@@ -392,8 +399,11 @@ class TopBar(QtWidgets.QWidget):
             self.simulator.setCurrentIndex(i)
 
     def set_view(self, name):
-        """Select the Design (name='design') or Plot (name='plot') view."""
-        self.view.setCurrentIndex(0 if name == "design" else 1)
+        """Select the Design (name='design') or Plot (name='plot') view.
+
+        Emits `view_changed` when it moves the switch, which is how the window
+        follows a view chosen in code (the plot pop-out, dock and reset paths)."""
+        self.view.set_current("design" if name == "design" else "plot")
 
     def set_sim_status(self, text, ok):
         """Show the run outcome: status text and the Run Simulation button in JKU

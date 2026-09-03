@@ -50,6 +50,25 @@ QPushButton#chip {{ background: rgba(255,255,255,0.10); color: #ffffff;
     border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; padding: 4px 12px; }}
 QPushButton#chip:hover {{ background: rgba(255,255,255,0.20); }}
 
+/* View switch: one segment per view, the selected one filled JKU blue.  Same
+   padding, border and font size as the Help chip beside it, so the two sit on
+   one line.  Neighbours drop the border they would share, leaving one outline
+   around the pair and the fill as the only boundary, and the outline colour is
+   the same in both states so only the fill moves.  The weight is 600 whether a
+   segment is selected or not: a bolder selected segment would be wider and
+   would shift the row on every switch. */
+QPushButton#viewSeg {{ background: rgba(255,255,255,0.10); color: #ccd2da;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-left: none; border-right: none;
+    border-radius: 0; padding: 4px 12px; font-weight: 600; }}
+QPushButton#viewSeg[seg="first"] {{ border-left: 1px solid rgba(255,255,255,0.25);
+    border-top-left-radius: 6px; border-bottom-left-radius: 6px; }}
+QPushButton#viewSeg[seg="last"] {{ border-right: 1px solid rgba(255,255,255,0.25);
+    border-top-right-radius: 6px; border-bottom-right-radius: 6px; }}
+QPushButton#viewSeg:hover {{ background: rgba(255,255,255,0.20); color: #ffffff; }}
+QPushButton#viewSeg:checked {{ background: {JKU_BLUE}; color: #ffffff; }}
+QPushButton#viewSeg:checked:hover {{ background: #0072a3; }}
+
 /* ---- control row ---- */
 #topbar {{ background: #ffffff; border-bottom: 1px solid {PANEL_BORDER}; }}
 .fieldLabel, [class="fieldLabel"] {{ color: {JKU_GRAY}; font-size: 10px; }}

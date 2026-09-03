@@ -106,8 +106,11 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 ├─ 📁 tests/                  pytest suite
 │  ├─ test_core.py
 │  ├─ test_gui_fit_progress.py  headless non-blocking-conversion regressions
+│  ├─ test_gui_fit_range.py   headless fit-range control
 │  ├─ test_gui_passivity_ceiling.py  headless passivity-ceiling control
 │  ├─ test_gui_sim_flow.py    headless GUI run/poll/import regressions
+│  ├─ test_gui_top_bar_layout.py  headless control-strip layout invariants
+│  ├─ test_gui_view_switch.py  headless View switch (both views on screen)
 │  ├─ test_progress.py        progress reporting and the fit watcher
 │  ├─ test_qt_essentials.py   guards the Essentials-only dependency
 │  ├─ test_reproducibility.py same input, same model, across processes
@@ -171,7 +174,7 @@ A bundled example is preloaded on first run. More live in `snp2le/examples/`.
 2. **Choose a mode.** Universal (set *Max order*, *Enforce passivity* and the *Passivity ceiling* it works towards) or Structure-specific (pick a structure and set the *extraction frequency*). Some structures expose an extra option such as *Stages*, *Isolation R* or *Resistive loss*.
 3. **Restrict the fit range** (optional, both modes). The *Fit range (GHz)* fields start at the loaded file's own span, so they always name the band being fitted. Enter two plain numbers in GHz (e.g. `110` and `170`) to fit only a sub-band. The *Result* panel shows the band actually fitted, and the RMS error, the tolerances, the plots and a testbench run's sweep all follow it. An edge outside the data is clamped to the data and reported, an empty or inverted band is refused.
 4. **Inspect** the result, element values, per-element **tolerances** at the extraction frequency, the drawn schematic, and the generated netlist in the **Design & Schematic** view.
-5. **Compare** the loaded data (grey) against the extracted model (blue) in the **Plot** view (up to four traces, magnitude and phase).
+5. **Compare** the loaded data (grey) against the extracted model (blue) in the **Plot** view (up to four traces, magnitude and phase). The **View** switch at the right of the title bar carries both views side by side and fills the one you are on, so a click moves between them.
 6. **Export** the netlist. *Export Ngspice* writes a `.spice` file and *Export VACASK* writes an `.inc` file. The `.SUBCKT` is named after the file, so a testbench that instantiates it resolves the include.
 
 > [!TIP]
@@ -223,7 +226,7 @@ The **Result** panel reports the measured sigma_max next to the ceiling it was j
 Every conversion runs on a worker thread, so the window stays usable while it
 runs. Progress shows in the **Conversion** panel, under the loaded file name and
 directly above the Result rows it fills in, and is mirrored into the **Plot**
-view's header row so switching tabs does not lose sight of a running fit:
+view's header row so switching views does not lose sight of a running fit:
 
 | While it runs | When it ends |
 | --- | --- |
