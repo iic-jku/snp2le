@@ -612,7 +612,22 @@ def test_max_order_bounds_the_model_order():
     for order in (2, 6, 9):
         res = universal.fit_universal(net, max_order=order, enforce_passivity=False)
         assert VectorFitting.get_model_order(np.atleast_1d(res.vf.poles)) <= order, order
-        assert res.n_poles <= order, order
+        # what the GUI reports: the order is what the cap is set in, the pole count
+        # counts a conjugate pair once, so it is the smaller of the two
+        assert res.model_order <= order, order
+        assert res.n_poles <= res.model_order <= 2 * res.n_poles, order
+        assert res.model_order == VectorFitting.get_model_order(
+            np.atleast_1d(res.vf.poles)), order
+
+
+def test_model_order_reaches_the_results():
+    """The order the panel and the CLI print comes through the engine, not just the fit."""
+    res = engine.convert(ConverterState(mode="universal", max_order=6), inductor_2port())
+    assert res.ok and 0 < res.n_poles <= res.model_order <= 6
+    # structure mode has no fit, so it reports no order at all
+    struct = engine.convert(ConverterState(mode="structure", structure_key="inductor-pi"),
+                            inductor_2port())
+    assert struct.ok and struct.model_order == 0
 
 
 def test_auto_fit_starts_inside_the_requested_order():

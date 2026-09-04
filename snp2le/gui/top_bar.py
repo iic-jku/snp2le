@@ -180,9 +180,10 @@ class TopBar(QtWidgets.QWidget):
         self.order.setFixedWidth(66)          # two digits plus the arrows, no more
         self.order.setToolTip(
             "Largest model order the vector fit may grow to, counted as\n"
-            "n_real + 2 x n_complex. The Result panel reports the pole count, which\n"
-            "counts a conjugate pair once, so it is at most this number and usually\n"
-            "below it. Raise it for a closer fit and a longer netlist.")
+            "n_real + 2 x n_complex, which is also the number of internal states in\n"
+            "the netlist. The Result panel reports the order the fit settled on and,\n"
+            "in brackets, its pole count, where a conjugate pair counts once.\n"
+            "Raise it for a closer fit and a longer netlist.")
 
         # two lines: the bar is wide enough as it is, and the box reads the same
         self.passive = QtWidgets.QCheckBox("Enforce\npassivity")

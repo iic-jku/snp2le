@@ -211,12 +211,14 @@ class DesignView(QtWidgets.QWidget):
             else f"color:{STATUS_GREEN if res.passive else STATUS_RED};font-weight:600;")
         if res.mode == "universal":
             self.order_out.label.setText("order")
-            self.order_out.set_value(f"{res.n_poles} poles")
+            # the model order first, since that is the unit Max order is set in, with the
+            # pole count beside it: a conjugate pair is one pole and two of the order
+            self.order_out.set_value(f"{res.model_order} ({res.n_poles} poles)")
             # the field is shared with structure mode, so the tooltip moves with the label
             self.order_out.setToolTip(
-                "Poles the fit kept, a complex-conjugate pair counted once. Max order in "
-                "the top bar counts that pair as two, so this number is at most Max order "
-                "and usually below it.")
+                "Model order of the fit, n_real + 2 x n_complex, so it never exceeds Max "
+                "order in the top bar. It is also the number of internal states in the "
+                "netlist. In brackets the poles kept, a conjugate pair counted once.")
         else:                                             # structure: extraction freq used
             f_ext = res.metrics.get("f_extract")
             self.order_out.label.setText("ext. frequency")

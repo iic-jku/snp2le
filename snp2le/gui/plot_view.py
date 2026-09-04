@@ -412,7 +412,8 @@ class PlotView(QtWidgets.QWidget):
             self.pass_stat.setText(self._stat_html("passivity", passivity_text(res)))
             self.sigma_stat.setText(
                 self._stat_html("σ<sub>max</sub>", sigma_text(res)))
-            self.order_stat.setText(self._stat_html("order", f"{res.n_poles} poles"))
+            self.order_stat.setText(self._stat_html(
+                "order", f"{res.model_order} ({res.n_poles} poles)"))
             self.stats_box.setVisible(True)
         else:
             self.stats_box.setVisible(False)

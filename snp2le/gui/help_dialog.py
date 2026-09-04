@@ -41,8 +41,11 @@ does not match the loaded file are greyed out:
 <li><b>f<sub>ext</sub></b> (structure mode): the single frequency at which the lumped
 values are read off the data. Accepts engineering notation (e.g. <i>7&nbsp;GHz</i>). If
 it is outside the data it falls back to the device's natural design point.</li>
-<li><b>Max order</b> (universal mode): the number of poles the vector fit may use. More
-poles track sharp resonances but enlarge the netlist.</li>
+<li><b>Max order</b> (universal mode): the largest model order the vector fit may use,
+counted as n<sub>real</sub> + 2 x n<sub>complex</sub>, which is also the number of internal
+states in the netlist. A higher order tracks sharp resonances but enlarges the netlist. The
+<i>order</i> line in the Result panel reports the order the fit settled on and, in brackets,
+its pole count, where a complex-conjugate pair counts once.</li>
 <li><b>Enforce passivity</b> / <b>Passivity ceiling</b> (universal mode): a model is
 <i>passive</i> when the largest singular value of its S-matrix, &sigma;<sub>max</sub>,
 stays at or below 1 at every frequency, which is the same as saying it can never deliver

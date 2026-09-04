@@ -104,6 +104,7 @@ def _convert_universal(state, net, res, track):
     res.ir = fit.ir
     res.physical = False
     res.n_poles = fit.n_poles
+    res.model_order = fit.model_order
     res.passive = fit.passive
     res.sigma_max = fit.sigma_max
     res.sigma_max_freq = fit.sigma_max_freq

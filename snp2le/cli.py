@@ -452,7 +452,8 @@ def cmd_convert(args):
                           else "  dc=solvable" if res.dc.ok else "  dc=SINGULAR")
                     sig = ("" if res.sigma_max != res.sigma_max
                            else f"  sigma_max={res.sigma_max:.3f}")
-                    extra = f"rms={res.rms_error:.2e}  poles={res.n_poles}{sig}{dc}"
+                    extra = (f"rms={res.rms_error:.2e}  order={res.model_order}"
+                             f" ({res.n_poles} poles){sig}{dc}")
                 else:
                     extra = f"f_ext={units.format_eng(res.metrics.get('f_extract'), 'Hz')}"
                 print(f"[ OK ] {src} -> {out}  ({dialect}, {extra}, "

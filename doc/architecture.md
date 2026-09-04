@@ -130,9 +130,12 @@ pytest
   `universal.effective_ceiling()` alone, so the GUI, the CLI and the engine cannot
   disagree about it.
 * `ConverterState.max_order` is a model order, `n_real + 2 x n_complex`, and it reaches
-  scikit-rf as `auto_fit(model_order_max=...)`. `Results.n_poles` counts pole entries,
-  where a complex-conjugate pair is one, so the reported number is at most the requested
-  order and normally below it. Below scikit-rf 1.12 `model_order_max` was only the exit
+  scikit-rf as `auto_fit(model_order_max=...)`. `Results.model_order` is that same count
+  measured on the fitted poles, and it is the number of internal states in the netlist,
+  since a conjugate pair costs `x_re` and `x_im`. `Results.n_poles` counts pole entries,
+  where a conjugate pair is one, so it is the smaller of the two. The GUI and the CLI
+  report the order with the pole count in brackets, because reporting only the pole count
+  under the label `order` reads as the cap being exceeded. Below scikit-rf 1.12 `model_order_max` was only the exit
   test of the pole-growth loop and never applied to the initial pole set (3 real plus 3
   complex, order 9), so any cap under 9 was inert and a cap above it could be overshot by
   one batch of added pairs. `universal._auto_fit()` passes the initial counts 1.12 would

@@ -34,7 +34,10 @@ from . import netlist as _nl
 @dataclass
 class FitResult:
     ir: CircuitIR = None
-    n_poles: int = 0
+    n_poles: int = 0                    # pole entries, a conjugate pair counted once
+    # n_real + 2 x n_complex, the unit `max_order` is set in and the number of internal
+    # states the netlist carries (a pair costs x_re and x_im)
+    model_order: int = 0
     passive: bool = False               # sigma_max <= passivity_ceiling
     sigma_max: float = float("nan")     # largest singular value of the model S-matrix
     sigma_max_freq: float = float("nan")   # where that peak sits [Hz]
@@ -149,7 +152,12 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
 
     report(_END_SIGMA, "scoring the fit")
     res.vf = vf
-    res.n_poles = int(len(np.atleast_1d(vf.poles)))
+    poles = np.atleast_1d(vf.poles)
+    res.n_poles = int(len(poles))
+    # counted here rather than through scikit-rf's helper, so the number cannot drift
+    # with the library the way `model_order_max` itself did (see `_auto_fit`)
+    res.model_order = int(np.count_nonzero(poles.imag == 0)
+                          + 2 * np.count_nonzero(poles.imag != 0))
     res.passive = _meets_ceiling(vf, res.sigma_max, ceiling)
     res.rms_error = _rms_error(vf, net)
     # Report the number whenever there is a violation to report, met or not.  A model

@@ -49,7 +49,8 @@ class Results:
     ngspice: str = ""
     vacask: str = ""
 
-    n_poles: int = 0
+    n_poles: int = 0                      # pole entries, a conjugate pair counted once
+    model_order: int = 0                  # n_real + 2 x n_complex, the unit max_order is in
     passive: bool = False                 # sigma_max <= passivity_ceiling
     sigma_max: float = float("nan")       # largest singular value of the model S-matrix
     sigma_max_freq: float = float("nan")  # where that peak sits [Hz]
