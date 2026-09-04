@@ -129,6 +129,15 @@ pytest
   by showing it. The rule that the ceiling applies only while enforcing lives in
   `universal.effective_ceiling()` alone, so the GUI, the CLI and the engine cannot
   disagree about it.
+* `ConverterState.max_order` is a model order, `n_real + 2 x n_complex`, and it reaches
+  scikit-rf as `auto_fit(model_order_max=...)`. `Results.n_poles` counts pole entries,
+  where a complex-conjugate pair is one, so the reported number is at most the requested
+  order and normally below it. Below scikit-rf 1.12 `model_order_max` was only the exit
+  test of the pole-growth loop and never applied to the initial pole set (3 real plus 3
+  complex, order 9), so any cap under 9 was inert and a cap above it could be overshot by
+  one batch of added pairs. `universal._auto_fit()` passes the initial counts 1.12 would
+  compute itself, which fixes the first half on older versions and is inert on 1.12, and
+  the second half is why the dependency floor is `scikit-rf>=1.12`.
 * Resistor thermal noise is keyed on `ir.physical` (`netlist.py`): a universal
   macromodel's resistors are fit artifacts and are emitted with `noisy=0` in both
   dialects, while a structure model's resistors are real loss and keep their noise.

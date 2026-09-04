@@ -176,7 +176,7 @@ Naming a `.sNp` file on the command line opens the GUI on it instead of the exam
 ### Typical workflow
 
 1. **Load** a Touchstone `.sNp` file from the top bar, or name it on the command line (`snp2le design.s4p`, see above). The header shows the port count and frequency range.
-2. **Choose a mode.** Universal (set *Max order*, *Enforce passivity* and the *Passivity ceiling* it works towards) or Structure-specific (pick a structure and set the *extraction frequency*). Some structures expose an extra option such as *Stages*, *Isolation R* or *Resistive loss*.
+2. **Choose a mode.** Universal (set *Max order*, *Enforce passivity* and the *Passivity ceiling* it works towards) or Structure-specific (pick a structure and set the *extraction frequency*). Some structures expose an extra option such as *Stages*, *Isolation R* or *Resistive loss*. *Max order* bounds the model order, `n_real + 2 x n_complex`, while the *Result* panel reports the pole count, which counts a complex-conjugate pair once, so that number is at most *Max order* and usually below it.
 3. **Restrict the fit range** (optional, both modes). The *Fit range (GHz)* fields start at the loaded file's own span, so they always name the band being fitted. Enter two plain numbers in GHz (e.g. `110` and `170`) to fit only a sub-band. The *Result* panel shows the band actually fitted, and the RMS error, the tolerances, the plots and a testbench run's sweep all follow it. An edge outside the data is clamped to the data and reported, an empty or inverted band is refused.
 4. **Inspect** the result, element values, per-element **tolerances** at the extraction frequency, the drawn schematic, and the generated netlist in the **Design & Schematic** view.
 5. **Compare** the loaded data (grey) against the extracted model (blue) in the **Plot** view (up to four traces, magnitude and phase). The **View** switch at the right of the title bar carries both views side by side and fills the one you are on, so a click moves between them.
@@ -219,12 +219,12 @@ Why those two limits, and what an out-of-range entry does:
 - **`1.20` is the ceiling** because past roughly 20 % of voltage gain (1.44x in power, +1.6 dB) at the worst frequency there is enough excess energy to grow a transient run without bound. It is also well clear of anything real: across the bundled examples an acceptable fit lands between 1.00 and 1.02, and a broken one jumps straight to 2.18 or 5.24. Nothing useful lives in between.
 - **A number outside the range is replaced by the limit it overshot.** Type `9.9` and the field shows `1.20`, type `0.5` and it shows `1.00`. That is deliberate: the field teaches you the limits without anyone reading this paragraph first. Text that is not a number at all has no limit to snap to, so it falls back to `1.00`. The CLI is stricter and refuses the run outright rather than substituting, since a batch script silently getting a different ceiling than it asked for is worse than a visible error.
 
-**A ceiling is not always reachable.** The perturbation only moves the model's residues, so a violation band that runs to infinity, caused by a non-passive constant term, cannot be corrected at any ceiling. The bundled `tline_100um_ihp-sg13g2.s2p` at order 13 is one: it stays at 5.24 whatever you ask for. When that happens the accurate fit is kept rather than a wrecked one, and the result reads *near-passive*. The fix is a lower **Max order**, not a higher ceiling, since order 6 brings the same file to 1.018.
+**A ceiling is not always reachable.** The perturbation only moves the model's residues, so a violation band that runs to infinity, caused by a non-passive constant term, cannot be corrected at any ceiling. The bundled `tline_100um_ihp-sg13g2.s2p` at order 13 is one: it stays at 5.24 whatever you ask for. When that happens the accurate fit is kept rather than a wrecked one, and the result reads *near-passive*. The fix is a lower **Max order**, not a higher ceiling, since order 6 brings the same file to 0.9997, passive outright.
 
 The **Result** panel reports the measured sigma_max next to the ceiling it was judged against, green inside the ceiling and red outside it, so a raised ceiling never reads as a clean pass without the number that earned it. When there is a violation, the message line under the panel (and the CLI's `note:` line) names the frequency of the peak. Read it before you decide what to do:
 
 - **At 0 Hz or inside your band**: a real hazard. Enforce, or raise the order.
-- **Far above the top data point**, at 10^4 times it or so: that is the model's high-frequency asymptote, not a resonance. It usually means the fit order is too high for the file. The bundled `tline_100um_ihp-sg13g2.s2p` reaches sigma_max = 5.24 at order 13 but only 1.018 at order 6, for the same reason.
+- **Far above the top data point**, at 10^4 times it or so: that is the model's high-frequency asymptote, not a resonance. It usually means the fit order is too high for the file. The bundled `tline_100um_ihp-sg13g2.s2p` reaches sigma_max = 5.24 at order 13 but only 0.9997 at order 6, for the same reason.
 
 ### Watching a conversion
 
@@ -319,7 +319,7 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `inputs` | all | one or more `.sNp` files or globs |
 | `--mode universal\|structure` | both | conversion philosophy (default `universal`) |
 | `--structure KEY` | structure | structure key (see `list-structures`) |
-| `--order N` | universal | maximum model order (poles) |
+| `--order N` | universal | maximum model order, counted as `n_real + 2 x n_complex` |
 | `--passive` / `--no-passive` | universal | enforce passivity (default on) |
 | `--passivity-ceiling SIGMA` | universal | sigma_max the enforcement works towards, `1.0` to `1.2`, needs `--passive` (default `1.0`) |
 | `--fext FREQ` | structure | extraction frequency, e.g. `7GHz` |

@@ -599,6 +599,54 @@ def test_cli_passivity_ceiling_argument():
         raise AssertionError(f"--passivity-ceiling {bad} should have been refused")
 
 
+def test_max_order_bounds_the_model_order():
+    """`Max order` caps the model order, n_real + 2 x n_complex, so the pole count the
+    GUI reports (a conjugate pair counted once) can never exceed it.
+
+    Issue #7: below scikit-rf 1.12 `model_order_max` was only the growth loop's exit
+    test, so a cap under the order 9 of auto_fit's default initial pole set did nothing
+    and order 6 came back as 7 poles."""
+    from skrf.vectorFitting import VectorFitting
+    from snp2le.core import universal
+    net = io.without_dc(_example("ind_500pH_ihp-sg13cmos5l.s2p"))
+    for order in (2, 6, 9):
+        res = universal.fit_universal(net, max_order=order, enforce_passivity=False)
+        assert VectorFitting.get_model_order(np.atleast_1d(res.vf.poles)) <= order, order
+        assert res.n_poles <= order, order
+
+
+def test_auto_fit_starts_inside_the_requested_order():
+    """The initial pole set is clamped to the cap, which is what makes the cap hold on
+    scikit-rf below 1.12.  On 1.12 and later the same two numbers are what scikit-rf
+    computes itself, so passing them changes nothing.  Above the default initial order
+    nothing is passed and the adaptive growth path is untouched."""
+    from snp2le.core import universal
+    seen = {}
+
+    class Recorder:
+        def __init__(self, net):
+            pass
+
+        def auto_fit(self, **kwargs):
+            seen.update(kwargs)
+
+    real = universal.VectorFitting
+    universal.VectorFitting = Recorder
+    try:
+        universal._auto_fit(None, 6)
+        assert seen == {"model_order_max": 6, "n_poles_init_real": 0,
+                        "n_poles_init_cmplx": 3}, seen
+        seen.clear()
+        universal._auto_fit(None, 7)
+        assert seen == {"model_order_max": 7, "n_poles_init_real": 1,
+                        "n_poles_init_cmplx": 3}, seen
+        seen.clear()
+        universal._auto_fit(None, 13)
+        assert seen == {"model_order_max": 13}, seen
+    finally:
+        universal.VectorFitting = real
+
+
 if __name__ == "__main__":
     # allow running without pytest
     for name, fn in sorted(globals().items()):

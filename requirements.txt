@@ -1,6 +1,6 @@
 # runtime
 PySide6-Essentials>=6.6
-scikit-rf>=1.0
+scikit-rf>=1.12   # 1.12 is the first release that applies auto_fit's model_order_max to the initial pole set
 numpy>=1.24
 scipy>=1.10
 matplotlib>=3.7

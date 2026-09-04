@@ -212,10 +212,17 @@ class DesignView(QtWidgets.QWidget):
         if res.mode == "universal":
             self.order_out.label.setText("order")
             self.order_out.set_value(f"{res.n_poles} poles")
+            # the field is shared with structure mode, so the tooltip moves with the label
+            self.order_out.setToolTip(
+                "Poles the fit kept, a complex-conjugate pair counted once. Max order in "
+                "the top bar counts that pair as two, so this number is at most Max order "
+                "and usually below it.")
         else:                                             # structure: extraction freq used
             f_ext = res.metrics.get("f_extract")
             self.order_out.label.setText("ext. frequency")
             self.order_out.set_value(format_eng(f_ext, "Hz") if f_ext else "\u2014")
+            self.order_out.setToolTip(
+                "Frequency the element values were extracted at.")
 
         self._clear(self.values_host)
         if not res.ok:

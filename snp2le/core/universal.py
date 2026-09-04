@@ -232,6 +232,12 @@ def _fit_watch(vf, report):
         watcher.join(timeout=1.0)
 
 
+# Model order of auto_fit's default initial pole set, 3 real + 3 complex.  Kept as a
+# number rather than read from the signature because scikit-rf's defaults are part of
+# its API, and a mismatch here only costs the clamp below, never correctness.
+_AUTO_FIT_INIT_ORDER = 3 + 2 * 3
+
+
 def _auto_fit(net, max_order: int, report=null_progress):
     """Run scikit-rf auto_fit with the model order bounded by `max_order`.
 
@@ -239,12 +245,25 @@ def _auto_fit(net, max_order: int, report=null_progress):
     keeps the exported netlist small.  (Our old call passed `n_poles_init`, which
     no longer exists in scikit-rf, so the order cap was silently ignored, and
     forcing the initial pole count made the model harder to make passive.)
+
+    Below scikit-rf 1.12 `model_order_max` is only the exit test of the growth loop,
+    never applied to the pole set auto_fit starts from.  That default set is 3 real
+    plus 3 complex poles, model order 9, so any cap under 9 leaves the loop unentered
+    and the model at order 9 whatever the user asked for (issue #7: max order 6 came
+    back as 7 poles).  Passing the initial counts 1.12 would compute itself makes the
+    older versions behave like 1.12, and is inert on 1.12, which clamps to the same
+    two numbers.  It is skipped when the default set already fits, so the growth path
+    at higher orders is untouched.
     """
     vf = VectorFitting(net)
+    order = max(2, int(max_order))
+    kwargs = {"model_order_max": order}
+    if _AUTO_FIT_INIT_ORDER > order:
+        kwargs.update(n_poles_init_real=order % 2, n_poles_init_cmplx=order // 2)
     report(0.0, "vector fitting")
     with _fit_watch(vf, report):
         try:
-            vf.auto_fit(model_order_max=max(2, int(max_order)))
+            vf.auto_fit(**kwargs)
         except TypeError:                          # different scikit-rf signature
             vf.auto_fit()
     report(1.0, "vector fitting done")

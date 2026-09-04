@@ -178,6 +178,11 @@ class TopBar(QtWidgets.QWidget):
 
         self.order = QtWidgets.QSpinBox(); self.order.setRange(2, 40); self.order.setValue(6)
         self.order.setFixedWidth(66)          # two digits plus the arrows, no more
+        self.order.setToolTip(
+            "Largest model order the vector fit may grow to, counted as\n"
+            "n_real + 2 x n_complex. The Result panel reports the pole count, which\n"
+            "counts a conjugate pair once, so it is at most this number and usually\n"
+            "below it. Raise it for a closer fit and a longer netlist.")
 
         # two lines: the bar is wide enough as it is, and the box reads the same
         self.passive = QtWidgets.QCheckBox("Enforce\npassivity")
