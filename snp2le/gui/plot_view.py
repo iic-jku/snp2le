@@ -467,7 +467,8 @@ class PlotView(QtWidgets.QWidget):
         for side, combo in zip(SIDES, self.selectors):
             sel = combo.currentData()
             magp = self._panels["mag" + side]; php = self._panels["ph" + side]
-            if isinstance(sel, tuple):                  # an S-parameter
+            # Qt's QVariant round-trip returns tuple item data back as a list
+            if isinstance(sel, (tuple, list)):           # an S-parameter
                 i, j = sel
                 sij = combo.currentText(); sub = sij[1:]
                 d = np.asarray(res.data_s)[:, i, j]
