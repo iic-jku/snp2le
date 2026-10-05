@@ -7,7 +7,7 @@ version = 1
 # licensing information.
 
 [[annotations]]
-path = [".designinit", ".gitattributes", ".gitignore", "CITATION.cff", "MANIFEST.in", "pyproject.toml", "README.md", "requirements.txt"]
+path = [".designinit", ".gitattributes", ".gitignore", "AGENTS.md", "CITATION.cff", "MANIFEST.in", "pyproject.toml", "README.md", "requirements.txt"]
 SPDX-FileCopyrightText = "2026 Simon Dorrer"
 SPDX-License-Identifier = "Apache-2.0"
 
