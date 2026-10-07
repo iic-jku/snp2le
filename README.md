@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/iic-jku/snp2le/main/snp2le/gui/assets/snp2le_logo.svg" alt="snp2le logo" width="140">
 </p>
 
-# snp2le: S-Parameter To Lumped Element Netlist Converter
+# snp2le: A PySide6 Interactive GUI and CLI-based S-Parameter to Lumped-Element Netlist Converter
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/iic-jku/snp2le/blob/main/LICENSE)
 [![License Check](https://github.com/iic-jku/snp2le/actions/workflows/license-check.yml/badge.svg)](https://github.com/iic-jku/snp2le/actions/workflows/license-check.yml)
