@@ -4,7 +4,7 @@ authors:
 - family-names: Dorrer
   given-names: Simon
   orcid: https://orcid.org/0009-0001-5994-5477
-title: "GitHub Repository of snp2le: A PySide6 Interactive GUI and CLI-based S-Parameter to Lumped Element Netlist Converter"
+title: "GitHub Repository of snp2le: A PySide6 Interactive GUI and CLI-based S-Parameter to Lumped-Element Netlist Converter"
 date-released: 2026
 url: https://github.com/iic-jku/snp2le
 identifiers:
