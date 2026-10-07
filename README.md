@@ -387,7 +387,7 @@ New structures plug in by subclassing `snp2le.core.structures.base.Structure` an
   author = {Dorrer, Simon},
   month = jul,
   year = {2026},
-  title = {{GitHub Repository for snp2le: A S-Parameter To Lumped Element Netlist Converter}},
+  title = {{GitHub Repository of snp2le: A PySide6 Interactive GUI and CLI-based S-Parameter to Lumped Element Netlist Converter}},
   url = {https://github.com/iic-jku/snp2le},
   doi = {10.5281/zenodo.21189545}
 }
