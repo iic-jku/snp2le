@@ -52,18 +52,29 @@ def _values(res):
     return {lab: val for lab, val, _unit in res.value_rows}
 
 
+# The references are inductor_fit.py's output on Windows (numpy 2.4, scipy 1.17).  The fit is
+# deterministic for one set of libraries, but a local optimizer on another numpy, scipy or BLAS
+# can settle elsewhere along directions the data barely constrains.  In IIC-OSIC-TOOLS (numpy
+# 2.5, scipy 1.18) the center-tapped fit lands 0.2 % lower in cost with L_s,h and k 4.5 %
+# away and R_skin2 at 2.3 x, while L, Q, the SRF and the well-determined elements agree within
+# 0.3 %.  So the tests pin the topology decisions, the elements the data does determine and
+# the response, each to 1 %, and leave the weak directions alone.
+
 def test_the_two_port_fit_reproduces_the_reference(two_port):
     """inductor_fit.py on the same file: 3 segments, symmetric substrate, these totals."""
     assert two_port.ok, two_port.error
-    assert two_port.metrics["segments"] == 3
-    assert two_port.metrics["substrate"] == "symmetric"
-    ref = {"R_s": 1.84543, "L_s": 5.04813e-10, "R_skin1": 0.704977, "L_skin1": 4.61579e-11,
-           "R_skin2": 7.43354, "L_skin2": 1.78919e-11, "C_s": 9.76973e-15,
+    m = two_port.metrics
+    assert m["segments"] == 3
+    assert m["substrate"] == "symmetric"
+    ref = {"R_s": 1.84543, "L_s": 5.04813e-10, "C_s": 9.76973e-15,
            "C_ox1": 2.47652e-14, "R_si1": 1719.96, "C_si1": 2.56102e-14}
     vals = _values(two_port)
     for lab, want in ref.items():
-        assert vals[lab] == pytest.approx(want, rel=1e-3), lab
+        assert vals[lab] == pytest.approx(want, rel=1e-2), lab
     assert vals["C_ox2"] == vals["C_ox1"]                 # symmetric: port 2 tied to port 1
+    assert m["L_dc"] == pytest.approx(0.5689e-9, rel=1e-2)
+    assert m["Q11_peak"] == pytest.approx(15.41, rel=1e-2)
+    assert m["srf_model"] == pytest.approx(50.30e9, rel=1e-2)
 
 
 def test_the_center_tap_fit_reproduces_the_reference(center_tap):
@@ -73,12 +84,16 @@ def test_the_center_tap_fit_reproduces_the_reference(center_tap):
     m = center_tap.metrics
     assert m["segments"] == 2
     assert m["symmetric"] == {"inductance": True, "resistance": False, "substrate": False}
-    ref = {"R_s,h1": 0.721296, "L_s,h1": 1.47676e-10, "R_s,h2": 0.998252, "k": 0.423279,
-           "C_s": 4.8286e-15, "R_ct": 0.0957937, "C_ox,ct": 1.90788e-14, "R_si,ct": 8364.33}
+    ref = {"R_s,h1": 0.721296, "R_s,h2": 0.998252, "C_s": 4.8286e-15, "R_ct": 0.0957937,
+           "C_ox1": 6.47091e-15, "C_ox,ct": 1.90788e-14, "R_si,ct": 8364.33}
     vals = _values(center_tap)
     for lab, want in ref.items():
-        assert vals[lab] == pytest.approx(want, rel=1e-3), lab
+        assert vals[lab] == pytest.approx(want, rel=1e-2), lab
     assert vals["L_s,h2"] == vals["L_s,h1"]
+    assert m["L_diff_dc"] == pytest.approx(0.4700e-9, rel=1e-2)
+    assert m["Qdiff_peak"] == pytest.approx(18.18, rel=1e-2)
+    assert m["Qcm_peak"] == pytest.approx(10.28, rel=1e-2)
+    assert m["fit_cost"] == pytest.approx(0.007279, rel=2e-2)
 
 
 @pytest.mark.parametrize("which", ["two_port", "center_tap"])

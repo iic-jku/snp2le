@@ -199,7 +199,12 @@ pytest
   pi (2-port) or delta (3-port) decomposition, then `scipy.optimize.least_squares` on
   log10 of the element values over the data up to 1.2 x the self-resonance frequency,
   from the seed plus two perturbed starts with a fixed random seed, so a fit is
-  reproducible on one BLAS. It chooses 1 to 3 coil segments (the fewest within 10 % of the
+  reproducible for one set of numpy, scipy and BLAS. Another set can settle elsewhere along
+  directions the data barely constrains: in IIC-OSIC-TOOLS (numpy 2.5, scipy 1.18) the
+  bundled center-tapped fit has L_s,h and k 4.5 % and R_skin2 2.3 x away from Windows
+  (numpy 2.4, scipy 1.17), at a 0.2 % lower cost, while L, Q, the SRF and the
+  well-determined elements agree within 0.3 %. The skin section whose corner lies above the
+  band and the split between L_s,h and k are those directions. It chooses 1 to 3 coil segments (the fewest within 10 % of the
   best cost), decides port and half-coil symmetry from the data (5 % threshold), and keeps
   a 2-port substrate coupling only if it improves the cost by more than 10 % and passes a
   plausibility check. `structures/inductor_wideband.py` turns the totals into one set of
