@@ -32,6 +32,16 @@ _PLAN_UNIVERSAL = (
     ("dc",       3, "checking the DC operating point"),
     ("netlist",  4, "rendering the netlists"),
 )
+# With thermal noise the generator is solved and checked after the model response, and its
+# netlist is larger.  A separate plan keeps the default one, and its fractions, as they were.
+_PLAN_UNIVERSAL_NOISE = (
+    ("prepare",  3, "preparing the data"),
+    ("fit",     72, "vector fitting"),
+    ("model",   18, "rebuilding the model response"),
+    ("noise",    6, "computing the thermal noise"),
+    ("dc",       3, "checking the DC operating point"),
+    ("netlist",  5, "rendering the netlists"),
+)
 _PLAN_STRUCTURE = (
     ("prepare",  3, "preparing the data"),
     ("extract", 25, "extracting the element values"),
@@ -44,8 +54,11 @@ _PLAN_STRUCTURE = (
 
 def convert(state, net, progress=None) -> Results:
     res = Results(mode=state.mode)
-    track = StageTracker(progress, _PLAN_STRUCTURE if state.mode == "structure"
-                         else _PLAN_UNIVERSAL)
+    if state.mode == "structure":
+        plan = _PLAN_STRUCTURE
+    else:
+        plan = _PLAN_UNIVERSAL_NOISE if state.thermal_noise else _PLAN_UNIVERSAL
+    track = StageTracker(progress, plan)
     if net is None:
         res.ok = False
         res.error = "No network loaded."
@@ -112,7 +125,14 @@ def _convert_universal(state, net, res, track):
     res.rms_error = fit.rms_error
     res.messages = fit.messages
     res.model_s = _uni.model_sparams(fit.vf, net.f, progress=track.sub("model"))
-    track.enter("dc")
+    if state.thermal_noise:
+        from . import noise as _noise
+        track.enter("noise")
+        res.noise = _noise.add_thermal_noise(res.ir, fit.vf, fit.sigma_max,
+                                             fit.sigma_max_freq)
+        if not res.noise.ok:                        # the netlist stays noiseless, say so
+            res.messages.append(res.noise.message)
+    track.enter("dc")                               # after the generator, so it is checked too
     try:                                            # flag a singular DC operating point
         z0 = float(np.real(np.asarray(net.z0).flatten()[0])) or 50.0
     except (TypeError, ValueError, IndexError):

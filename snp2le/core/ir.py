@@ -28,6 +28,9 @@ class Element:
     value: float = 0.0
     ctrl: tuple = ()                # controlling nodes (G/E) or (vname,) (F)
     label: str = ""                 # math spec for display, e.g. "L_s" (defaults to name)
+    # resistor thermal noise: None follows CircuitIR.physical, True/False overrides it (the
+    # noise generator's sources in an otherwise noiseless universal model)
+    noisy: bool | None = None
 
 
 @dataclass
@@ -38,6 +41,7 @@ class CircuitIR:
     comments: list = field(default_factory=list)  # provenance / header notes
     physical: bool = False          # True for structure models (interpretable)
     couplings: list = field(default_factory=list)  # list[(L_name, L_name, k)] mutual
+    notes: list = field(default_factory=list)      # header lines, all rendered after comments
 
     def add(self, el: Element):
         self.elements.append(el)

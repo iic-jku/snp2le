@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Simon Dorrer
 # SPDX-License-Identifier: Apache-2.0
-"""test_gui_top_bar_layout.py - the two tick boxes in the control strip, headless.
+"""test_gui_top_bar_layout.py - the tick boxes in the control strip, headless.
 
-'Enforce passivity' and 'Show output' are built the same way (a caption slot, then a
-two-line box) for two reasons: wrapped text keeps the bar narrow, and the identical shape
-is what puts the two indicators on the same line.  Both are easy to break by editing one
-of them alone, and neither shows up in any functional test, so they are pinned here.
+'Enforce passivity', 'Thermal noise' and 'Show output' are built the same way (a caption
+slot, then a two-line box) for two reasons: wrapped text keeps the bar narrow, and the
+identical shape is what puts the indicators on the same line.  Each is easy to break by
+editing it alone, and none shows up in any functional test, so they are pinned here.
 Run with: pytest -q
 """
 import os
@@ -47,11 +47,11 @@ def _indicator_y(cb, ref):
     return cb.mapTo(ref, rect.topLeft()).y(), rect.height()
 
 
-def test_the_two_tick_boxes_share_a_line(bar):
+def test_the_tick_boxes_share_a_line(bar):
     row = bar.layout().itemAt(1).widget()
-    passive_y, passive_h = _indicator_y(bar.passive, row)
-    output_y, output_h = _indicator_y(bar.sim_output, row)
-    assert (passive_y, passive_h) == (output_y, output_h)
+    passive = _indicator_y(bar.passive, row)
+    assert _indicator_y(bar.thermal_noise, row) == passive
+    assert _indicator_y(bar.sim_output, row) == passive
 
 
 def test_the_tick_boxes_sit_on_the_button_line(bar):
@@ -60,7 +60,7 @@ def test_the_tick_boxes_sit_on_the_button_line(bar):
     so the two boxes carry #wrapCheck and style.py pins the indicator to the top."""
     row = bar.layout().itemAt(1).widget()
     button_y = bar.run_sim.mapTo(row, QtCore.QPoint(0, 0)).y()
-    for cb in (bar.passive, bar.sim_output):
+    for cb in (bar.passive, bar.thermal_noise, bar.sim_output):
         assert _indicator_y(cb, row)[0] == button_y
         assert cb.objectName() == "wrapCheck"
 
@@ -103,11 +103,11 @@ def test_no_other_row_sets_the_window_floor(bar):
         plots.deleteLater()
 
 
-def test_both_tick_box_labels_stay_wrapped(bar):
-    """Unwrapping either one costs about 45 px of bar width, which is the whole point
+def test_the_tick_box_labels_stay_wrapped(bar):
+    """Unwrapping any one costs about 45 px of bar width, which is the whole point
     of the shape.  Compare against the same text on one line rather than a pixel
     constant, so the check holds at any font size or DPI."""
-    for cb in (bar.passive, bar.sim_output):
+    for cb in (bar.passive, bar.thermal_noise, bar.sim_output):
         assert "\n" in cb.text()
         one_line = QtWidgets.QCheckBox(cb.text().replace("\n", " "))
         assert cb.sizeHint().width() < one_line.sizeHint().width()

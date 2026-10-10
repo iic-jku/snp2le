@@ -179,6 +179,23 @@ def passivity_text(res) -> str:
     return "not passive"
 
 
+def noise_text(res) -> str:
+    """What the exported netlist carries as noise.
+
+    A universal model is noiseless unless thermal noise was asked for, and then it either
+    carries the generator or, when the model is not strictly passive, stays noiseless and
+    says so.  A structure model's resistors are the structure's loss, so it is always
+    noisy."""
+    if not res.ok:
+        return "—"
+    if res.mode == "structure":
+        return "thermal (resistors)"
+    noise = getattr(res, "noise", None)
+    if noise is None:
+        return "noiseless (ideal)"
+    return "thermal ✓" if noise.ok else "NOT added"
+
+
 _SYMBOLS = {"sigma_max": "σ_max"}
 
 

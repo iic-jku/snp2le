@@ -13,7 +13,7 @@ from PySide6 import QtCore, QtWidgets
 from snp2le.core.units import format_eng
 from .style import JKU_GRAY, STATUS_GREEN, STATUS_AMBER, STATUS_RED
 from .widgets import (OutputField, section_title, MathLabel, passivity_text,
-                      sigma_text, with_symbols)
+                      sigma_text, noise_text, with_symbols)
 from .fit_status import FitProgress
 from .schematic_widget import SchematicWidget
 
@@ -92,8 +92,19 @@ class DesignView(QtWidgets.QWidget):
             "Untick 'Enforce passivity' in the top bar to raise the bound and keep the "
             "more accurate fit.")
         self.order_out = OutputField("order / Q", "\u2014", label_w=100, equals=False)
+        self.noise_out = OutputField("noise", "\u2014", label_w=100, equals=False)
+        self.noise_out.setToolTip(
+            "What the netlist carries as noise.\n"
+            "noiseless (ideal): a universal model without 'Thermal noise'. Its resistors\n"
+            "place poles, not loss, so they are emitted with noisy=0.\n"
+            "thermal: 'Thermal noise' added the passive's own noise, kT(I - S S^H) at the\n"
+            "ports, from a generator computed from the fit.\n"
+            "NOT added: the model is not strictly passive, so no such generator exists.\n"
+            "The message line below says why, and Export refuses until it is fixed or\n"
+            "'Thermal noise' is unticked.\n"
+            "A structure model's resistors are real loss and always carry their noise.")
         for i, w in enumerate((self.mode_out, self.band_out, self.rms_out, self.pass_out,
-                               self.sigma_out, self.order_out)):
+                               self.sigma_out, self.order_out, self.noise_out)):
             if i:
                 left.addSpacing(_ROW_GAP)      # air between the rows, not under the heading
             left.addWidget(w)
@@ -225,6 +236,11 @@ class DesignView(QtWidgets.QWidget):
             self.order_out.set_value(format_eng(f_ext, "Hz") if f_ext else "\u2014")
             self.order_out.setToolTip(
                 "Frequency the element values were extracted at.")
+        self.noise_out.set_value(noise_text(res))
+        noise = getattr(res, "noise", None)
+        self.noise_out.value.setStyleSheet(
+            "" if (not res.ok or noise is None)
+            else f"color:{STATUS_GREEN if noise.ok else STATUS_RED};font-weight:600;")
 
         self._clear(self.values_host)
         if not res.ok:

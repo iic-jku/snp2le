@@ -16,6 +16,9 @@
     # enforce passivity only down to 1.05, keeping accuracy strict enforcement would cost
     snp2le -b convert bpf.s2p --mode universal --order 13 --passivity-ceiling 1.05
 
+    # add the passive's thermal noise, kT(I - S S^H) at the ports, to the macromodel
+    snp2le -b convert wpd.s3p --mode universal --order 13 --thermal-noise --format both
+
     # convert, run an Xschem testbench, and show data-vs-model-vs-sim plots
     snp2le -b convert bpf.s2p --mode universal --order 13 \\
         -o netlist/spice/two_port.spice \\
@@ -395,6 +398,9 @@ def cmd_convert(args):
               "raw fit untouched", file=sys.stderr)
     p_ceiling = (universal.PASSIVITY_CEILING_DEFAULT if args.passivity_ceiling is None
                 else args.passivity_ceiling)
+    if args.thermal_noise and args.mode == "structure":
+        print("[WARN] --thermal-noise is ignored in structure mode, whose resistors are the "
+              "structure's loss and always carry their thermal noise", file=sys.stderr)
 
     formats = ["ngspice", "vacask"] if args.format == "both" else [args.format]
     rc = 0
@@ -409,7 +415,7 @@ def cmd_convert(args):
         state = ConverterState(
             mode=args.mode, structure_key=args.structure,
             max_order=args.order, enforce_passivity=args.passive,
-            passivity_ceiling=p_ceiling,
+            passivity_ceiling=p_ceiling, thermal_noise=args.thermal_noise,
             f_extract=args.fext, n_segments=args.stages, iso_resistor=args.iso_r,
             f_min=args.fmin, f_max=args.fmax)
         bar = _progress_for(args, os.path.basename(src))
@@ -422,6 +428,12 @@ def cmd_convert(args):
         elapsed = time.monotonic() - t_start
         if not res.ok:
             print(f"[FAIL] {src}: {res.error}", file=sys.stderr)
+            rc = 1
+            continue
+        if res.noise is not None and not res.noise.ok:
+            # a noiseless netlist under a name the caller expects to be noisy would go
+            # into a noise budget unnoticed, so nothing is written
+            print(f"[FAIL] {src}: {res.noise.message}", file=sys.stderr)
             rc = 1
             continue
         last_res = res
@@ -452,8 +464,9 @@ def cmd_convert(args):
                           else "  dc=solvable" if res.dc.ok else "  dc=SINGULAR")
                     sig = ("" if res.sigma_max != res.sigma_max
                            else f"  sigma_max={res.sigma_max:.3f}")
+                    noise = "  noise=thermal" if res.noise is not None else ""
                     extra = (f"rms={res.rms_error:.2e}  order={res.model_order}"
-                             f" ({res.n_poles} poles){sig}{dc}")
+                             f" ({res.n_poles} poles){sig}{dc}{noise}")
                 else:
                     extra = f"f_ext={units.format_eng(res.metrics.get('f_extract'), 'Hz')}"
                 print(f"[ OK ] {src} -> {out}  ({dialect}, {extra}, "
@@ -534,6 +547,13 @@ def build_parser():
                         f"{universal.PASSIVITY_CEILING_MAX:.1f}. Universal mode, needs "
                         f"--passive. Default "
                         f"{universal.PASSIVITY_CEILING_DEFAULT:.1f} (strictly passive)")
+    c.add_argument("--thermal-noise", dest="thermal_noise", action="store_true",
+                   default=False,
+                   help="add the passive's thermal noise, kT(I - S S^H) at the ports, as a "
+                        "generator computed from the fit. Universal mode, needs a strictly "
+                        "passive model, else nothing is written. Default off (noiseless)")
+    c.add_argument("--no-thermal-noise", dest="thermal_noise", action="store_false",
+                   help="emit the noiseless (ideal) model, the default")
     # structure-mode options
     c.add_argument("--fext", type=_freq, default=10e9, metavar="FREQ",
                    help="extraction frequency, e.g. 7GHz (structure)")

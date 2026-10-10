@@ -24,6 +24,10 @@ class ConverterState:
     # works towards, so it only takes effect with enforce_passivity=True.  See
     # universal.PASSIVITY_CEILING_* for the allowed range.
     passivity_ceiling: float = 1.0
+    # Universal mode: append a generator of the passive's thermal noise, kT(I - S S^H) at the
+    # ports, computed from the fit (noise.py).  False keeps the model noiseless (ideal).
+    # Structure models are unaffected, their resistors are real loss and always noisy.
+    thermal_noise: bool = False
     f_min: float | None = None            # fit band start [Hz], None = the data's first point
     f_max: float | None = None            # fit band stop  [Hz], None = the data's last point
     source_path: str = ""                 # last loaded .sNp (for save/restore)
@@ -56,6 +60,7 @@ class Results:
     sigma_max_freq: float = float("nan")  # where that peak sits [Hz]
     passivity_ceiling: float = 1.0        # the ceiling `passive` was judged against
     dc: object = None                     # DCHealth: DC operating-point check (universal mode)
+    noise: object = None                  # NoiseHealth when thermal noise was requested
     rms_error: float = float("nan")
     metrics: dict = field(default_factory=dict)
     value_rows: list = field(default_factory=list)   # (name, value, unit)
