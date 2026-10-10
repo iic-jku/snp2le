@@ -19,6 +19,10 @@ class Structure(ABC):
     key = ""
     display_name = ""
     n_ports = 2          # required port count
+    # True for a model fitted over the whole band instead of read off at f_ext.  Its
+    # extract() also takes `basic` and `progress` keywords and returns its notes in
+    # metrics["messages"].  The GUI hides f_ext for it and shows 'Basic model' instead.
+    wideband = False
 
     @abstractmethod
     def extract(self, net, f_extract, n_segments=None, iso_r=True):

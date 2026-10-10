@@ -10,6 +10,9 @@
     snp2le -b convert ind.s2p --mode structure --structure inductor-pi \\
         --fext 7GHz --format both --values --tolerances
 
+    # wideband inductor model, fitted over the whole band (no f_ext)
+    snp2le -b convert ind.s2p --mode structure --structure inductor-wideband --values
+
     # fit only the 110 to 170 GHz sub-band of a wider EM sweep
     snp2le -b convert core.s7p --mode universal --order 24 --fmin 110GHz --fmax 170GHz
 
@@ -39,7 +42,7 @@ import time
 from snp2le.core import io, engine, units, netlist, universal
 from snp2le.core.progress import format_duration
 from snp2le.core.state import ConverterState
-from snp2le.core.structures import structure_items
+from snp2le.core.structures import get_structure, structure_items
 
 # extensions in the testbench's data folder that are never a result table
 _NON_DATA = {".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out", ".svg", ".png",
@@ -398,6 +401,10 @@ def cmd_convert(args):
               "raw fit untouched", file=sys.stderr)
     p_ceiling = (universal.PASSIVITY_CEILING_DEFAULT if args.passivity_ceiling is None
                 else args.passivity_ceiling)
+    if args.basic and not (args.mode == "structure"
+                           and get_structure(args.structure).wideband):
+        print("[WARN] --basic is ignored, it applies to the wideband inductor structures "
+              "(inductor-wideband, inductor-ct) only", file=sys.stderr)
     if args.thermal_noise and args.mode == "structure":
         print("[WARN] --thermal-noise is ignored in structure mode, whose resistors are the "
               "structure's loss and always carry their thermal noise", file=sys.stderr)
@@ -417,7 +424,7 @@ def cmd_convert(args):
             max_order=args.order, enforce_passivity=args.passive,
             passivity_ceiling=p_ceiling, thermal_noise=args.thermal_noise,
             f_extract=args.fext, n_segments=args.stages, iso_resistor=args.iso_r,
-            f_min=args.fmin, f_max=args.fmax)
+            basic_model=args.basic, f_min=args.fmin, f_max=args.fmax)
         bar = _progress_for(args, os.path.basename(src))
         t_start = time.monotonic()
         try:
@@ -467,6 +474,10 @@ def cmd_convert(args):
                     noise = "  noise=thermal" if res.noise is not None else ""
                     extra = (f"rms={res.rms_error:.2e}  order={res.model_order}"
                              f" ({res.n_poles} poles){sig}{dc}{noise}")
+                elif res.metrics.get("f_fit_max") is not None:   # wideband, no f_ext
+                    n = res.metrics.get("segments", 1)
+                    extra = (f"fit to {units.format_eng(res.metrics['f_fit_max'], 'Hz')}, "
+                             f"{n} segment{'' if n == 1 else 's'}")
                 else:
                     extra = f"f_ext={units.format_eng(res.metrics.get('f_extract'), 'Hz')}"
                 print(f"[ OK ] {src} -> {out}  ({dialect}, {extra}, "
@@ -569,6 +580,9 @@ def build_parser():
     c.add_argument("--iso-r", dest="iso_r", action="store_true", default=True,
                    help="include the Wilkinson isolation R or branch-line arm loss")
     c.add_argument("--no-iso-r", dest="iso_r", action="store_false")
+    c.add_argument("--basic", action="store_true", default=False,
+                   help="fixed basic topology: 1 coil segment, 1 skin section, no substrate "
+                        "coupling (inductor-wideband, inductor-ct)")
     # output
     c.add_argument("--format", choices=["ngspice", "vacask", "both"], default="ngspice")
     c.add_argument("-o", "--output", default=None, help="output path (single input)")

@@ -24,6 +24,9 @@ from .schematic_widget import SchematicWidget
 # cramped: between consecutive rows here, and above a heading via
 # widgets._HEADING_TOP_GAP.
 _ROW_GAP = 3
+# A longer values table (the wideband inductors, up to 24 elements) goes in two columns, so
+# the panel keeps its height.  Every other structure has at most 9 values and one column.
+_ONE_COLUMN_ROWS = 12
 
 
 def _panel(title):
@@ -230,6 +233,13 @@ class DesignView(QtWidgets.QWidget):
                 "Model order of the fit, n_real + 2 x n_complex, so it never exceeds Max "
                 "order in the top bar. It is also the number of internal states in the "
                 "netlist. In brackets the poles kept, a conjugate pair counted once.")
+        elif getattr(getattr(res, "_structure", None), "wideband", False):
+            f_top = res.metrics.get("f_fit_max")
+            self.order_out.label.setText("fitted up to")
+            self.order_out.set_value(format_eng(f_top, "Hz") if f_top else "\u2014")
+            self.order_out.setToolTip(
+                "Highest frequency the wideband fit used: the end of the fit range, or "
+                "1.2 x the self-resonance frequency of the data where that comes first.")
         else:                                             # structure: extraction freq used
             f_ext = res.metrics.get("f_extract")
             self.order_out.label.setText("ext. frequency")
@@ -247,6 +257,17 @@ class DesignView(QtWidgets.QWidget):
             lab = QtWidgets.QLabel(res.error)
             lab.setStyleSheet(f"color:{STATUS_RED};"); lab.setWordWrap(True)
             self.values_host.addWidget(lab)
+        elif res.physical and len(res.value_rows) > _ONE_COLUMN_ROWS:
+            host = QtWidgets.QWidget()
+            grid = QtWidgets.QGridLayout(host)
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setHorizontalSpacing(16); grid.setVerticalSpacing(4 + _ROW_GAP)
+            per_col = (len(res.value_rows) + 1) // 2          # top to bottom, then right
+            for i, (label, val, unit) in enumerate(res.value_rows):
+                of = OutputField(label, format_eng(val, unit), label_w=76,
+                                 equals=True, field_w=96)
+                grid.addWidget(of, i % per_col, i // per_col)
+            self.values_host.addWidget(host, alignment=QtCore.Qt.AlignHCenter)
         elif res.physical and res.value_rows:
             for label, val, unit in res.value_rows:
                 of = OutputField(label, format_eng(val, unit), label_w=52,

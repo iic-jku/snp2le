@@ -36,3 +36,10 @@ SPDX-License-Identifier = "Apache-2.0"
 path = ["snp2le/examples/**", "snp2le/gui/assets/**"]
 SPDX-FileCopyrightText = "2026 Simon Dorrer"
 SPDX-License-Identifier = "Apache-2.0"
+
+# Palace simulation by Volker Muehlhaus (the inductor_fit example in his lumpedmodel repo),
+# after the block above so it takes precedence for this file.
+[[annotations]]
+path = "snp2le/examples/ind_ct_n2_d82_w4_s4_ihp-sg13g2.s3p"
+SPDX-FileCopyrightText = "2026 Volker Muehlhaus"
+SPDX-License-Identifier = "Apache-2.0"

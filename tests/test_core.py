@@ -96,8 +96,9 @@ def test_all_structures_extract():
     example = {2: lambda: inductor_2port(),
                3: lambda: _example("wpd_ihp-sg13g2.s3p"),
                4: lambda: _example("balun_ihp-sg13cmos5l.s4p")}
+    own = {"inductor-ct": lambda: _example("ind_ct_n2_d82_w4_s4_ihp-sg13g2.s3p")}
     for key, _name, nports in structure_items():
-        net = example[nports]()
+        net = own.get(key, example[nports])()
         res = engine.convert(ConverterState(mode="structure", structure_key=key), net)
         assert res.ok, (key, res.error)
         assert res.value_rows                         # has labelled values

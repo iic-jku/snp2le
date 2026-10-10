@@ -17,6 +17,9 @@ class ConverterState:
     f_extract: float = 10e9               # extraction frequency for structure modes [Hz]
     n_segments: int = 2                   # RLGC ladder stages (transmission-line model)
     iso_resistor: bool = True             # include the Wilkinson isolation resistor
+    # Wideband inductor models: the fixed topology (1 coil segment, 1 skin section, no
+    # substrate coupling) instead of the one the fit picks, so every fit has the same elements.
+    basic_model: bool = False
     max_order: int = 6
     enforce_passivity: bool = True
     # Largest singular value the enforced model may keep.  1.0 is strict passivity, a

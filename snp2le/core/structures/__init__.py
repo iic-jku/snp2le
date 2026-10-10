@@ -4,15 +4,18 @@
 from __future__ import annotations
 from .base import Structure
 from .inductor_pi import InductorPi
+from .inductor_wideband import InductorWideband, InductorCenterTap
 from .mim_cap import MimCap
 from .tline import TransmissionLine
 from .wilkinson import Wilkinson, WilkinsonInphase
 from .balun import Balun
 from .branchline import BranchLineCoupler
 
-STRUCTURES = {s.key: s for s in (InductorPi(), MimCap(), TransmissionLine(),
-                                 WilkinsonInphase(), Wilkinson(), Balun(),
-                                 BranchLineCoupler())}
+# Order is the GUI dropdown order, and the first structure matching a file's port count is
+# the one structure mode opens on, so the center-tapped inductor stays behind the Wilkinsons.
+STRUCTURES = {s.key: s for s in (InductorPi(), InductorWideband(), MimCap(),
+                                 TransmissionLine(), WilkinsonInphase(), Wilkinson(),
+                                 InductorCenterTap(), Balun(), BranchLineCoupler())}
 
 
 def structure_items():

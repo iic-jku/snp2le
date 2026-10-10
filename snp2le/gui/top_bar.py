@@ -15,7 +15,7 @@ import math
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from snp2le import __version__
-from snp2le.core.structures import structure_items
+from snp2le.core.structures import get_structure, structure_items
 from snp2le.core import xschem
 from snp2le.core.units import parse_eng, format_eng
 from snp2le.core.universal import (PASSIVITY_CEILING_DEFAULT, PASSIVITY_CEILING_MAX,
@@ -159,8 +159,10 @@ class TopBar(QtWidgets.QWidget):
 
         self.structure = FitComboBox("MIM capacitor")
         self._struct_ports = {}
+        self._struct_wideband = {}         # fitted over the band: no f_ext
         for key, name, nports in structure_items():
             self.structure.addItem(name, key); self._struct_ports[key] = nports
+            self._struct_wideband[key] = get_structure(key).wideband
 
         # extraction frequency (structure modes). Accepts eng. notation e.g. '10 GHz'
         self.f_ext = QtWidgets.QLineEdit("10 GHz"); self.f_ext.setFixedWidth(92)
@@ -180,6 +182,14 @@ class TopBar(QtWidgets.QWidget):
         # reserve room for the longest label so the option slot width never changes
         self.iso_r.setMinimumWidth(
             self.iso_r.fontMetrics().horizontalAdvance("Resistive loss") + 28)
+
+        # wideband inductors: the fixed topology instead of the one the fit picks
+        self.basic = QtWidgets.QCheckBox("Basic model"); self.basic.setChecked(False)
+        self.basic.setToolTip(
+            "Fit the fixed basic topology: 1 coil segment, 1 skin section and no\n"
+            "substrate coupling, so every fit has the same elements (e.g. for data tables).\n"
+            "Untick to let the fit add segments, a second skin section and the substrate\n"
+            "coupling where the data needs them.")
 
         self.order = QtWidgets.QSpinBox(); self.order.setRange(2, 40); self.order.setValue(6)
         self.order.setFixedWidth(66)          # two digits plus the arrows, no more
@@ -234,11 +244,12 @@ class TopBar(QtWidgets.QWidget):
         # only for the structure it belongs to (otherwise hidden entirely)
         self.stages_box = self._labeled_widget("Stages", self.stages)
         self.iso_r_box = self._labeled_widget("", self.iso_r)
+        self.basic_box = self._labeled_widget("", self.basic)
         # a stacked slot sized to its widest page holds whichever option applies, so
         # selecting one never changes the bar width (window opens wide and stays put)
         self.opt_box = QtWidgets.QStackedWidget()
         self._opt_empty = QtWidgets.QWidget()
-        for w in (self._opt_empty, self.stages_box, self.iso_r_box):
+        for w in (self._opt_empty, self.stages_box, self.iso_r_box, self.basic_box):
             self.opt_box.addWidget(w)
 
         # the controls between Structure and the divider depend on the mode: universal
@@ -256,7 +267,9 @@ class TopBar(QtWidgets.QWidget):
         self.struct_page = QtWidgets.QWidget()
         sp = QtWidgets.QHBoxLayout(self.struct_page); sp.setContentsMargins(0, 0, 0, 0)
         sp.setSpacing(_GAP)
-        sp.addLayout(self._labeled("<i>f</i><sub>ext</sub>", self.f_ext))
+        # a widget, not a layout, so a wideband structure can hide it
+        self.f_ext_box = self._labeled_widget("<i>f</i><sub>ext</sub>", self.f_ext)
+        sp.addWidget(self.f_ext_box)
         sp.addWidget(self.opt_box); sp.addStretch(1)
         self.mode_stack = QtWidgets.QStackedWidget()
         self.mode_stack.addWidget(self.uni_page); self.mode_stack.addWidget(self.struct_page)
@@ -372,6 +385,7 @@ class TopBar(QtWidgets.QWidget):
         self.f_max.editingFinished.connect(self._on_band)
         self.stages.valueChanged.connect(lambda _=None: self.changed.emit())
         self.iso_r.toggled.connect(lambda _=None: self.changed.emit())
+        self.basic.toggled.connect(lambda _=None: self.changed.emit())
         self.order.valueChanged.connect(lambda _=None: self.changed.emit())
         self.passive.toggled.connect(self._on_change)      # also greys the ceiling field
         self.p_ceiling.editingFinished.connect(self._on_ceiling)
@@ -390,7 +404,7 @@ class TopBar(QtWidgets.QWidget):
 
         Also unticks 'Show output' and clears the run-status label so the bar
         matches a freshly-opened window. The caller recomputes once."""
-        widgets = (self.mode, self.structure, self.stages, self.iso_r, self.order,
+        widgets = (self.mode, self.structure, self.stages, self.iso_r, self.basic, self.order,
                    self.passive, self.thermal_noise, self.sim_output, self.simulator)
         for w in widgets:
             w.blockSignals(True)
@@ -400,6 +414,7 @@ class TopBar(QtWidgets.QWidget):
             self.structure.setCurrentIndex(si)
         self.stages.setValue(2)
         self.iso_r.setChecked(True)
+        self.basic.setChecked(False)
         self.order.setValue(6)
         self.passive.setChecked(True)
         self.thermal_noise.setChecked(False)
@@ -459,7 +474,7 @@ class TopBar(QtWidgets.QWidget):
         Signals are blocked so this does not trigger a recompute. The caller
         recomputes once afterwards.
         """
-        widgets = (self.mode, self.structure, self.stages, self.iso_r, self.order,
+        widgets = (self.mode, self.structure, self.stages, self.iso_r, self.basic, self.order,
                    self.passive, self.thermal_noise)
         for w in widgets:
             w.blockSignals(True)
@@ -471,6 +486,7 @@ class TopBar(QtWidgets.QWidget):
             self.structure.setCurrentIndex(si)
         self.stages.setValue(int(state.n_segments))
         self.iso_r.setChecked(bool(state.iso_resistor))
+        self.basic.setChecked(bool(getattr(state, "basic_model", False)))
         self.order.setValue(int(state.max_order))
         self.passive.setChecked(bool(state.enforce_passivity))
         self.thermal_noise.setChecked(bool(getattr(state, "thermal_noise", False)))
@@ -518,8 +534,12 @@ class TopBar(QtWidgets.QWidget):
         # structure-specific option: show only the page for the chosen structure
         key = self.structure.currentData()
         self.iso_r.setText("Resistive loss" if key == "branchline" else "Isolation R")
+        wideband = is_struct and self._struct_wideband.get(key, False)
+        self.f_ext_box.setVisible(not wideband)              # fitted over the band
         if is_struct and key == "tline-rlgc":               # RLGC line only
             self.opt_box.setCurrentWidget(self.stages_box)
+        elif wideband:
+            self.opt_box.setCurrentWidget(self.basic_box)
         elif is_struct and key in ("wilkinson-inphase", "branchline"):
             self.opt_box.setCurrentWidget(self.iso_r_box)   # isolation R / resistive loss
         else:
@@ -677,6 +697,7 @@ class TopBar(QtWidgets.QWidget):
             "f_extract": self._f_extract_hz,
             "n_segments": int(self.stages.value()),
             "iso_resistor": bool(self.iso_r.isChecked()),
+            "basic_model": bool(self.basic.isChecked()),
             "max_order": int(self.order.value()),
             "enforce_passivity": bool(self.passive.isChecked()),
             "passivity_ceiling": float(self._p_ceiling),
