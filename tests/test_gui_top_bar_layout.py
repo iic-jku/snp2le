@@ -66,9 +66,10 @@ def test_the_tick_boxes_sit_on_the_button_line(bar):
 
 
 def test_the_divider_has_the_same_gap_on_both_sides(bar):
-    """The conversion controls end and the action buttons start the same distance from
-    the vertical divider.  The spare width of a wide window belongs at the right edge,
-    not in that gap, which is why the stretch sits after Reset."""
+    """The conversion controls end and the action buttons start one ordinary gap from the
+    vertical divider, the same gap as between any two buttons.  The spare width of a wide
+    window belongs at the right edge, not in that gap, which is why the stretch sits after
+    Reset."""
     # its own bar, sized with room to spare: at the natural width every gap is tight
     # anyway, so a stretch in the wrong place only shows up in a window that has slack.
     # A separate instance also keeps the shared fixture's geometry untouched.
@@ -85,8 +86,9 @@ def test_the_divider_has_the_same_gap_on_both_sides(bar):
     field_end = span(wide.f_max)[1]
     div_start, div_end = span(wide.sep)
     export_start = span(wide.exp_ng)[0]
+    button_gap = span(wide.load_sch)[0] - span(wide.exp_va)[1]
     wide.close()
-    assert div_start - field_end == export_start - div_end
+    assert div_start - field_end == export_start - div_end == button_gap
 
 
 def test_no_other_row_sets_the_window_floor(bar):
