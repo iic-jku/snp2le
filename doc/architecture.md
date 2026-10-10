@@ -87,9 +87,10 @@ waits, and parks a worker that outlives the wait in `fit_runner._ORPHANS`.
 Subclass `snp2le.core.structures.base.Structure`, implement `extract(net, ...)`
 returning `(CircuitIR, metrics, rows)`, and register it in
 `snp2le/core/structures/__init__.py`. It then appears in the GUI dropdown and the
-CLI automatically. The registry order is the dropdown order, and structure mode opens
-on the first entry that matches the file's port count, so a new structure goes behind
-the one that should stay the default.
+CLI automatically. The registry order is the dropdown order. Structure mode opens on
+`structures.default_structure(n_ports)`, the first entry with the file's port count that
+is not a wideband fit, which keeps a slow fit from starting on its own. The three
+inductors lead the dropdown, and a 3-port still opens on the in-phase Wilkinson.
 
 A structure fitted over the whole band instead of read off at f_ext sets
 `wideband = True`. The engine then calls its `extract()` with two more keywords,

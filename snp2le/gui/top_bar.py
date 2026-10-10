@@ -15,7 +15,7 @@ import math
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from snp2le import __version__
-from snp2le.core.structures import get_structure, structure_items
+from snp2le.core.structures import default_structure, get_structure, structure_items
 from snp2le.core import xschem
 from snp2le.core.units import parse_eng, format_eng
 from snp2le.core.universal import (PASSIVITY_CEILING_DEFAULT, PASSIVITY_CEILING_MAX,
@@ -528,8 +528,9 @@ class TopBar(QtWidgets.QWidget):
             if i == cur:
                 cur_ok = ok
         if is_struct and not cur_ok and first_ok is not None:
+            idx = self.structure.findData(default_structure(self._n_ports))
             self.structure.blockSignals(True)
-            self.structure.setCurrentIndex(first_ok)
+            self.structure.setCurrentIndex(idx if idx >= 0 else first_ok)
             self.structure.blockSignals(False)
         # structure-specific option: show only the page for the chosen structure
         key = self.structure.currentData()

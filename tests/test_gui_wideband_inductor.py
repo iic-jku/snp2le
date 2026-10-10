@@ -74,6 +74,27 @@ def test_a_wideband_structure_swaps_f_ext_for_basic(win, top):
     assert not top.f_ext_box.isHidden()
 
 
+def test_the_center_tap_is_third_but_never_the_default(win):
+    """It sits right under the wideband inductor, yet a 3-port in structure mode still opens
+    on the in-phase Wilkinson, also when a wideband 2-port model was selected before."""
+    from snp2le.gui.top_bar import TopBar
+    bar = TopBar()
+    try:
+        assert [bar.structure.itemData(i) for i in range(3)] == [
+            "inductor-pi", "inductor-wideband", "inductor-ct"]
+        bar.set_ports(3)
+        _select(bar, "inductor-pi")                  # disabled for a 3-port, so it moves on
+        assert bar.structure.currentData() == "wilkinson-inphase"
+        bar.set_ports(2)
+        _select(bar, "inductor-wideband")
+        bar.set_ports(3)
+        assert bar.structure.currentData() == "wilkinson-inphase"
+        bar.set_ports(2)
+        assert bar.structure.currentData() == "inductor-pi"
+    finally:
+        bar.close()
+
+
 def test_the_strip_does_not_grow(win, top):
     """The option slot is sized to its widest page and 'Basic model' is narrower than
     'Resistive loss', so the strip keeps the width it has in universal mode."""

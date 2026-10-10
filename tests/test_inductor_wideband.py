@@ -20,7 +20,8 @@ import skrf                                                   # noqa: E402
 
 from snp2le.core import engine, io                            # noqa: E402
 from snp2le.core.state import ConverterState                  # noqa: E402
-from snp2le.core.structures import STRUCTURES, structure_items  # noqa: E402
+from snp2le.core.structures import (STRUCTURES, default_structure,   # noqa: E402
+                                    structure_items)
 from snp2le.core.structures import inductor_fit as fitmod     # noqa: E402
 from snp2le.core.structures.inductor_wideband import _row, coil_segments  # noqa: E402
 
@@ -196,12 +197,13 @@ def test_data_that_is_no_inductor_is_refused_with_a_reason():
     assert "does not look like a center-tapped inductor" in res.error
 
 
-def test_the_dropdown_defaults_did_not_move():
-    """Structure mode opens on the first structure matching the port count, so the new ones
-    sit behind inductor-pi (2-port) and the Wilkinsons (3-port)."""
-    first = {}
-    for key, _name, n in structure_items():
-        first.setdefault(n, key)
-    assert first == {2: "inductor-pi", 3: "wilkinson-inphase", 4: "balun"}
+def test_the_inductors_lead_the_dropdown_and_the_defaults_did_not_move():
+    """The three inductors come first in the dropdown, and structure mode still opens on
+    inductor-pi for a 2-port and on the in-phase Wilkinson for a 3-port: the default skips
+    the wideband fits, which take seconds and are picked on purpose."""
+    keys = [key for key, _name, _n in structure_items()]
+    assert keys[:3] == ["inductor-pi", "inductor-wideband", "inductor-ct"]
+    assert {n: default_structure(n) for n in (1, 2, 3, 4)} == {
+        1: None, 2: "inductor-pi", 3: "wilkinson-inphase", 4: "balun"}
     assert {k for k, s in STRUCTURES.items() if s.wideband} == {"inductor-wideband",
                                                                  "inductor-ct"}

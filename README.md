@@ -419,11 +419,11 @@ snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \
 | --- | --- | --- | --- |
 | `inductor-pi` | Inductor | 2 | series R-L plus shunt C/R per port |
 | `inductor-wideband` | Inductor (wideband) | 2 | fitted over the whole band, no f_ext (`--basic`), see below |
+| `inductor-ct` | Inductor (center tap) | 3 | coupled half coils, center tap on port 3, no f_ext (`--basic`), see below |
 | `mim-cap` | MIM capacitor | 2 | series C with parasitic L/R plus shunt C (use it for MOM caps too) |
 | `tline-rlgc` | Tline (RLGC) | 2 | transmission line as an N-cell ladder of L-cells (`--stages`) |
 | `wilkinson-inphase` | Wilkinson (in-phase) | 3 | optional isolation resistor (`--iso-r`) |
 | `wilkinson` | Wilkinson (quadrature) | 3 | quadrature (90 deg) outputs |
-| `inductor-ct` | Inductor (center tap) | 3 | coupled half coils, center tap on port 3, no f_ext (`--basic`), see below |
 | `balun` | Balun (transformer) | 4 | coupled inductors (k, M, n), Qp and Qs |
 | `branchline` | Branch-line coupler | 4 | optional fitted arm loss (`--iso-r`) |
 
