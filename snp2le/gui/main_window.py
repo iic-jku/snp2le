@@ -23,6 +23,7 @@ from .help_dialog import HelpDialog
 from .log_dialog import LogWindow
 from .footer import Footer
 from .fit_runner import FitRunner
+from .widgets import with_symbols
 
 # A fit at least this long is one the user may have walked away from, so its
 # completion also flashes the taskbar entry when the window is not in front.
@@ -143,6 +144,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.max_order = v["max_order"]
         self.state.enforce_passivity = v["enforce_passivity"]
         self.state.passivity_ceiling = v["passivity_ceiling"]
+        self.state.thermal_noise = v["thermal_noise"]
         self.state.f_min = v["f_min"]
         self.state.f_max = v["f_max"]
 
@@ -307,6 +309,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 detail = "No conversion has finished yet."
             QtWidgets.QMessageBox.warning(self, "Export netlist",
                                           f"There is nothing to export.\n{detail}")
+            return
+        if res.noise is not None and not res.noise.ok:
+            # the CLI writes nothing in this case either: a noiseless netlist exported while
+            # 'Thermal noise' is ticked would enter a noise budget unnoticed
+            QtWidgets.QMessageBox.warning(
+                self, "Export netlist",
+                "Thermal noise is ticked but could not be added, so there is nothing to "
+                f"export.\n\n{with_symbols(res.noise.message)}.\n\nUntick 'Thermal noise' "
+                "to export the noiseless (ideal) model.")
             return
         ext = "inc" if dialect == "vacask" else "spice"   # VACASK include file (.inc)
         # default name: <source>_le, falling back to the subcircuit's own name

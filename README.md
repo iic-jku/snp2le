@@ -27,7 +27,7 @@ Institute for Integrated Circuits and Quantum Computing (IICQC), Johannes Kepler
 
 It offers two conversion philosophies:
 
-- **Universal (any N-port).** Vector-fits the S-parameters with [scikit-rf](https://scikit-rf.org) `VectorFitting`, optionally enforces passivity, and synthesises a passive macromodel of R, C and controlled sources. It works for any structure and port count, and is electrically exact but not physically interpretable. Its resistors are emitted noiseless (`noisy=0`, understood by both Ngspice and VACASK): they exist to reproduce the fitted response, not to model a device, and charging thermal noise against them would report noise that tracks the fit order instead of the structure. A noise budget through a universal model must account for the structure's real loss separately.
+- **Universal (any N-port).** Vector-fits the S-parameters with [scikit-rf](https://scikit-rf.org) `VectorFitting`, optionally enforces passivity, and synthesises a passive macromodel of R, C and controlled sources. It works for any structure and port count, and is electrically exact but not physically interpretable. Its resistors are emitted noiseless (`noisy=0`, understood by both Ngspice and VACASK): they exist to reproduce the fitted response, not to model a device, and charging thermal noise against them would report noise that tracks the fit order instead of the structure. So by default the model is noiseless (ideal), and the **Thermal noise** option adds the noise the lossy passive really has, kT(I - S S<sup>H</sup>) at its ports, as a generator computed from the fit. See [Thermal noise](https://github.com/iic-jku/snp2le#thermal-noise).
 - **Structure-specific.** Fits a known physical topology, so every component maps to reality (series L, shunt C, coupling k, and so on) at a chosen **extraction frequency**. Its resistors model real loss (a Wilkinson's isolation resistor, a coil's conductor loss), so they keep their thermal noise. See [Available structures](https://github.com/iic-jku/snp2le#available-structures).
 
 Either mode fits the file's full frequency range by default, or a **fit range** of your choosing (e.g. only 110 GHz to 170 GHz of a 80 GHz to 240 GHz EM sweep), so the model order is spent on the band the block actually operates in.
@@ -77,6 +77,7 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │  │  ├─ ir.py                dialect-agnostic Circuit IR
 │  │  ├─ mna.py               rebuild N-port S-parameters from an RLC IR
 │  │  ├─ netlist.py           render the IR to Ngspice and VACASK
+│  │  ├─ noise.py             thermal-noise generator of a universal model
 │  │  ├─ progress.py          progress reporting for long conversions
 │  │  ├─ state.py             ConverterState and Results dataclasses
 │  │  ├─ units.py             engineering-notation parse and format
@@ -110,9 +111,11 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │  ├─ test_gui_launch_file.py  headless GUI opened on a command-line file
 │  ├─ test_gui_passivity_ceiling.py  headless passivity-ceiling control
 │  ├─ test_gui_sim_flow.py    headless GUI run/poll/import regressions
+│  ├─ test_gui_thermal_noise.py  headless Thermal noise control
 │  ├─ test_gui_top_bar_layout.py  headless control-strip layout invariants
 │  ├─ test_gui_view_switch.py  headless View switch (both views on screen)
 │  ├─ test_main_dispatch.py   the entry point's argument dispatch (no Qt)
+│  ├─ test_noise.py           the thermal-noise generator against Bosma's formula
 │  ├─ test_progress.py        progress reporting and the fit watcher
 │  ├─ test_qt_essentials.py   guards the Essentials-only dependency
 │  ├─ test_reproducibility.py same input, same model, across processes
@@ -176,7 +179,7 @@ Naming a `.sNp` file on the command line opens the GUI on it instead of the exam
 ### Typical workflow
 
 1. **Load** a Touchstone `.sNp` file from the top bar, or name it on the command line (`snp2le design.s4p`, see above). The header shows the port count and frequency range.
-2. **Choose a mode.** Universal (set *Max order*, *Enforce passivity* and the *Passivity ceiling* it works towards) or Structure-specific (pick a structure and set the *extraction frequency*). Some structures expose an extra option such as *Stages*, *Isolation R* or *Resistive loss*. *Max order* bounds the model order, `n_real + 2 x n_complex`, which is also the number of internal states in the netlist. The *Result* panel's *order* line reports the order the fit settled on and, in brackets, its pole count, where a complex-conjugate pair counts once, so the two numbers differ by design.
+2. **Choose a mode.** Universal (set *Max order*, *Enforce passivity* and the *Passivity ceiling* it works towards, and tick *Thermal noise* for a model that carries the passive's noise) or Structure-specific (pick a structure and set the *extraction frequency*). Some structures expose an extra option such as *Stages*, *Isolation R* or *Resistive loss*. *Max order* bounds the model order, `n_real + 2 x n_complex`, which is also the number of internal states in the netlist. The *Result* panel's *order* line reports the order the fit settled on and, in brackets, its pole count, where a complex-conjugate pair counts once, so the two numbers differ by design.
 3. **Restrict the fit range** (optional, both modes). The *Fit range (GHz)* fields start at the loaded file's own span, so they always name the band being fitted. Enter two plain numbers in GHz (e.g. `110` and `170`) to fit only a sub-band. The *Result* panel shows the band actually fitted, and the RMS error, the tolerances, the plots and a testbench run's sweep all follow it. An edge outside the data is clamped to the data and reported, an empty or inverted band is refused.
 4. **Inspect** the result, element values, per-element **tolerances** at the extraction frequency, the drawn schematic, and the generated netlist in the **Design & Schematic** view.
 5. **Compare** the loaded data (grey) against the extracted model (blue) in the **Plot** view (up to four traces, magnitude and phase). The **View** switch at the right of the title bar carries both views side by side and fills the one you are on, so a click moves between them.
@@ -225,6 +228,36 @@ The **Result** panel reports the measured sigma_max next to the ceiling it was j
 
 - **At 0 Hz or inside your band**: a real hazard. Enforce, or raise the order.
 - **Far above the top data point**, at 10^4 times it or so: that is the model's high-frequency asymptote, not a resonance. It usually means the fit order is too high for the file. The bundled `tline_100um_ihp-sg13g2.s2p` reaches sigma_max = 5.24 at order 13 but only 0.9997 at order 6, for the same reason.
+
+### Thermal noise
+
+A lossy passive at temperature T is a noise source, and its noise follows from its S-parameters alone: the noise waves leaving its ports have the correlation kT(I - S S<sup>H</sup>) per hertz (Bosma's theorem, Nyquist's for an N-port). A lossless block adds no noise, and a block with loss adds the noise of that loss, correlations between its ports included.
+
+A universal model cannot take that noise from its own resistors, which place the fit's poles rather than model the structure's loss and are therefore emitted with `noisy=0`. By default it is noiseless, an ideal block. Tick **Thermal noise** (CLI: `--thermal-noise`) to add the noise the passive really has:
+
+- snp2le computes a noise generator from the fitted model itself, the spectral factor of I - S S<sup>H</sup> given by the bounded-real lemma, and appends it to the subcircuit.
+- N resistors of 0.25 ohm, one per port, are its only noise sources (`Rnz_e1` to `Rnz_eN`), since 4kTR = kT is the noise power a matched port emits. They drive a copy of the model's state dynamics (`Cnz_x*` and controlled sources `Gnz_*`), which injects the noise waves into each port's internal sensor node.
+- Nothing feeds back into the fitted network, so its S-parameters, its DC operating point and everything else the conversion reports stay exactly what they are without the option.
+- The noise follows the simulator temperature like any resistor's, while the S-parameters do not change with it.
+- In a noise analysis the block's share is the sum of its `Rnz_e*` entries. It works in every analysis that handles resistor noise, for example `noise` in Ngspice and VACASK, and VACASK's `hbnoise`, `pnoise` and transient noise.
+- The netlist grows by about 2N + 3 lines per state, where a model has N times its model order states: a 3-port at order 6 gains 113 lines, a 7-port at order 23 goes from 1892 to 4659.
+
+**It needs a strictly passive model.** The generator exists only where sigma_max stays below 1 at every frequency, far outside the data included, so keep *Enforce passivity* ticked at a ceiling of `1.00`. When the model still is not strictly passive (a raised ceiling, enforcement off, or a fit enforcement cannot fix), no noise is added and the message names the model's sigma_max. The GUI still shows the model and its plots, its Result panel reads *NOT added*, and Export refuses. The CLI writes no file and exits non-zero. A noiseless netlist under a name you asked to be noisy would otherwise enter a noise budget unnoticed.
+
+Every generator is checked before it is added: V V<sup>H</sup> = I - S S<sup>H</sup> over DC, the data band and four decades either side, within 1e-6 kT (the bundled examples land between 1e-15 and 1e-13). Simulated, with every port terminated in noiseless 50 ohm, the port noise must be Z<sub>0</sub> kT(I - S S<sup>H</sup>):
+
+| Model | Ports, states | Ngspice `noise` | VACASK `noise` |
+| --- | --- | --- | --- |
+| `bpf_ihp-sg13g2.s2p`, order 13 | 2, 26 | 3.6e-7 | 9.7e-7 |
+| `wpd_ihp-sg13g2.s3p`, order 6 | 3, 12 | 3.5e-7 | 9.4e-7 |
+| `blc_ihp-sg13g2.s4p`, order 6 | 4, 24 | 3.5e-7 | 9.4e-7 |
+| a 7-port receiver core, order 23 | 7, 161 | 3.6e-7 | 9.4e-7 |
+
+The numbers are the largest relative deviation from 1 GHz to 10 THz, on every port and on the difference of ports 1 and 2, which tests the correlation. Both are constant offsets set by each simulator's physical constants, the same a plain resistor shows. VACASK transient noise (`noisemode="sde"`) through the WPD generator matches VACASK's own `noise` analysis within 3.4 % over 5 GHz to 2 THz, and plain resistor noise through the same fitted model within 2.5 %, both the scatter of a single 40 ns record.
+
+The noise is only as good as the loss in the S-parameter data. An EM solve whose mesh has not converged carries its loss error straight into the noise, and on a low-loss block a small fit error is a large share of 1 - |S<sub>21</sub>|<sup>2</sup>.
+
+Structure models are unaffected: their resistors are the structure's loss and always carry their thermal noise.
 
 ### Watching a conversion
 
@@ -322,6 +355,7 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `--order N` | universal | maximum model order, counted as `n_real + 2 x n_complex` |
 | `--passive` / `--no-passive` | universal | enforce passivity (default on) |
 | `--passivity-ceiling SIGMA` | universal | sigma_max the enforcement works towards, `1.0` to `1.2`, needs `--passive` (default `1.0`) |
+| `--thermal-noise` / `--no-thermal-noise` | universal | add the passive's thermal noise, kT(I - S S<sup>H</sup>) at the ports, or emit the noiseless model (default noiseless). A model that is not strictly passive cannot carry it: nothing is written and the exit code is non-zero |
 | `--fext FREQ` | structure | extraction frequency, e.g. `7GHz` |
 | `--fmin FREQ` | both | lowest frequency used for the fit (default: the file's first point) |
 | `--fmax FREQ` | both | highest frequency used for the fit (default: the file's last point) |
@@ -354,6 +388,9 @@ snp2le -b convert core.s7p --mode universal --order 24 --fmin 110GHz --fmax 170G
 
 # enforce passivity only down to 1.05, keeping accuracy that strict enforcement would cost
 snp2le -b convert bpf.s2p --mode universal --order 13 --passivity-ceiling 1.05
+
+# add the passive's thermal noise to the macromodel, both dialects
+snp2le -b convert wpd.s3p --mode universal --order 13 --thermal-noise --format both
 
 # convert the BPF, run the 2-port Xschem testbench, and show data vs model vs sim plots
 snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \

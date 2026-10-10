@@ -145,7 +145,31 @@ pytest
   macromodel's resistors are fit artifacts and are emitted with `noisy=0` in both
   dialects, while a structure model's resistors are real loss and keep their noise.
   The reasoning and the measured numbers are in the comment block above
-  `netlist._NOISY_OFF`.
+  `netlist._NOISY_OFF`. `Element.noisy` overrides that per element (None follows
+  `ir.physical`), and `netlist._silenced()` is the one place both renderers ask.
+* `ConverterState.thermal_noise` (universal mode, off by default) appends the passive's
+  thermal noise, kT(I - S S^H) at the ports, through `noise.add_thermal_noise()`, called
+  by the engine after the model response and before the DC check, so the check covers it.
+  `noise.state_space()` rebuilds the fit's real (A, B, C, D, E) from scikit-rf's public
+  pole and residue attributes (the layout of its private `_get_ABCDE`), and
+  `noise.spectral_factor()` solves the bounded-real Riccati equation with
+  `scipy.linalg.solve_continuous_are` in time normalised to the largest pole, with V0
+  the Cholesky factor of I - D D^T. The generator is N noisy 0.25 ohm resistors
+  (`Element.noisy=True`) driving a copy of the state dynamics, injected into each port's
+  sensor node `s_n` of the scikit-rf realisation at 2/sqrt(Z0) per unit of noise wave,
+  and found by `noise._port_sensors()` from the 0 V source and reference resistor of
+  each port. Each state is rescaled so the gains that drive it and the gains that read
+  it meet in size, with a complex pair tied to one factor, because VACASK does not
+  equilibrate its matrix (1.4 % off at low frequency without it). Before anything is
+  added, V V^H is checked against I - S S^H on DC, the data band and four decades either
+  side (`noise.CHECK_TOL`, 1e-6 kT). A model that is not strictly passive, has a
+  proportional term or fails the check gets no generator, `Results.noise.ok` is False
+  with the reason, the engine adds that reason to `messages`, the GUI refuses Export
+  and the CLI writes nothing and exits non-zero. Its notes go into `CircuitIR.notes`,
+  which the renderers print in full after the provenance comments. `_PLAN_UNIVERSAL_NOISE`
+  carries the extra stage, so the default plan's progress fractions are unchanged.
+  `tests/test_noise.py` solves the emitted circuit with its own AC noise analysis and
+  compares every port and correlation with Bosma's formula.
 * The bundled `netlist/` examples are `bpf_ihp-sg13g2.s2p` at `--order 13`
   (`two_port`), `wpd_ihp-sg13g2.s3p` at `--order 13` (`three_port`) and
   `blc_ihp-sg13g2.s4p` at `--order 8` (`four_port`), exported with `--format both`.

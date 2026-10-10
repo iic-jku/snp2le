@@ -5,9 +5,9 @@
 Dark title bar: snp2le logo + title, then (right) the two-segment View switch
 (Design & Schematic | Plot) + Help.
 Light controls row: Load .sNp, Mode (Universal / Structure), Structure, Max
-order, Enforce passivity, Passivity ceiling, Fit range (GHz).  Structures that do not match
-the loaded port count are greyed out so an invalid choice can never be made, and the
-passivity ceiling is greyed out (pinned to its strict default) while passivity is not
+order, Enforce passivity, Passivity ceiling, Thermal noise, Fit range (GHz).  Structures that
+do not match the loaded port count are greyed out so an invalid choice can never be made, and
+the passivity ceiling is greyed out (pinned to its strict default) while passivity is not
 enforced.
 """
 from __future__ import annotations
@@ -214,6 +214,17 @@ class TopBar(QtWidgets.QWidget):
             "Only applies while 'Enforce passivity' is ticked.")
         self._set_ceiling(PASSIVITY_CEILING_DEFAULT)           # show the default, not an empty box
 
+        # built like 'Enforce passivity', two lines and the indicator pinned to the top
+        self.thermal_noise = QtWidgets.QCheckBox("Thermal\nnoise")
+        self.thermal_noise.setObjectName("wrapCheck")
+        self.thermal_noise.setChecked(False)
+        self.thermal_noise.setToolTip(
+            "Add the passive's own thermal noise, kT(I - S S^H) at the ports, as a\n"
+            "generator computed from the fit and appended to the netlist. The fitted\n"
+            "network and its S-parameters stay exactly as they are.\n"
+            "It needs a strictly passive model, so keep 'Enforce passivity' at 1.00.\n"
+            "Untick for the noiseless (ideal) model, whose resistors carry noisy=0.")
+
         # structure-specific options live in their own containers so each can be shown
         # only for the structure it belongs to (otherwise hidden entirely)
         self.stages_box = self._labeled_widget("Stages", self.stages)
@@ -235,6 +246,7 @@ class TopBar(QtWidgets.QWidget):
         up.addLayout(self._labeled("Max order", self.order))
         up.addLayout(self._labeled("", self.passive))
         up.addLayout(self._labeled("Passivity ceiling", self.p_ceiling))
+        up.addLayout(self._labeled("", self.thermal_noise))
         up.addStretch(1)
         self.struct_page = QtWidgets.QWidget()
         sp = QtWidgets.QHBoxLayout(self.struct_page); sp.setContentsMargins(0, 0, 0, 0)
@@ -362,6 +374,7 @@ class TopBar(QtWidgets.QWidget):
         self.order.valueChanged.connect(lambda _=None: self.changed.emit())
         self.passive.toggled.connect(self._on_change)      # also greys the ceiling field
         self.p_ceiling.editingFinished.connect(self._on_ceiling)
+        self.thermal_noise.toggled.connect(lambda _=None: self.changed.emit())
         self.exp_ng.clicked.connect(lambda: self.export_clicked.emit("ngspice"))
         self.exp_va.clicked.connect(lambda: self.export_clicked.emit("vacask"))
         self.load_sch.clicked.connect(self.load_sch_clicked.emit)
@@ -377,7 +390,7 @@ class TopBar(QtWidgets.QWidget):
         Also unticks 'Show output' and clears the run-status label so the bar
         matches a freshly-opened window. The caller recomputes once."""
         widgets = (self.mode, self.structure, self.stages, self.iso_r, self.order,
-                   self.passive, self.sim_output, self.simulator)
+                   self.passive, self.thermal_noise, self.sim_output, self.simulator)
         for w in widgets:
             w.blockSignals(True)
         self.mode.setCurrentIndex(0)                       # universal
@@ -388,6 +401,7 @@ class TopBar(QtWidgets.QWidget):
         self.iso_r.setChecked(True)
         self.order.setValue(6)
         self.passive.setChecked(True)
+        self.thermal_noise.setChecked(False)
         self._set_ceiling(PASSIVITY_CEILING_DEFAULT)
         self.sim_output.setChecked(False)
         self.simulator.setCurrentIndex(0)                  # Ngspice
@@ -445,7 +459,7 @@ class TopBar(QtWidgets.QWidget):
         recomputes once afterwards.
         """
         widgets = (self.mode, self.structure, self.stages, self.iso_r, self.order,
-                   self.passive)
+                   self.passive, self.thermal_noise)
         for w in widgets:
             w.blockSignals(True)
         mi = self.mode.findData(state.mode)
@@ -458,6 +472,7 @@ class TopBar(QtWidgets.QWidget):
         self.iso_r.setChecked(bool(state.iso_resistor))
         self.order.setValue(int(state.max_order))
         self.passive.setChecked(bool(state.enforce_passivity))
+        self.thermal_noise.setChecked(bool(getattr(state, "thermal_noise", False)))
         for w in widgets:
             w.blockSignals(False)
         self._set_ceiling(state.passivity_ceiling)
@@ -664,6 +679,7 @@ class TopBar(QtWidgets.QWidget):
             "max_order": int(self.order.value()),
             "enforce_passivity": bool(self.passive.isChecked()),
             "passivity_ceiling": float(self._p_ceiling),
+            "thermal_noise": bool(self.thermal_noise.isChecked()),
             "f_min": self._f_min_hz,
             "f_max": self._f_max_hz,
         }

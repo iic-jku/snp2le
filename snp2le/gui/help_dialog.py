@@ -82,6 +82,21 @@ term, cannot be corrected at any ceiling. <tt>tline_100um_ihp-sg13g2.s2p</tt> at
 stays at 5.24 whatever you ask for. The accurate fit is then kept rather than a wrecked
 one and the result reads <i>near-passive</i>. The fix is a lower <b>Max order</b>, not a
 higher ceiling, since order 6 brings the same file to 1.018.</p></li>
+<li><b>Thermal noise</b> (universal mode): a lossy passive at temperature T is a noise
+source, and its noise follows from its S-parameters alone, kT(I&nbsp;&minus;&nbsp;S&nbsp;S<sup>H</sup>)
+at its ports (Bosma's theorem). Unticked (the default), the model is noiseless, an ideal
+block. Ticked, snp2le computes a noise generator from the fitted model (its spectral factor)
+and appends it to the subcircuit: one 0.25&nbsp;&Omega; resistor per port
+(<tt>Rnz_e1</tt>, <tt>Rnz_e2</tt>, ...) is the only noise source, driving controlled sources
+that inject the correlated noise waves into the ports. Nothing feeds back into the fitted
+network, so the S-parameters and the operating point stay exactly as they are. Any noise
+analysis then sees the block's noise, as the sum of its <tt>Rnz_e*</tt> contributions.
+<p><b>It needs a strictly passive model</b>, so keep <b>Enforce passivity</b> ticked at
+<i>1.00</i>. If the model is not strictly passive anywhere, far outside the data included,
+no generator exists: the noise is not added, the <i>noise</i> result reads <i>NOT added</i>,
+the message line names &sigma;<sub>max</sub>, and <b>Export</b> refuses until it is fixed
+or the box is unticked. Structure models are unaffected, since their resistors are the
+structure's loss and always carry their thermal noise.</p></li>
 <li><b>Fit range (GHz)</b> (both modes): the band of the loaded file the model is fitted
 to, as two plain numbers in GHz (the unit is in the label, so there is nothing to type but
 the number). Loading a file puts its own span in the fields, so they always name the band
@@ -136,7 +151,10 @@ running.</li>
 <ul>
 <li><b>Result</b>: fit/extraction quality. RMS error against the data, passivity,
 &sigma;<sub>max</sub> against the ceiling it was judged against (green below the
-ceiling, red above it), and the model order (universal) or the extraction frequency (structure).
+ceiling, red above it), the model order (universal) or the extraction frequency (structure),
+and the <i>noise</i> the netlist carries: <i>noiseless (ideal)</i>, <i>thermal</i> (green) when
+<b>Thermal noise</b> added the generator, <i>NOT added</i> (red) when the model could not
+carry it, or <i>thermal (resistors)</i> for a structure model.
 Passivity reads <i>passive</i> below 1, <i>below ceiling</i> when a raised ceiling was
 reached, <i>near-passive</i> when enforcement ran and could not reach it, and <i>not
 passive</i> when the model is above its ceiling. Structure models are passive by
@@ -167,8 +185,9 @@ Transformer coupling is emitted as a builtin <tt>mutual</tt> instance. Device mo
 OSDI loads come from your testbench, not the exported subcircuit. A universal macromodel's
 resistors carry <tt>noisy=0</tt> (understood by both simulators): they exist to reproduce
 the fitted response, not to model a device, and charging thermal noise against them would
-report noise that tracks the fit order instead of the structure. The model is therefore
-fully noiseless, so a noise budget must account for the structure's real loss separately.
+report noise that tracks the fit order instead of the structure. Without <b>Thermal
+noise</b> the model is therefore fully noiseless. With it, the generator's
+<tt>Rnz_e*</tt> resistors are the only ones without <tt>noisy=0</tt>.
 A structure model's resistors are real loss (an isolation resistor, a coil's conductor
 loss) and keep their noise. In VACASK the
 subcircuit's ground is node <tt>GND</tt>: Spectre has no implicit node-0 ground the way
