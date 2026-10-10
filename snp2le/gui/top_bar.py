@@ -24,6 +24,11 @@ from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN, JKU_RED, PANEL_BORDER, DISABLE
 from .widgets import FitComboBox, SegmentedSwitch
 
 _DISABLED_GREY = QtGui.QColor(DISABLED_FG)     # greyed-out dropdown items
+# Gap between neighbouring controls, the divider included.  The controls row is the widest
+# row in the window, so this decides whether the window fits a 1920 px screen.  Measured in
+# the IIC-OSIC-TOOLS container under WSLg (Sans Serif 9): 14 px needs 1929 px, too wide for a
+# maximized window there (Wayland aborts the app), 12 px needs 1899 px.
+_GAP = 12
 
 
 def _reset_icon(color=JKU_BLUE):
@@ -141,7 +146,7 @@ class TopBar(QtWidgets.QWidget):
     # ---- controls --------------------------------------------------------
     def _build_controls(self):
         bar = QtWidgets.QWidget(); bar.setObjectName("topbar")
-        lay = QtWidgets.QHBoxLayout(bar); lay.setContentsMargins(16, 8, 16, 10); lay.setSpacing(14)
+        lay = QtWidgets.QHBoxLayout(bar); lay.setContentsMargins(16, 8, 16, 10); lay.setSpacing(_GAP)
 
         self.load = QtWidgets.QPushButton("Load .sNp")
         self.load.setObjectName("primary"); self.load.setFixedHeight(30)
@@ -242,7 +247,7 @@ class TopBar(QtWidgets.QWidget):
         # position never change with the mode either.
         self.uni_page = QtWidgets.QWidget()
         up = QtWidgets.QHBoxLayout(self.uni_page); up.setContentsMargins(0, 0, 0, 0)
-        up.setSpacing(14)
+        up.setSpacing(_GAP)
         up.addLayout(self._labeled("Max order", self.order))
         up.addLayout(self._labeled("", self.passive))
         up.addLayout(self._labeled("Passivity ceiling", self.p_ceiling))
@@ -250,7 +255,7 @@ class TopBar(QtWidgets.QWidget):
         up.addStretch(1)
         self.struct_page = QtWidgets.QWidget()
         sp = QtWidgets.QHBoxLayout(self.struct_page); sp.setContentsMargins(0, 0, 0, 0)
-        sp.setSpacing(14)
+        sp.setSpacing(_GAP)
         sp.addLayout(self._labeled("<i>f</i><sub>ext</sub>", self.f_ext))
         sp.addWidget(self.opt_box); sp.addStretch(1)
         self.mode_stack = QtWidgets.QStackedWidget()
@@ -339,11 +344,7 @@ class TopBar(QtWidgets.QWidget):
         lay.addLayout(self._labeled("Structure", self.structure))
         lay.addWidget(self.mode_stack)         # f_ext+option (structure) or order+passivity
         lay.addWidget(self.band_box)           # fit range (both modes)
-        # the same 12 px on both sides of the divider, so the action buttons start as
-        # close to it as the fit range ends on the other side
-        lay.addSpacing(12)
-        lay.addWidget(self.sep)                # fixed divider, always visible
-        lay.addSpacing(12)
+        lay.addWidget(self.sep)                # fixed divider, one ordinary gap either side
         lay.addLayout(self._labeled("", self.exp_ng))
         lay.addLayout(self._labeled("", self.exp_va))
         lay.addLayout(self._labeled("", self.load_sch))
