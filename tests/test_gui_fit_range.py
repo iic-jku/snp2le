@@ -169,3 +169,19 @@ def test_the_displayed_rounding_never_crops_the_fit(win, top):
     _settle(win)
     assert win.state.f_min == float(win.net.f[0])      # the untouched side stays exact
     assert win._res.freq[0] == win.net.f[0]
+
+
+def test_the_0_hz_box_reaches_the_state(win, top):
+    """Universal mode only, greyed for a structure, cleared by Reset, and a design that set
+    it opens with it set."""
+    assert not top.fit_dc.isChecked() and top.fit_dc.isEnabled()
+    top.fit_dc.setChecked(True)
+    win._pull()
+    assert win.state.fit_dc is True and top.values()["fit_dc"] is True
+    top.mode.setCurrentIndex(top.mode.findData("structure"))
+    assert not top.fit_dc.isEnabled()
+    win.on_reset()
+    _settle(win)
+    assert not top.fit_dc.isChecked() and win.state.fit_dc is False
+    top.set_values(ConverterState(fit_dc=True))
+    assert top.fit_dc.isChecked()

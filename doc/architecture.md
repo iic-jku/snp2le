@@ -27,6 +27,7 @@ The flow is always **load, `engine.convert(state, net)`, `Results`, views**:
 1. `io.load_touchstone` reads the `.sNp` (scikit-rf); `engine.convert` then drops
    any 0 Hz sample through `io.without_dc` and restricts the data to the requested
    fit band through `io.restrict_band` (`state.f_min` / `state.f_max`, both optional).
+   In universal mode it also keeps the band with the 0 Hz point still in it (`dc_net`, made passive by `io.passive_dc`), fitted itself when `state.fit_dc` asks for it and otherwise handed to passivity enforcement as one more refit to try.
    Everything downstream, the RMS error, the plots and a testbench run's sweep,
    refers to the fitted band.
 2. `engine.convert(state, net)` runs the chosen mode and returns a `Results`
@@ -196,8 +197,9 @@ pytest
   The rendered float tails depend on the BLAS the fit ran on, so a regeneration on
   another platform can differ in the last digits without anything being wrong. Since 0.1.13 every value is written at full precision (below), so a file regenerated on another platform differs in the last digits of many numbers.
 * Element values are written as the shortest text that reads back as the same double (`netlist._num`, Python's `repr`). A universal realisation relies on cancellation between its controlled-source gains, and the 10 significant digits written up to 0.1.12 could break it: a synthetic 2-port (a 30 degree line, a 0.2 pF shunt and 5 ohm, 1 to 20 GHz) missed its own model by 2.2e-4 in S at order 20, 1.0 at order 24 and 6.7 at order 40, solved from the netlist text. VACASK's `acsp` on the same netlists read 9.5e-5, 0.27 and 1.3, and 4.4e-10, 7.1e-7 and 3.5e-6 at full precision. The bundled examples and real EM data were not affected (1.4e-8 at most). The text now reproduces the IR exactly, so the netlist is as close to the model as the realisation itself, 9.5e-6 at order 24 on that 2-port.
-* A 0 Hz (DC) sample is dropped automatically, since it breaks the
-  Y-/ABCD-parameter extraction and the MNA rebuild.
+* A 0 Hz (DC) sample is dropped before a structure extraction, since it breaks the Y-/ABCD-parameter extraction and the MNA rebuild. A universal fit drops it by default as well and extrapolates to DC, which on the bundled `ind_d20` coil at order 13 gives a DC resistance of 1.29 ohm against the file's 1.096 ohm.
+  `state.fit_dc` (GUI tick box *0 Hz* on the fit range caption, CLI `--fit-dc`) fits the band with the 0 Hz point instead. scikit-rf's `auto_fit` and `vector_fit` then enforce the DC point on the constant term (`enforce_dc=True`, their default), so the model meets it exactly, at a few times the in-band error. `io.passive_dc()` first clips singular values of S(0) above 1, since an EM solver's extrapolated DC point can come out a hair above passivity (the bundled line at 1.0001, ORCA files up to 1.0000036) and a fit pinned to it would inherit a negative DC conductance. Passivity enforcement can still move the DC point: scikit-rf preserves it only when no violation band starts at 0 Hz, and the engine reports a move in S above `engine._DC_MOVED` (1e-6).
+  The tick box sits on the fit range's caption line with that line sized to nothing (`QSizePolicy.Ignored`), so the two fields set the box width and the bar keeps its 1899 px in the container (1920 px screen) and 1735 px on Windows. Its indicator is 12 px to fit the caption line's height: at 10 px the Windows 11 style draws a circle without a check mark.
 * The transmission-line ladder uses 2 L-cells by default (`N_SEGMENTS` in
   `snp2le/core/structures/tline.py`) and can be set from 1 to 10 stages.
 * `inductor-wideband` and `inductor-ct` port Volker Muehlhaus' inductor_fit

@@ -105,6 +105,19 @@ def test_no_other_row_sets_the_window_floor(bar):
         plots.deleteLater()
 
 
+def test_the_0_hz_box_takes_no_width_or_height(bar):
+    """It sits on the fit range's caption line, in width the two fields already take, since
+    the bar has none to spare (1899 px on a 1920 px screen in the container), and at the
+    caption's own height, so the fields stay in line with every other field in the strip."""
+    fields = bar.f_min.parentWidget()
+    assert bar.band_box.sizeHint().width() == fields.sizeHint().width()
+    row = bar.layout().itemAt(1).widget()
+
+    def top(w):
+        return w.mapTo(row, QtCore.QPoint(0, 0)).y()
+    assert top(bar.f_min) == top(bar.order) == top(bar.p_ceiling)
+
+
 def test_the_tick_box_labels_stay_wrapped(bar):
     """Unwrapping any one costs about 45 px of bar width, which is the whole point
     of the shape.  Compare against the same text on one line rather than a pixel

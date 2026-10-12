@@ -149,6 +149,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.enforce_passivity = v["enforce_passivity"]
         self.state.passivity_ceiling = v["passivity_ceiling"]
         self.state.thermal_noise = v["thermal_noise"]
+        self.state.fit_dc = v["fit_dc"]
         self.state.f_min = v["f_min"]
         self.state.f_max = v["f_max"]
 

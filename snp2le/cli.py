@@ -26,6 +26,9 @@
     # add the passive's thermal noise, kT(I - S S^H) at the ports, to the macromodel
     snp2le -b convert wpd.s3p --mode universal --order 13 --thermal-noise --format both
 
+    # fit a coil's 0 Hz point too, so the model has its exact DC resistance
+    snp2le -b convert coil.s2p --mode universal --order 13 --no-passive --fit-dc
+
     # convert, run an Xschem testbench, and show data-vs-model-vs-sim plots
     snp2le -b convert bpf.s2p --mode universal --order 13 \\
         -o netlist/spice/two_port.spice \\
@@ -487,6 +490,9 @@ def cmd_convert(args):
     if args.thermal_noise and args.mode == "structure":
         print("[WARN] --thermal-noise is ignored in structure mode, whose resistors are the "
               "structure's loss and always carry their thermal noise", file=sys.stderr)
+    if args.fit_dc and args.mode == "structure":
+        print("[WARN] --fit-dc is ignored in structure mode, whose extraction drops the 0 Hz "
+              "point", file=sys.stderr)
 
     formats = ["ngspice", "vacask"] if args.format == "both" else [args.format]
     rc = 0
@@ -505,6 +511,7 @@ def cmd_convert(args):
             mode=args.mode, structure_key=args.structure,
             max_order=args.order, enforce_passivity=args.passive,
             passivity_ceiling=p_ceiling, thermal_noise=args.thermal_noise,
+            fit_dc=args.fit_dc,
             f_extract=ConverterState.f_extract if args.fext is None else args.fext,
             n_segments=args.stages, iso_resistor=args.iso_r,
             basic_model=args.basic, coil_segments=args.segments or 0,
@@ -654,6 +661,14 @@ def build_parser():
                         "passive model, else nothing is written. Default off (noiseless)")
     c.add_argument("--no-thermal-noise", dest="thermal_noise", action="store_false",
                    help="emit the noiseless (ideal) model, the default")
+    c.add_argument("--fit-dc", dest="fit_dc", action="store_true", default=False,
+                   help="fit the file's 0 Hz point too instead of dropping it, so the model "
+                        "meets the DC point exactly (a coil's DC resistance) at some in-band "
+                        "accuracy. Passivity enforcement can still move it, a note says by "
+                        "how much. Universal mode, needs a 0 Hz sample and a fit range that "
+                        "starts at it. Default off")
+    c.add_argument("--no-fit-dc", dest="fit_dc", action="store_false",
+                   help="drop the 0 Hz point before the fit, the default")
     # structure-mode options
     c.add_argument("--fext", type=_freq, default=None, metavar="FREQ",
                    help="extraction frequency, e.g. 7GHz (structure, default 10GHz)")

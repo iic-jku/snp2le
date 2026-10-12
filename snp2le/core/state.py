@@ -53,6 +53,10 @@ class ConverterState:
     # ports, computed from the fit (noise.py).  False keeps the model noiseless (ideal).
     # Structure models are unaffected, their resistors are real loss and always noisy.
     thermal_noise: bool = False
+    # Universal mode: fit the file's 0 Hz point too instead of dropping it, so the model meets
+    # the DC point exactly (a coil's DC resistance) at some in-band accuracy.  Needs a file
+    # with a 0 Hz sample and a fit range that starts at it.  Structure modes always drop it.
+    fit_dc: bool = False
     f_min: float | None = None            # fit band start [Hz], None = the data's first point
     f_max: float | None = None            # fit band stop  [Hz], None = the data's last point
     source_path: str = ""                 # last loaded .sNp (for save/restore)

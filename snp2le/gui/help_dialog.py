@@ -131,7 +131,12 @@ model that says nothing outside the band. An edge outside the data is clamped to
 and reported, an empty or inverted band is refused, and clearing a field leaves that side
 at the file's own edge. The band applies to everything downstream: the RMS error, the
 tolerances, the plots, and the sweep written into a testbench run. The <b>Result</b> panel
-shows the band actually fitted, highlighted while it is a sub-band.</li>
+shows the band actually fitted, highlighted while it is a sub-band.
+<p>The <b>0 Hz</b> tick box on the caption line (universal mode) fits the file's 0 Hz point
+too, instead of dropping it and extrapolating to DC, so the model meets the DC point
+exactly, a coil's DC resistance included, at a few times the in-band error. Passivity
+enforcement can still move it, and the message line then says by how much. It needs a file
+with a 0 Hz sample and a fit range that starts at it.</p></li>
 <li><b>Model option</b> (shown only for the structure it belongs to):
   <ul>
   <li><b>Stages</b>: number of RLGC ladder cells for the transmission line (1 to 10).</li>

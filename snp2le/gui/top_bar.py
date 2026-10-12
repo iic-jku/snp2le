@@ -346,7 +346,32 @@ class TopBar(QtWidgets.QWidget):
         bl.setContentsMargins(0, 0, 0, 0); bl.setSpacing(4)
         to_lbl = QtWidgets.QLabel("to"); to_lbl.setProperty("class", "fieldLabel")
         bl.addWidget(self.f_min); bl.addWidget(to_lbl); bl.addWidget(self.f_max)
-        self.band_box = self._labeled_widget("Fit range (GHz)", band)
+        # Universal mode can fit the file's 0 Hz point too.  The tick box sits on the caption
+        # line, in width the two fields already take, since the bar has no width to spare
+        # (1899 px on a 1920 px screen in the container), and at the caption's own height, so
+        # the fields stay in line with every other field in the strip.
+        self.fit_dc = QtWidgets.QCheckBox("0 Hz")
+        self.fit_dc.setObjectName("captionCheck")
+        self.fit_dc.setProperty("class", "fieldLabel")
+        self.fit_dc.setToolTip(
+            "Universal mode: fit the file's 0 Hz point too, instead of dropping it.\n"
+            "The model then meets the DC point exactly, a coil's DC resistance included,\n"
+            "where otherwise it extrapolates to it. It costs in-band accuracy, a few times\n"
+            "the error is typical. Passivity enforcement can still move the DC point, and\n"
+            "the result then says by how much.\n"
+            "Needs a file with a 0 Hz sample and a fit range that starts at it.")
+        band_lab = QtWidgets.QLabel("Fit range (GHz)"); band_lab.setProperty("class", "fieldLabel")
+        caption = QtWidgets.QWidget()
+        cl = QtWidgets.QHBoxLayout(caption); cl.setContentsMargins(0, 0, 0, 0); cl.setSpacing(4)
+        cl.addWidget(band_lab); cl.addStretch(1); cl.addWidget(self.fit_dc)
+        # the fields set the box width, never the caption line (a font with wider
+        # glyphs would otherwise widen the whole bar)
+        caption.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed)
+        self.fit_dc.setFixedHeight(band_lab.sizeHint().height())
+        self.band_box = QtWidgets.QWidget()
+        bb = QtWidgets.QVBoxLayout(self.band_box); bb.setContentsMargins(0, 0, 0, 0)
+        bb.setSpacing(2)
+        bb.addWidget(caption); bb.addWidget(band); bb.addStretch(1)
         self.band_box.setToolTip(band_tip)
 
         # fixed vertical divider between the conversion controls and the action buttons
@@ -445,6 +470,7 @@ class TopBar(QtWidgets.QWidget):
         self.passive.toggled.connect(self._on_change)      # also greys the ceiling field
         self.p_ceiling.editingFinished.connect(self._on_ceiling)
         self.thermal_noise.toggled.connect(lambda _=None: self.changed.emit())
+        self.fit_dc.toggled.connect(lambda _=None: self.changed.emit())
         self.exp_ng.clicked.connect(lambda: self.export_clicked.emit("ngspice"))
         self.exp_va.clicked.connect(lambda: self.export_clicked.emit("vacask"))
         self.load_sch.clicked.connect(self.load_sch_clicked.emit)
@@ -460,7 +486,7 @@ class TopBar(QtWidgets.QWidget):
         Also unticks 'Show output' and clears the run-status label so the bar
         matches a freshly-opened window. The caller recomputes once."""
         widgets = (self.mode, self.structure, self.stages, self.iso_r, *self._wideband_widgets(),
-                   self.order, self.passive, self.thermal_noise, self.sim_output,
+                   self.order, self.passive, self.thermal_noise, self.fit_dc, self.sim_output,
                    self.simulator)
         for w in widgets:
             w.blockSignals(True)
@@ -479,6 +505,7 @@ class TopBar(QtWidgets.QWidget):
         self.order.setValue(6)
         self.passive.setChecked(True)
         self.thermal_noise.setChecked(False)
+        self.fit_dc.setChecked(False)
         self._set_ceiling(PASSIVITY_CEILING_DEFAULT)
         self.sim_output.setChecked(False)
         self.simulator.setCurrentIndex(0)                  # Ngspice
@@ -536,7 +563,7 @@ class TopBar(QtWidgets.QWidget):
         recomputes once afterwards.
         """
         widgets = (self.mode, self.structure, self.stages, self.iso_r, *self._wideband_widgets(),
-                   self.order, self.passive, self.thermal_noise)
+                   self.order, self.passive, self.thermal_noise, self.fit_dc)
         for w in widgets:
             w.blockSignals(True)
         mi = self.mode.findData(state.mode)
@@ -562,6 +589,7 @@ class TopBar(QtWidgets.QWidget):
         self.order.setValue(int(state.max_order))
         self.passive.setChecked(bool(state.enforce_passivity))
         self.thermal_noise.setChecked(bool(getattr(state, "thermal_noise", False)))
+        self.fit_dc.setChecked(bool(getattr(state, "fit_dc", False)))
         for w in widgets:
             w.blockSignals(False)
         self._set_ceiling(state.passivity_ceiling)
@@ -585,6 +613,7 @@ class TopBar(QtWidgets.QWidget):
             if self._p_ceiling != PASSIVITY_CEILING_DEFAULT:
                 self._set_ceiling(PASSIVITY_CEILING_DEFAULT)
         self.structure.setEnabled(is_struct)       # greyed in universal mode
+        self.fit_dc.setEnabled(not is_struct)      # structure models always drop 0 Hz
         # grey structures that don't match the loaded port count
         cur = self.structure.currentIndex()
         first_ok = None
@@ -805,6 +834,7 @@ class TopBar(QtWidgets.QWidget):
             "enforce_passivity": bool(self.passive.isChecked()),
             "passivity_ceiling": float(self._p_ceiling),
             "thermal_noise": bool(self.thermal_noise.isChecked()),
+            "fit_dc": bool(self.fit_dc.isChecked()),
             "f_min": self._f_min_hz,
             "f_max": self._f_max_hz,
         }

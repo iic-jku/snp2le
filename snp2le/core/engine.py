@@ -71,6 +71,10 @@ def _is_wideband(key) -> bool:
     return bool(getattr(STRUCTURES.get(key), "wideband", False))
 
 
+# A fit that includes the 0 Hz point meets it to rounding, so a model whose S(0) is further
+# off than this was moved by passivity enforcement, and the result says so.
+_DC_MOVED = 1e-6
+
 # An explicit thread count for the BLAS library wins over the limit below.
 _BLAS_THREAD_VARS = ("OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
 
@@ -140,15 +144,26 @@ def _convert(state, net, progress=None) -> Results:
         return res
     res.band_limited = len(net.f) < n_file
 
+    # The same band with the file's 0 Hz point still in it: fitted itself when fit_dc asks
+    # for it, otherwise a refit passivity enforcement can try.  Only when the band starts at
+    # the bottom of the file.
+    dc_net, dc_sigma = None, float("nan")
+    if state.mode != "structure" and len(loaded.f) and loaded.f[0] == 0 and not state.f_min:
+        dc_net, dc_sigma = _io.passive_dc(_io.restrict_band(loaded, None, state.f_max)[0])
+    if state.mode != "structure" and state.fit_dc:
+        if dc_net is None:
+            band_notes.append("fitting the 0 Hz point was asked for, but the fitted band has "
+                              "none (the file has no 0 Hz sample, or the fit range starts "
+                              "above it)")
+        else:
+            net, dc_net = dc_net, None       # fitted with the 0 Hz point, nothing to retry
+            if dc_sigma > 1.0:
+                band_notes.append(f"the file's 0 Hz point had sigma_max {dc_sigma:.7f} and "
+                                  f"was made passive before the fit")
+
     res.freq = net.f
     res.n_ports = net.nports
     res.data_s = net.s
-
-    # The same band with the file's 0 Hz point still in it, for passivity enforcement to try
-    # a refit that includes it.  Only when the band starts at the bottom of the file.
-    dc_net = None
-    if state.mode != "structure" and len(loaded.f) and loaded.f[0] == 0 and not state.f_min:
-        dc_net = _io.passive_dc(_io.restrict_band(loaded, None, state.f_max)[0])[0]
 
     try:
         if state.mode == "structure":
@@ -200,6 +215,12 @@ def _convert_universal(state, net, res, track, dc_net=None):
     res.rms_error = fit.rms_error
     res.messages = fit.messages
     res.model_s = _uni.model_sparams(fit.vf, net.f, progress=track.sub("model"))
+    if len(net.f) and net.f[0] == 0:          # the 0 Hz point was fitted, say if it moved
+        moved = float(np.max(np.abs(res.model_s[0] - net.s[0])))
+        if moved > _DC_MOVED:
+            res.messages.append(
+                f"the model's 0 Hz point is {moved:.1e} off the data's in S"
+                + (", moved there by passivity enforcement" if state.enforce_passivity else ""))
     if state.thermal_noise:
         from . import noise as _noise
         track.enter("noise")

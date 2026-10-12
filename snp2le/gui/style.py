@@ -143,6 +143,8 @@ QRadioButton, QCheckBox {{ spacing: 6px; }}
    their indicator at the top of the box rather than centred on both text lines, so it
    sits on the same line as the buttons and fields beside it. */
 QCheckBox#wrapCheck::indicator {{ subcontrol-origin: padding; subcontrol-position: top left; }}
+QCheckBox#captionCheck {{ spacing: 3px; }}
+QCheckBox#captionCheck::indicator {{ width: 12px; height: 12px; }}
 
 /* ---- footer ---- */
 #footer {{ background: #ffffff; border-top: 1px solid {PANEL_BORDER}; }}

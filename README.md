@@ -122,6 +122,7 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │  ├─ test_gui_view_switch.py  headless View switch (both views on screen)
 │  ├─ test_gui_wideband_inductor.py  headless wideband inductor page
 │  ├─ test_inductor_wideband.py  the wideband inductor fit, netlist and noise
+│  ├─ test_fit_dc.py          the 0 Hz point of a universal fit (no Qt)
 │  ├─ test_main_dispatch.py   the entry point's argument dispatch (no Qt)
 │  ├─ test_noise.py           the thermal-noise generator against Bosma's formula
 │  ├─ test_parallel_callers.py  fits in parallel threads give the streams back
@@ -189,7 +190,7 @@ Naming a `.sNp` file on the command line opens the GUI on it instead of the exam
 
 1. **Load** a Touchstone `.sNp` file from the top bar, or name it on the command line (`snp2le design.s4p`, see above). The header shows the port count and frequency range.
 2. **Choose a mode.** Universal (set *Max order*, *Enforce passivity* and the *Passivity ceiling* it works towards, and tick *Thermal noise* for a model that carries the passive's noise) or Structure-specific (pick a structure and set the *extraction frequency*). Some structures expose an extra option such as *Stages*, *Isolation R* or *Resistive loss*. The wideband inductors have no extraction frequency and show their own options instead: *Basic model*, *Segments* (*Center tap* for the center-tapped one), *Peak-Q weight* and *Measured data*. *Max order* bounds the model order, `n_real + 2 x n_complex`, which is also the number of internal states in the netlist. The *Result* panel's *order* line reports the order the fit settled on and, in brackets, its pole count, where a complex-conjugate pair counts once, so the two numbers differ by design.
-3. **Restrict the fit range** (optional, both modes). The *Fit range (GHz)* fields start at the loaded file's own span, so they always name the band being fitted. Enter two plain numbers in GHz (e.g. `110` and `170`) to fit only a sub-band. The *Result* panel shows the band actually fitted, and the RMS error, the tolerances, the plots and a testbench run's sweep all follow it. An edge outside the data is clamped to the data and reported, an empty or inverted band is refused.
+3. **Restrict the fit range** (optional, both modes). The *Fit range (GHz)* fields start at the loaded file's own span, so they always name the band being fitted. Enter two plain numbers in GHz (e.g. `110` and `170`) to fit only a sub-band. The *Result* panel shows the band actually fitted, and the RMS error, the tolerances, the plots and a testbench run's sweep all follow it. An edge outside the data is clamped to the data and reported, an empty or inverted band is refused. In universal mode, the **0 Hz** tick box on the caption line fits the file's 0 Hz point too, see [The 0 Hz point](#the-0-hz-point).
 4. **Inspect** the result, element values, per-element **tolerances** at the extraction frequency, the drawn schematic, and the generated netlist in the **Design & Schematic** view.
 5. **Compare** the loaded data (grey) against the extracted model (blue) in the **Plot** view (up to four traces, magnitude and phase). The **View** switch at the right of the title bar carries both views side by side and fills the one you are on, so a click moves between them.
 6. **Export** the netlist. *Export Ngspice* writes a `.spice` file and *Export VACASK* writes an `.inc` file. The `.SUBCKT` is named after the file, so a testbench that instantiates it resolves the include.
@@ -231,12 +232,21 @@ Why those two limits, and what an out-of-range entry does:
 - **`1.20` is the ceiling** because past roughly 20 % of voltage gain (1.44x in power, +1.6 dB) at the worst frequency there is enough excess energy to grow a transient run without bound. It is also well clear of anything real: across the bundled examples an acceptable fit lands between 1.00 and 1.02, and a broken one jumps straight to 2.18 or 5.24. Nothing useful lives in between.
 - **A number outside the range is replaced by the limit it overshot.** Type `9.9` and the field shows `1.20`, type `0.5` and it shows `1.00`. That is deliberate: the field teaches you the limits without anyone reading this paragraph first. Text that is not a number at all has no limit to snap to, so it falls back to `1.00`. The CLI is stricter and refuses the run outright rather than substituting, since a batch script silently getting a different ceiling than it asked for is worse than a visible error.
 
-**A ceiling is not always reachable.** The perturbation only moves the model's residues, so a violation band that runs to infinity, caused by a non-passive constant term, cannot be corrected at any ceiling. The bundled `tline_100um_ihp-sg13g2.s2p` at order 13 is one: its constant term sits at 5.24. A file that carries a 0 Hz point, as this one does, then also gets a refit that includes it, since that refit's constant term is pinned to the DC point. With scikit-rf 1.12 the line at order 13 comes out passive that way, at model order 9 and an RMS error of 1.5e-3, while with scikit-rf 2.1.0 that refit misses the ceiling too. When nothing reaches the ceiling, the accurate fit is kept rather than a wrecked one, and the result reads *near-passive*. The fix is a lower **Max order**, not a higher ceiling, since order 6 brings the same file to 0.9997 by plain perturbation. Whenever the constant term D, the model's value at infinite frequency, is above the ceiling, the message line says so with its sigma, so this case cannot be mistaken for a violation inside your band.
+**A ceiling is not always reachable.** The perturbation only moves the model's residues, so a violation band that runs to infinity, caused by a non-passive constant term, cannot be corrected at any ceiling. The bundled `tline_100um_ihp-sg13g2.s2p` at order 13 is one: its constant term sits at 5.24. A file that carries a 0 Hz point, as this one does, then also gets a refit that includes it, since that refit's constant term is pinned to the DC point (see [The 0 Hz point](#the-0-hz-point)). With scikit-rf 1.12 the line at order 13 comes out passive that way, at model order 9 and an RMS error of 1.5e-3, while with scikit-rf 2.1.0 that refit misses the ceiling too. When nothing reaches the ceiling, the accurate fit is kept rather than a wrecked one, and the result reads *near-passive*. The fix is a lower **Max order**, not a higher ceiling, since order 6 brings the same file to 0.9997 by plain perturbation. Whenever the constant term D, the model's value at infinite frequency, is above the ceiling, the message line says so with its sigma, so this case cannot be mistaken for a violation inside your band.
 
 The **Result** panel reports the measured sigma_max next to the ceiling it was judged against, green inside the ceiling and red outside it, so a raised ceiling never reads as a clean pass without the number that earned it. When there is a violation, the message line under the panel (and the CLI's `note:` line) names the frequency of the peak. Read it before you decide what to do:
 
 - **At 0 Hz or inside your band**: a real hazard. Enforce, or raise the order.
 - **Far above the top data point**, at 10^4 times it or so: that is the model's high-frequency asymptote, not a resonance. It usually means the fit order is too high for the file. The bundled `tline_100um_ihp-sg13g2.s2p` reaches sigma_max = 5.24 at order 13 but only 0.9997 at order 6, for the same reason.
+
+### The 0 Hz point
+
+Some files carry a 0 Hz sample, an EM solver's extrapolated DC point. The bundled `ind_d20_w7_sp3_nw1_r10_ihp-sg13g2.s2p` and `tline_100um_ihp-sg13g2.s2p` do. A universal fit drops it by default and extrapolates to DC from the samples above it. That is fine for a block no bias current flows through, and off for a coil in a bias or supply path: on the bundled coil at order 13 the extrapolated DC resistance is 1.29 ohm, against the file's 1.096 ohm.
+
+- **0 Hz**, the tick box on the *Fit range* caption line (universal mode, CLI `--fit-dc`), fits the 0 Hz point too. The model then meets it exactly: the coil reads 1.0964 ohm at order 13, with enforcement as without. It costs in-band accuracy, a few times the RMS error is typical (the coil: 5.8e-4 becomes 2.0e-3). A 0 Hz point a hair above passivity, as the bundled line's at sigma 1.0001, is made passive before the fit, and a note says so. Without enforcement the model then sits at sigma_max 1 at 0 Hz, so it cannot carry thermal noise.
+- **Passivity enforcement can still move the fitted DC point**, and a note then says by how much in S. On the coil at order 10 it moves by 3.2e-2 and the DC resistance reads 2.6 ohm. When the exact DC point matters more than strict passivity, untick *Enforce passivity*, keeping in mind what that means for transient and harmonic-balance runs (above).
+- **Without the tick box, a file with a 0 Hz point still uses it once.** When residue perturbation cannot bring the fit under the ceiling, enforcement also tries a refit that includes the 0 Hz point, enforced the same way, and keeps whichever passing candidate is closer to the data, that one or the lower-order refit. The refit's constant term is pinned to the DC point, which is exactly the violation residue perturbation cannot reach. The result's `passivity_path` then reads `dc refit`. A file without a 0 Hz point sees no change.
+- Structure modes always drop the 0 Hz point, since their extraction divides by the frequency.
 
 ### Thermal noise
 
@@ -369,6 +379,7 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `--passive` / `--no-passive` | universal | enforce passivity (default on) |
 | `--passivity-ceiling SIGMA` | universal | sigma_max the enforcement works towards, `1.0` to `1.2`, needs `--passive` (default `1.0`) |
 | `--thermal-noise` / `--no-thermal-noise` | universal | add the passive's thermal noise, kT(I - S S<sup>H</sup>) at the ports, or emit the noiseless model (default noiseless). A model that is not strictly passive cannot carry it: nothing is written and the exit code is non-zero |
+| `--fit-dc` / `--no-fit-dc` | universal | fit the file's 0 Hz point too, so the model meets the DC point exactly (a coil's DC resistance), at some in-band accuracy (default off). Needs a 0 Hz sample and a fit range that starts at it |
 | `--fext FREQ` | structure | extraction frequency, e.g. `7GHz` (default 10 GHz). The wideband inductors have none |
 | `--fmin FREQ` | both | lowest frequency used for the fit (default: the file's first point) |
 | `--fmax FREQ` | both | highest frequency used for the fit (default: the file's last point) |
@@ -422,6 +433,9 @@ snp2le -b convert bpf.s2p --mode universal --order 13 --passivity-ceiling 1.05
 
 # add the passive's thermal noise to the macromodel, both dialects
 snp2le -b convert wpd.s3p --mode universal --order 13 --thermal-noise --format both
+
+# fit a coil's 0 Hz point too, so the model has its exact DC resistance
+snp2le -b convert coil.s2p --mode universal --order 13 --fit-dc
 
 # convert the BPF, run the 2-port Xschem testbench, and show data vs model vs sim plots
 snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \
