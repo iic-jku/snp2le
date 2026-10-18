@@ -424,34 +424,80 @@ def test_the_messages_name_what_limits_the_fit():
 
 def _spread_variant(names, x, ties=None):
     ties = ties or {}
-    return dict(names=names, free=np.array([n not in ties for n in names]), ties=ties,
+    return dict(names=names, free=np.array([n not in ties for n in names]), ties=ties, fixed={},
                 lower=x - 5, upper=x + 5)
 
 
+def _spread(names, x, residual, cost=0.0, floor_cost=1e-3, ties=None, lower=None):
+    variant = _spread_variant(names, x, ties)
+    return fitmod._spread_warnings(variant, x, x - 5 if lower is None else lower, x + 5, residual,
+                                   cost, floor_cost, 60e9)
+
+
 def test_an_element_the_data_does_not_constrain_is_named():
-    """A flat direction shows as a large factor wherever along it the fit stopped, for a fit
-    to perfect data too, whose tiny cost would otherwise hide it."""
+    """Each element named comes with a witness: a model with it moved by the factor and the
+    others re-fitted, within the cost limit.  A flat direction reaches the top of the ladder."""
     names = ["Ls", "Rskin2", "Lskin2"]
     x = np.array([-9.0, 2.0, -11.0])                # skin corner 100 / (2 pi 1e-11) = 1.6 THz
 
     def flat_in_rskin2(x):
         return 10 * np.array([x[0] + 9.0, x[2] + 11.0])
 
-    msgs = fitmod._spread_warnings(_spread_variant(names, x), x, x - 5, x + 5, flat_in_rskin2,
-                                   0.0, 60e9)
-    assert msgs == ["Rskin2 (x1000 or more) is not determined by the data, it can change by that "
-                    "factor at 1 % more fit error (skin section 2 has its corner above the fit "
-                    "band, where it acts as plain L, and Basic model leaves section 2 out)"]
-    assert fitmod._spread_warnings(_spread_variant(names, x), x, x - 5, x + 5,
-                                   lambda x: 10 * (x - np.array([-9.0, 2.0, -11.0])), 0.0,
-                                   60e9) == []
+    assert _spread(names, x, flat_in_rskin2) == [
+        "Rskin2 (x1000 or more) is not determined by the data, it can change by that factor "
+        "while the fit's RMS error grows by 0.5 % or less (skin section 2 has its corner above "
+        "the fit band, where it acts as plain L, and Basic model leaves section 2 out)"]
+    assert _spread(names, x, lambda x: 10 * (x - np.array([-9.0, 2.0, -11.0]))) == []
     # an element at a bound is _bound_warnings' to report
-    assert fitmod._spread_warnings(_spread_variant(names, x), x, x - np.array([5, 0, 5]), x + 5,
-                                   flat_in_rskin2, 0.0, 60e9) == []
-    tied = _spread_variant(["Cox1", "Cox2"], np.zeros(2), {"Cox2": "Cox1"})
-    msgs = fitmod._spread_warnings(tied, np.zeros(2), -np.ones(2), np.ones(2),
-                                   lambda x: np.zeros(3), 1.0, 60e9)
+    assert _spread(names, x, flat_in_rskin2, lower=x - np.array([5, 0, 5])) == []
+    msgs = _spread(["Cox1", "Cox2"], np.zeros(2), lambda x: np.zeros(3), cost=1.0,
+                   ties={"Cox2": "Cox1"})
     assert msgs[0].startswith("Cox1 = Cox2 (x1000 or more) is not determined by the data")
+
+
+def test_the_spread_follows_the_cost_not_the_curvature():
+    """A cost that saturates (a skin R far above its corner) was missed by the curvature at
+    the fit, which put the bundled coil's R_skin2 at x1.65 while a re-fit at 100 x cost 0.6 %
+    more.  And a direction the curvature calls flat but the cost is not (the reviewer's C_s)
+    must not be named."""
+    x = np.array([-9.0, 2.0])
+
+    def saturating(x):                       # 0 at x[1] = 2, approaches 5e-3 as x[1] grows
+        return np.array([10 * (x[0] + 9.0), 0.01 * (1 / (1 + 10 ** (x[1] - 2)) - 0.5)])
+
+    assert _spread(["A", "B"], x, saturating)[0].startswith("B (x10) is not determined")
+
+    def quartic(x):                          # flat at the fit, steep 0.48 decades away
+        return np.array([10 * (x[0] + 9.0), 1e-4 * (x[1] - 2), 100 * (x[1] - 2) ** 2])
+
+    assert _spread(["A", "B"], x, quartic) == []
+
+
+def test_the_cost_floor_does_not_grow_with_the_number_of_points():
+    """Each goal's residual is divided by the root of its point count, so the floor is the cost
+    of one relative error on every point of every goal (it grew with the points before)."""
+    costs = []
+    for n in (10, 1000):
+        meas = {"Y": np.linspace(1, 2, n) + 1j, "L": np.linspace(1, 2, n)}
+        goals = fitmod._make_goals(meas, [("Y", 1.0, np.ones(n, bool)),
+                                          ("L", 0.5, np.ones(n, bool))])
+        costs.append(fitmod._uniform_error_cost(goals, 1e-3))
+    assert costs[0] == pytest.approx(costs[1], rel=1e-12)
+    assert costs[0] == pytest.approx(0.5 * 1e-6 * (1.0 + 0.25), rel=1e-12)
+
+
+def test_tied_half_coils_keep_one_skin_section_order():
+    """With the half inductances tied and the resistances free, the two halves could sort
+    their skin sections differently, and the tie then paired section 1 with section 2."""
+    names = fitmod.CT_PARAM_NAMES
+    x = np.zeros(len(names))
+    for h, r1, r2 in (("_h1", 1.0, 0.0), ("_h2", 0.0, 1.0)):   # corners in opposite orders
+        x[names.index("Rskin1" + h)], x[names.index("Rskin2" + h)] = r1, r2
+        x[names.index("Lskin1" + h)], x[names.index("Lskin2" + h)] = -10.9, -11.0
+    ties = {n + "_h2": n + "_h1" for n in ("Ls", "Lskin1", "Lskin2")}
+    fitmod._sort_half_coil_skin_sections(names, (x,), ties)
+    for n in ("Lskin1", "Lskin2"):
+        assert x[names.index(n + "_h1")] == x[names.index(n + "_h2")], n
 
 
 def test_the_center_tapped_fit_names_its_undetermined_skin_sections(center_tap):
@@ -463,13 +509,19 @@ def test_the_center_tapped_fit_names_its_undetermined_skin_sections(center_tap):
     msg = [m for m in center_tap.messages if "not determined by the data, each can change" in m]
     assert len(msg) == 1
     named = {n for pair in re.findall(r"(\w+)(?: = (\w+))? \(x", msg[0]) for n in pair if n}
-    assert {"Rskin2_h1", "Rskin2_h2"} <= named <= {"Rskin2_h1", "Rskin2_h2", "Lskin2_h1",
-                                                   "Lskin2_h2"}
+    assert {"Rskin2_h1", "Rskin2_h2"} <= named
+    assert not named & {"Rs_h1", "Rs_h2", "Cs", "Rct", "Cox1", "Cox2", "Coxct", "Rsi1", "Rsi2",
+                        "Rsict", "Csi1", "Csi2", "Csict"}
     assert "skin section 2 has its corner above the fit band" in msg[0]
 
 
-def test_a_coil_the_data_determines_gets_no_such_note(two_port):
-    assert not any("can change by that factor" in m for m in two_port.messages)
+def test_the_two_port_fit_names_only_its_free_skin_resistance(two_port):
+    """The bundled coil's second skin corner (66 GHz) lies above its 50 GHz band."""
+    msg = [m for m in two_port.messages if "can change by that factor" in m]
+    assert len(msg) == 1 and msg[0].startswith("Rskin2 (x")
+    assert "skin section 2 has its corner above the fit band" in msg[0]
+    basic = _convert(IND, "inductor-wideband", basic_model=True)
+    assert not any("can change by that factor" in m for m in basic.messages)
 
 
 def test_a_wideband_conversion_never_reports_a_blank_stage():

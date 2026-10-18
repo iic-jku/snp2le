@@ -53,9 +53,10 @@ MAX_NFEV = 200         # cap per global fit run, the last iterations crawl along
 SEGMENT_CHOICES = (1, 2, 3)
 SEGMENT_COST_TOLERANCE = 1.1    # fewest segments with cost within this factor of the best
 SUBSTRATE_COST_TOLERANCE = 1.1  # simplest substrate variant within this factor of the best
-SPREAD_COST = 0.01     # an element counts as not determined if, at this much more cost,
-SPREAD_FACTOR = 3.0    # the fit can move it by this factor or more (the others following)
-SPREAD_RMS_FLOOR = 1e-3   # a fit closer than this RMS relative residual counts as this close
+SPREAD_COST = 0.01     # an element is not determined if, at this much more cost, the fit can
+SPREAD_STEPS = (3.0, 10.0, 100.0, 1000.0)   # move it by the first factor, the others following
+SPREAD_RMS_FLOOR = 1e-3   # cost floor: a relative error of this on every point of every goal
+SPREAD_CANDIDATE = 1.2    # elements whose curvature allows this factor at SPREAD_COST are probed
 SYMMETRY_TOLERANCE = 0.05       # symmetric model if port/half responses differ by less (RMS)
 COX_SPAN = 0.5                  # Cox bound in decades around its low-frequency seed
 MIN_FIT_POINTS = 10
@@ -521,17 +522,29 @@ def _fit_segments(variant, residual_fn_for, segment_choices, tick):
     return results, segments
 
 
-def _sort_skin_sections(names, arrays, suffix=""):
+def _sort_skin_sections(names, arrays, suffix="", swap=None):
     """Order the two skin sections by corner frequency (section 1 = lower corner), in all
-    arrays (fit result, bounds, seeds) together."""
+    arrays (fit result, bounds, seeds) together.  `swap` forces the decision, returned."""
     i1, i2 = names.index("Rskin1" + suffix), names.index("Rskin2" + suffix)
 
     def corner(x, i):
         return x[i] - x[i + 1]                    # log10(Rskin/Lskin), monotonic in corner f
 
-    if corner(arrays[0], i1) > corner(arrays[0], i2):
+    if swap is None:
+        swap = bool(corner(arrays[0], i1) > corner(arrays[0], i2))
+    if swap:
         for arr in arrays:
             arr[[i1, i1 + 1, i2, i2 + 1]] = arr[[i2, i2 + 1, i1, i1 + 1]]
+    return swap
+
+
+def _sort_half_coil_skin_sections(names, arrays, ties):
+    """_sort_skin_sections per half coil.  Halves with tied skin elements keep the first
+    half's order, or a tie would pair section 1 of one half with section 2 of the other
+    (inductances tied, resistances free, corners ordered differently)."""
+    swap = _sort_skin_sections(names, arrays, "_h1")
+    tied = any(n + "_h2" in ties for n in ("Rskin1", "Lskin1", "Rskin2", "Lskin2"))
+    _sort_skin_sections(names, arrays, "_h2", swap if tied else None)
 
 
 class _Ticker:
@@ -723,41 +736,100 @@ def _bound_warnings(variant, x_fit, lower, upper, negligible_at, skip=()):
     return out
 
 
-def _spread_warnings(variant, x_fit, lower, upper, residual_fn, cost, f_max, skip=()):
-    """Elements the data do not determine: those the fit can move by SPREAD_FACTOR or more
-    while its cost rises by SPREAD_COST, the other elements following.  From the Gauss-Newton
-    Hessian J^T J at the fit, in the log10 parameters the fit works in, so a flat direction
-    (a skin section whose corner lies above the band acts as plain L, its R is free) shows
-    as a large factor wherever along it the fit stopped.  Elements at a bound and `skip`
-    are reported elsewhere."""
+def _uniform_error_cost(goals, error):
+    """Cost of a model off by `error` (relative) at every point of every goal.  It does not
+    depend on the number of points, since each goal's residual is divided by its root."""
+    return 0.5 * error ** 2 * sum(float(np.mean(np.square(w))) for _key, w, _mask, _norm in goals)
+
+
+def _spread_warnings(variant, x_fit, lower, upper, residual_fn, cost, floor_cost, f_max,
+                     skip=()):
+    """Elements the data do not determine: those the fit can move by SPREAD_STEPS[0] or more
+    at SPREAD_COST more cost, the other elements following.  Each one named comes with a
+    witness: a model with the element moved by that factor, the others re-fitted, at no more
+    than that cost.  The Gauss-Newton Hessian J^T J at the fit (log10 parameters) picks the
+    candidates and the starting direction, and a Gauss-Newton re-fit of the others with that
+    Jacobian kept fixed follows the valley.  The curvature alone misses a cost that saturates
+    (a skin section's R far above its corner, where the section acts as plain L) and invents a
+    spread where the linear step leaves the model.  `floor_cost` keeps a near-perfect fit from
+    hiding a flat direction behind its tiny cost.  Elements at a bound and `skip` are reported
+    elsewhere."""
     names = variant["names"]
     at_bound = (x_fit - lower < 0.005) | (upper - x_fit < 0.005)
     idx = [i for i in range(len(names)) if variant["free"][i]]
-    cols = []
-    for i in idx:                                  # central differences, ties move along
-        d = np.zeros(len(names))
-        d[i] = 1.0
+    steps = np.zeros((len(idx), len(names)))       # each free element with the ones tied to it
+    for k, i in enumerate(idx):
+        steps[k, i] = 1.0
         for dst, src in variant["ties"].items():
             if src == names[i]:
-                d[names.index(dst)] = 1.0
-        cols.append((residual_fn(x_fit + 1e-5 * d) - residual_fn(x_fit - 1e-5 * d)) / 2e-5)
-    w, V = np.linalg.eigh(np.array(cols) @ np.array(cols).T)
-    floor = (w[-1] if w[-1] > 0 else 1.0) * 1e-15                # all flat: every element free
-    var = (V ** 2) @ (1.0 / np.maximum(w, floor))              # diag of (J^T J)^-1
-    # a near-perfect fit would otherwise hide a flat direction behind its tiny cost
-    cost = max(cost, 0.5 * len(cols[0]) * SPREAD_RMS_FLOOR ** 2)
-    decades = np.minimum(np.sqrt(2 * SPREAD_COST * cost * var), 3.0)
+                steps[k, names.index(dst)] = 1.0
+    J = np.array([(residual_fn(x_fit + 1e-5 * d) - residual_fn(x_fit - 1e-5 * d)) / 2e-5
+                  for d in steps]).T
+    w, V = np.linalg.eigh(J.T @ J)
+    hinv = (V / np.maximum(w, (w[-1] if w[-1] > 0 else 1.0) * 1e-15)) @ V.T
+    limit = cost + SPREAD_COST * max(cost, floor_cost)
+    curvature = np.sqrt(2 * SPREAD_COST * max(cost, floor_cost) * np.diag(hinv))   # decades
+    u_lo, u_up = (lower - x_fit)[idx], (upper - x_fit)[idx]
+
+    def cost_at(u):
+        try:
+            with np.errstate(all="ignore"):
+                r = residual_fn(x_fit + u @ steps)
+        except (ArithmeticError, ValueError):     # LinAlgError is a ValueError
+            return math.inf
+        c = 0.5 * float(np.dot(r, r))
+        return c if math.isfinite(c) else math.inf
+
+    def witness(k, shift):
+        """Lowest cost found with free element k moved by `shift` decades, the others
+        re-fitted by Gauss-Newton on the fixed Jacobian, with backtracking."""
+        if not u_lo[k] < shift < u_up[k]:
+            return math.inf
+        others = [j for j in range(len(idx)) if j != k]
+        Jo = J[:, others]
+        Ho = Jo.T @ Jo
+        Ho += 1e-12 * max(np.trace(Ho), 1e-300) * np.eye(len(others))
+        u = np.clip(shift * hinv[:, k] / hinv[k, k], u_lo, u_up)
+        u[k] = shift
+        best = cost_at(u)
+        for _ in range(12):
+            if best <= limit or not math.isfinite(best):
+                break
+            r = residual_fn(x_fit + u @ steps)
+            delta = np.linalg.solve(Ho, Jo.T @ r)
+            lam = 1.0
+            while lam > 1e-3:
+                trial = u.copy()
+                trial[others] = np.clip(u[others] - lam * delta, u_lo[others], u_up[others])
+                c = cost_at(trial)
+                if c < best:
+                    u, best = trial, c
+                    break
+                lam /= 4
+            else:
+                break
+        return best
+
     loose, above = [], set()
-    for i, dec in zip(idx, decades):
-        if 10 ** dec >= SPREAD_FACTOR and not at_bound[i] and names[i] not in skip:
-            tied = [dst for dst, src in variant["ties"].items() if src == names[i]]
-            factor = ("1000 or more" if dec >= 3.0 else f"{10 ** dec:.0f}" if dec >= 1.0
-                      else f"{10 ** dec:.2g}")
-            loose.append(f"{' = '.join([names[i]] + tied)} (x{factor})")
-            if names[i].startswith("Rskin"):       # corner Rskin / (2 pi Lskin) above the band
-                corner = 10 ** (x_fit[i] - x_fit[names.index("L" + names[i][1:])]) / (2 * math.pi)
-                if corner > f_max:
-                    above.add(names[i][5])
+    for k, i in enumerate(idx):
+        if at_bound[i] or names[i] in skip or 10 ** curvature[k] < SPREAD_CANDIDATE:
+            continue
+        reached = 0
+        for sign in (1.0, -1.0):
+            n = 0
+            while n < len(SPREAD_STEPS) and witness(k, sign * math.log10(SPREAD_STEPS[n])) <= limit:
+                n += 1
+            reached = max(reached, n)
+        if not reached:
+            continue
+        tied = [dst for dst, src in variant["ties"].items() if src == names[i]]
+        loose.append(f"{' = '.join([names[i]] + tied)} (x{SPREAD_STEPS[reached - 1]:g}"
+                     f"{' or more' if reached == len(SPREAD_STEPS) else ''})")
+        if names[i].startswith(("Rskin", "Lskin")):     # its section's corner Rskin / (2 pi Lskin)
+            sec = names[i][5:]
+            corner = 10 ** (x_fit[names.index("Rskin" + sec)] - x_fit[names.index("Lskin" + sec)])
+            if corner / (2 * math.pi) > f_max:
+                above.add(sec[0])
     if not loose:
         return []
     listed = loose[0] if len(loose) == 1 else ", ".join(loose[:-1]) + " and " + loose[-1]
@@ -766,11 +838,14 @@ def _spread_warnings(variant, x_fit, lower, upper, residual_fn, cost, f_max, ski
         one = len(above) == 1
         why = (f" (skin section{'' if one else 's'} {' and '.join(sorted(above))} "
                f"{'has its corner' if one else 'have their corners'} above the fit band, where "
-               f"{'it acts' if one else 'they act'} as plain L, and Basic model leaves section 2 "
-               f"out)")
+               f"{'it acts' if one else 'they act'} as plain L")
+        if "2" in above and not any(n.startswith("Rskin2") for n in variant["fixed"]):
+            why += ", and Basic model leaves section 2 out"
+        why += ")"
+    rms = (math.sqrt(1 + SPREAD_COST) - 1) * 100
     return [f"{listed} {'is' if len(loose) == 1 else 'are'} not determined by the data, "
-            f"{'it' if len(loose) == 1 else 'each'} can change by that factor at "
-            f"{SPREAD_COST * 100:g} % more fit error" + why]
+            f"{'it' if len(loose) == 1 else 'each'} can change by that factor while the fit's RMS "
+            f"error grows by {rms:.1g} % or less" + why]
 
 
 def _shorted_substrate(fit, locations, omega_max, tied=()):
@@ -993,7 +1068,7 @@ def fit_two_port(net, basic=False, segments=None, substrate="auto", peak_q_weigh
     msgs += notes
     msgs += _bound_warnings(variant, x_fit, lower, upper, negligible_at, shorted)
     msgs += _spread_warnings(variant, x_fit, lower, upper, residual_fn_for(segments), best_cost,
-                             f_fit[-1], shorted)
+                             _uniform_error_cost(goals, SPREAD_RMS_FLOOR), f_fit[-1], shorted)
 
     metrics = {"segments": segments, "substrate": substrate, "basic": bool(basic),
                "f_fit_min": float(f_fit[0]), "f_fit_max": float(f_fit[-1]),
@@ -1155,8 +1230,7 @@ def fit_center_tap(net, basic=False, segments=None, substrate="auto", peak_q_wei
     lower, upper = variant["lower"].copy(), variant["upper"].copy()
     x_seed = variant["x_seed"].copy()
     if num_skin == 2:
-        for h in ("_h1", "_h2"):
-            _sort_skin_sections(CT_PARAM_NAMES, (x_fit, lower, upper, x_seed), h)
+        _sort_half_coil_skin_sections(CT_PARAM_NAMES, (x_fit, lower, upper, x_seed), ties)
     p_fit = 10 ** x_fit
     fit = dict(zip(CT_PARAM_NAMES, (float(v) for v in p_fit)))
     active = [name for name in CT_PARAM_NAMES if name not in variant["fixed"]]
@@ -1205,7 +1279,7 @@ def fit_center_tap(net, basic=False, segments=None, substrate="auto", peak_q_wei
     msgs += notes
     msgs += _bound_warnings(variant, x_fit, lower, upper, negligible_at, shorted)
     msgs += _spread_warnings(variant, x_fit, lower, upper, residual_fn_for(segments), best_cost,
-                             f_fit[-1], shorted)
+                             _uniform_error_cost(goals, SPREAD_RMS_FLOOR), f_fit[-1], shorted)
 
     metrics = {"segments": segments, "basic": bool(basic),
                "symmetric": dict(symmetric), "asymmetry": dict(asymmetry),
