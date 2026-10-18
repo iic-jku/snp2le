@@ -103,7 +103,7 @@ has its constant term at 5.24. A file that carries a 0 Hz point, as this one doe
 also gets a refit that includes it, which scikit-rf meets through the constant term, and
 it is kept if it passes and fits closer than a lower-order refit (the line comes out passive
 at model order 9 that way).
-That outcome is fragile: a random change of 1e-12 in the file's S values made the refit miss in 1 or 2 of 8 tries, and the line then reads <i>near-passive</i> at 5.24, while order 6 gave the same result every time.
+That outcome is fragile: a random change of 1e-12 in the file's S values made the refit miss in 1 to 3 of 8 tries, and the line then reads <i>near-passive</i> at 5.24, while order 6 gave the same result every time.
 The refit needs a fit range that starts at the file's first
 sample above 0&nbsp;Hz. With <b>Thermal noise</b> ticked, a strictly passive candidate wins
 over one that only meets a raised ceiling, since only it can carry the noise. When nothing
