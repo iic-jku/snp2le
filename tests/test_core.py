@@ -650,6 +650,33 @@ def test_complex_and_frequency_dependent_references_are_renormalised():
         assert np.all(out.z0 == 50) and np.allclose(out.s, truth.s, rtol=0, atol=1e-10)
 
 
+def test_an_hfss_export_with_imaginary_port_impedances_gives_a_finite_netlist(tmp_path):
+    """An HFSS export that is not renormalised carries each port's impedance per frequency,
+    imaginary below cutoff.  Port 1's real part, 0 ohm, became both port resistors and put
+    inf and nan into a netlist the conversion reported as fitted."""
+    import re
+    truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
+    net = truth[np.arange(len(truth.f)) % 10 == 0]
+    z = 1j * np.stack([np.linspace(29, 31, len(net.f)), np.linspace(57, 61, len(net.f))], axis=1)
+    exported = net.copy()
+    exported.renormalize(z, s_def="traveling")         # the wave definition scikit-rf gives HFSS
+    path = tmp_path / "hfss.s2p"
+    with open(path, "w") as fh:
+        fh.write("!Data is not renormalized\n# GHZ S MA\n")
+        for k, fr in enumerate(net.f):
+            fh.write(f"{fr / 1e9:.15g} " + " ".join(
+                f"{abs(v):.15e} {np.degrees(np.angle(v)):.15e}" for v in exported.s[k].T.flatten()))
+            fh.write("\n! Gamma ! 1.0 0.0 1.0 0.0\n! Port Impedance "
+                     + " ".join(f"{v.real:.15e} {v.imag:.15e}" for v in z[k]) + "\n")
+    loaded = io.load_touchstone(str(path))
+    assert np.allclose(loaded.z0, z)
+    res = engine.convert(ConverterState(max_order=6), loaded)
+    assert res.ok
+    assert res.messages[0] == "port references that vary with frequency renormalised to 50 ohm"
+    assert np.allclose(res.data_s, net.s, rtol=0, atol=1e-10)
+    assert not re.search(r"\b(inf|nan)\b", res.ngspice + res.vacask, re.I)
+
+
 def _touchstone_11(tmp_path, refs, name="refs.s2p"):
     """The 500 pH coil as a Touchstone 1.1 file with one reference resistance per port."""
     truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
