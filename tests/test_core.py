@@ -1235,6 +1235,7 @@ def test_a_file_that_breaks_the_engine_does_not_end_the_batch(tmp_path, capsys, 
 
     def convert(state, net, progress=None):
         if net.nports == 4:
+            progress(0.4, "fitting")                  # a live progress bar, then the failure
             raise ValueError("Array must not contain infs or NaNs")
         return real(state, net, progress)
 
@@ -1242,9 +1243,10 @@ def test_a_file_that_breaks_the_engine_does_not_end_the_batch(tmp_path, capsys, 
     stale = tmp_path / "blc_ihp-sg13g2.spice"
     stale.write_text("left by an earlier run\n")
     srcs = [_example_path("blc_ihp-sg13g2.s4p"), _example_path("bpf_ihp-sg13g2.s2p")]
-    assert cli.main(["convert", *srcs, "--order", "6"]) == 1
+    assert cli.main(["convert", *srcs, "--order", "6", "--progress"]) == 1
     err = capsys.readouterr().err
     assert f"[FAIL] {srcs[0]}: Array must not contain infs or NaNs" in err
+    assert "fitting[FAIL]" not in err                 # printed after the bar cleared its line
     assert "Traceback" not in err
     assert not stale.exists() and (tmp_path / "bpf_ihp-sg13g2.spice").exists()
 
