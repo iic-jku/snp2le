@@ -585,6 +585,174 @@ def test_restrict_band_keeps_the_network_intact():
     assert same is net and notes == []
 
 
+# ---------------------------------------------------------------- port references
+def _referred(net, z0):
+    """The same device with its ports referred to `z0`, one value or one per port."""
+    out = net.copy()
+    out.renormalize(z0)
+    return out
+
+
+def test_a_network_with_one_real_reference_is_left_alone():
+    import glob
+    paths = glob.glob(os.path.join(os.path.dirname(io.__file__), "..", "examples", "*.s*p"))
+    assert paths
+    for path in paths:
+        net = io.load_touchstone(path)
+        same, notes = io.uniform_reference(net)
+        assert same is net and notes == [], path
+
+
+def test_mixed_references_are_renormalised_before_a_structure_extraction():
+    """The extractors, the model rebuild and the traces read port 1's z0 for every port.  At
+    50 / 75 ohm the wideband coil's RMS error read 0.127 instead of 5.0e-3, the pi model's
+    data traces were off by a median 128 %, and its tolerances moved."""
+    truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
+    mixed = _referred(truth, np.array([50.0, 75.0]))
+    # the pi model is read off in closed form, the wideband one is a least-squares fit whose
+    # R_skin2 moves by 0.2 % when the data move by the renormalisation's 1e-12
+    for key, rtol in (("inductor-pi", 1e-6), ("inductor-wideband", 1e-2)):
+        st = ConverterState(mode="structure", structure_key=key)
+        a, b = engine.convert(st, truth), engine.convert(st, mixed)
+        assert b.ok, key
+        assert b.messages[0] == "port references 50 ohm, 75 ohm renormalised to 50 ohm"
+        if key == "inductor-pi":
+            assert b.messages[1:] == a.messages
+        assert np.allclose(b.data_s, a.data_s, rtol=0, atol=1e-10)
+        assert np.isclose(b.rms_error, a.rms_error, rtol=rtol), key
+        for (la, va, ua), (lb, vb, ub) in zip(a.value_rows, b.value_rows):
+            assert (la, ua) == (lb, ub) and np.isclose(va, vb, rtol=rtol), (key, la)
+        for lab, tol in a.value_drift.items():
+            assert np.isclose(b.value_drift[lab], tol, rtol=rtol, atol=1e-9), (key, lab)
+        for name, panels in a.aux_traces.items():
+            for side in ("top", "bottom"):
+                assert np.allclose(b.aux_traces[name][side]["data"], panels[side]["data"],
+                                   rtol=1e-5, equal_nan=True), (key, name, side)
+    assert np.allclose(mixed.z0[0], [50, 75])           # the caller's network is untouched
+
+
+def test_mixed_references_reach_a_universal_fit_at_50_ohm():
+    truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
+    res = engine.convert(ConverterState(max_order=6), _referred(truth, np.array([50.0, 75.0])))
+    assert res.ok and res.messages[0] == "port references 50 ohm, 75 ohm renormalised to 50 ohm"
+    assert np.allclose(res.data_s, truth.s, rtol=0, atol=1e-10)
+    sensors = [l.split()[3] for l in res.ngspice.splitlines() if l.startswith(("R1 s1", "R2 s2"))]
+    assert sensors == ["50.0", "50.0"]
+
+
+def test_complex_and_frequency_dependent_references_are_renormalised():
+    truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
+    for z0, what in ((50 + 10j, "complex port references"),
+                     (np.linspace(40, 60, len(truth.f))[:, None] * np.ones(2),
+                      "port references that vary with frequency"),
+                     (np.array([50.0, 50.04]), "port references 50 ohm, 50.04 ohm")):
+        out, notes = io.uniform_reference(_referred(truth, z0))
+        assert notes == [f"{what} renormalised to 50 ohm"]
+        assert np.all(out.z0 == 50) and np.allclose(out.s, truth.s, rtol=0, atol=1e-10)
+
+
+def test_a_row_without_finite_data_is_kept_and_the_rest_renormalised():
+    """renormalize rejects NaN, so a mixed-reference file with a solver's NaN at 0 Hz stopped
+    the conversion with an exception, and the CLI with it."""
+    truth = _example("tline_100um_ihp-sg13g2.s2p")
+    plain = truth.copy()
+    plain.s[0] = np.nan
+    mixed = _referred(truth, np.array([50.0, 75.0]))
+    mixed.s[0] = np.nan
+    out, _ = io.uniform_reference(mixed)
+    assert np.isnan(out.s[0]).all() and np.all(out.z0 == 50)
+    assert np.allclose(out.s[1:], truth.s[1:], rtol=0, atol=1e-10)
+    a, b = engine.convert(ConverterState(), plain), engine.convert(ConverterState(), mixed)
+    assert a.ok and b.ok, b.error
+    assert np.isclose(b.rms_error, a.rms_error, rtol=1e-6)
+
+
+def test_load_touchstone_still_takes_a_file_object():
+    with open(_example_path("bpf_ihp-sg13g2.s2p")) as fh:
+        assert io.load_touchstone(fh).nports == 2
+
+
+def test_an_hfss_export_with_imaginary_port_impedances_gives_a_finite_netlist(tmp_path):
+    """An HFSS export that is not renormalised carries each port's impedance per frequency,
+    imaginary below cutoff.  Port 1's real part, 0 ohm, became both port resistors and put
+    inf and nan into a netlist the conversion returned as ok."""
+    import re
+    truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
+    net = truth[np.arange(len(truth.f)) % 10 == 0]
+    z = 1j * np.stack([np.linspace(29, 31, len(net.f)), np.linspace(57, 61, len(net.f))], axis=1)
+    exported = net.copy()
+    exported.renormalize(z, s_def="traveling")         # the wave definition scikit-rf gives HFSS
+    path = tmp_path / "hfss.s2p"
+    with open(path, "w") as fh:
+        fh.write("!Data is not renormalized\n# GHZ S MA\n")
+        for k, fr in enumerate(net.f):
+            fh.write(f"{fr / 1e9:.15g} " + " ".join(
+                f"{abs(v):.15e} {np.degrees(np.angle(v)):.15e}" for v in exported.s[k].T.flatten()))
+            fh.write("\n! Gamma ! 1.0 0.0 1.0 0.0\n! Port Impedance "
+                     + " ".join(f"{v.real:.15e} {v.imag:.15e}" for v in z[k]) + "\n")
+    loaded = io.load_touchstone(str(path))
+    assert np.allclose(loaded.z0, z)
+    res = engine.convert(ConverterState(max_order=6), loaded)
+    assert res.ok
+    assert res.messages[0] == "port references that vary with frequency renormalised to 50 ohm"
+    assert np.allclose(res.data_s, net.s, rtol=0, atol=1e-10)
+    assert not re.search(r"\b(inf|nan)\b", res.ngspice + res.vacask, re.I)
+
+
+def _touchstone_11(tmp_path, refs, name="refs.s2p"):
+    """The 500 pH coil as a Touchstone 1.1 file with one reference resistance per port."""
+    truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
+    s = _referred(truth, np.array(refs, float)).s
+    path = tmp_path / name
+    with open(path, "w") as fh:
+        fh.write("# Hz S RI R " + " ".join(f"{r:g}" for r in refs) + "\n")
+        for fr, m in zip(truth.f, s):
+            fh.write(f"{fr:.9e} " + " ".join(f"{v.real:.15e} {v.imag:.15e}" for v in m.T.flatten())
+                     + "\n")
+    return str(path), truth
+
+
+def test_an_option_line_with_one_reference_per_port_is_read_as_written_or_refused(tmp_path):
+    """scikit-rf below 2.2 reads only the first R, and the coil's universal netlist then
+    missed the device by 0.126 rms against a fit error of 7e-5, without a word."""
+    path, truth = _touchstone_11(tmp_path, (50, 75))
+    try:
+        net = io.load_touchstone(path)
+    except ValueError as exc:                           # scikit-rf below 2.2
+        assert "one reference resistance per port (50 ohm, 75 ohm)" in str(exc)
+        assert "scikit-rf 2.2 and later read it as written" in str(exc)
+    else:                                               # scikit-rf 2.2 and later
+        assert np.allclose(net.z0[0], [50, 75])
+        st = ConverterState(mode="structure", structure_key="inductor-pi")
+        assert np.isclose(engine.convert(st, net).rms_error, engine.convert(st, truth).rms_error,
+                          rtol=1e-6)
+
+
+def test_a_per_port_option_line_read_as_one_reference_is_refused(tmp_path):
+    """The refusal on any scikit-rf, given the network as one below 2.2 hands it over."""
+    import pytest
+    path, truth = _touchstone_11(tmp_path, (50, 75))
+    with pytest.raises(ValueError, match=r"reads as 50 ohm, 50 ohm\. scikit-rf 2\.2"):
+        io._check_option_references(path, truth)          # truth has 50 ohm on both ports
+    with pytest.raises(ValueError, match="2 reference resistances .* for 3 ports"):
+        io._check_option_references(path, _example("wpd_ihp-sg13g2.s3p"))
+    one = skrf.Network(frequency=truth.frequency, s=truth.s[:, :1, :1], z0=50)
+    with pytest.raises(ValueError, match="for 1 port$"):
+        io._check_option_references(path, one)
+    io._check_option_references(_touchstone_11(tmp_path, (50, 50), "same.s2p")[0], truth)
+    io._check_option_references(_example_path("bpf_ihp-sg13g2.s2p"), truth)
+
+
+def test_the_option_line_references_are_read_in_any_order(tmp_path):
+    for line, want in (("# GHz S RI R 50 75 ! two ports", [50, 75]),
+                       ("# R 50 75 GHz S RI", [50, 75]),
+                       ("#GHZ S MA R 50", [50]),
+                       ("# GHz S MA", [])):
+        path = tmp_path / "head.s2p"
+        path.write_text(f"! a comment # with a hash\n{line}\n1 0 0 1 0 1 0 0 0\n")
+        assert io._option_references(str(path)) == want, line
+
+
 # ---------------------------------------------------------------- edge cases
 def test_dc_point_is_dropped():
     net = inductor_2port(with_dc=True)

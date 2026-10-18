@@ -129,8 +129,13 @@ def _convert(state, net, progress=None) -> Results:
 
     from . import io as _io
     track.enter("prepare")
-    loaded = net
-    net = _io.without_dc(net)            # a 0 Hz sample breaks the extraction math
+    try:
+        loaded, ref_notes = _io.uniform_reference(net)
+    except (TypeError, ValueError) as exc:     # numpy's LinAlgError is a ValueError
+        res.ok = False
+        res.error = error_text(exc)
+        return res
+    net = _io.without_dc(loaded)         # a 0 Hz sample breaks the extraction math
     n_file = len(net.f)
     f_file_lo = float(net.f[0]) if n_file else 0.0
     try:                                 # optional sub-band: fit only what the user asked for
@@ -171,7 +176,8 @@ def _convert(state, net, progress=None) -> Results:
         # the low end is what pins Rdc and the DC inductance, a fit without it guesses them
         res.messages.append("the fit range starts above the file's first frequency, so the "
                             "DC resistance and inductance are extrapolated, not fitted")
-    res.messages = list(band_notes) + list(res.messages)   # the band first, it frames the rest
+    # the reference and the band first, they frame the rest
+    res.messages = list(ref_notes) + list(band_notes) + list(res.messages)
     track.enter("netlist")
     res.ngspice = _nl.render_ngspice(res.ir)
     res.vacask = _nl.render_vacask(res.ir)
