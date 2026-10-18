@@ -630,6 +630,12 @@ def cmd_convert(args):
         t_start = time.monotonic()
         try:
             res = engine.convert(state, net, progress=bar)
+        except Exception as exc:                          # noqa: BLE001
+            # one file that breaks the engine must not end the batch for the files after it
+            print(f"[FAIL] {src}: {engine.error_text(exc)}", file=sys.stderr)
+            _remove_stale(outs, written)
+            rc = 1
+            continue
         finally:
             if bar is not None:
                 bar.close()

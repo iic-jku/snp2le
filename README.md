@@ -366,7 +366,7 @@ snp2le -b list-structures
 snp2le -b convert <file.sNp> [options]
 ```
 
-From a source checkout without installing, use `python -m snp2le -b ...` in place of `snp2le -b`. The exit code is non-zero if any conversion fails, and a failed conversion writes nothing and removes the files an earlier run left at its output paths, so a Makefile never takes an old netlist for the result. Without `-b`, a single file argument opens the GUI on that file instead (see [Run the GUI](https://github.com/iic-jku/snp2le#run-the-gui)).
+From a source checkout without installing, use `python -m snp2le -b ...` in place of `snp2le -b`. The exit code is non-zero if any conversion fails, and a failed conversion writes nothing and removes the files an earlier run left at its output paths, so a Makefile never takes an old netlist for the result. With several inputs, a file that fails, for whatever reason, is reported as `[FAIL]` and the rest are still converted. Without `-b`, a single file argument opens the GUI on that file instead (see [Run the GUI](https://github.com/iic-jku/snp2le#run-the-gui)).
 
 ### `convert` options
 
