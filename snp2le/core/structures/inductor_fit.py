@@ -564,6 +564,11 @@ class _Ticker:
         if self._cb is not None:
             self._cb(_SEED_SHARE + (1.0 - _SEED_SHARE) * self._done / self._total, message)
 
+    def note(self, message):
+        """A new message at the current fraction, for work after the last fit run."""
+        if self._cb is not None:
+            self._cb(_SEED_SHARE + (1.0 - _SEED_SHARE) * self._done / self._total, message)
+
 
 # ---------------- analytic seed values ----------------
 
@@ -787,16 +792,20 @@ def _spread_warnings(variant, x_fit, lower, upper, residual_fn, cost, floor_cost
             return math.inf
         others = [j for j in range(len(idx)) if j != k]
         Jo = J[:, others]
-        Ho = Jo.T @ Jo
-        Ho += 1e-12 * max(np.trace(Ho), 1e-300) * np.eye(len(others))
-        u = np.clip(shift * hinv[:, k] / hinv[k, k], u_lo, u_up)
-        u[k] = shift
-        best = cost_at(u)
+        wo, Vo = np.linalg.eigh(Jo.T @ Jo)
+        keep = wo > max(wo[-1] if len(wo) else 0.0, 0.0) * 1e-8   # a flat one would take the step away
+        # start from the element moved alone or from the linear guess, whichever costs less: near
+        # a flat direction the guess moves the others far
+        alone = np.zeros(len(idx))
+        alone[k] = shift
+        guess = np.clip(shift * hinv[:, k] / hinv[k, k], u_lo, u_up)
+        guess[k] = shift
+        best, u = min((cost_at(alone), 0, alone), (cost_at(guess), 1, guess))[0::2]
         for _ in range(12):
             if best <= limit or not math.isfinite(best):
                 break
             r = residual_fn(x_fit + u @ steps)
-            delta = np.linalg.solve(Ho, Jo.T @ r)
+            delta = Vo[:, keep] @ ((Vo[:, keep].T @ (Jo.T @ r)) / wo[keep])
             lam = 1.0
             while lam > 1e-3:
                 trial = u.copy()
@@ -812,7 +821,7 @@ def _spread_warnings(variant, x_fit, lower, upper, residual_fn, cost, floor_cost
 
     loose, above = [], set()
     for k, i in enumerate(idx):
-        if at_bound[i] or names[i] in skip or 10 ** curvature[k] < SPREAD_CANDIDATE:
+        if at_bound[i] or names[i] in skip or curvature[k] < math.log10(SPREAD_CANDIDATE):
             continue
         reached = 0
         for sign in (1.0, -1.0):
@@ -823,8 +832,7 @@ def _spread_warnings(variant, x_fit, lower, upper, residual_fn, cost, floor_cost
         if not reached:
             continue
         tied = [dst for dst, src in variant["ties"].items() if src == names[i]]
-        loose.append(f"{' = '.join([names[i]] + tied)} (x{SPREAD_STEPS[reached - 1]:g}"
-                     f"{' or more' if reached == len(SPREAD_STEPS) else ''})")
+        loose.append(f"{' = '.join([names[i]] + tied)} (x{SPREAD_STEPS[reached - 1]:g})")
         if names[i].startswith(("Rskin", "Lskin")):     # its section's corner Rskin / (2 pi Lskin)
             sec = names[i][5:]
             corner = 10 ** (x_fit[names.index("Rskin" + sec)] - x_fit[names.index("Lskin" + sec)])
@@ -842,10 +850,14 @@ def _spread_warnings(variant, x_fit, lower, upper, residual_fn, cost, floor_cost
         if "2" in above and not any(n.startswith("Rskin2") for n in variant["fixed"]):
             why += ", and Basic model leaves section 2 out"
         why += ")"
-    rms = (math.sqrt(1 + SPREAD_COST) - 1) * 100
+    if cost >= floor_cost:
+        bound = f"the fit's RMS error grows by {(math.sqrt(1 + SPREAD_COST) - 1) * 100:.1g} % or less"
+    else:                                           # a near-perfect fit, judged against the floor
+        bound = (f"the fit stays as close to the data as a uniform relative error of "
+                 f"{SPREAD_RMS_FLOOR * math.sqrt(limit / floor_cost):.1g}")
     return [f"{listed} {'is' if len(loose) == 1 else 'are'} not determined by the data, "
-            f"{'it' if len(loose) == 1 else 'each'} can change by that factor while the fit's RMS "
-            f"error grows by {rms:.1g} % or less" + why]
+            f"{'it' if len(loose) == 1 else 'each'} can change by that factor or more while "
+            + bound + why]
 
 
 def _shorted_substrate(fit, locations, omega_max, tied=()):
@@ -1067,6 +1079,7 @@ def fit_two_port(net, basic=False, segments=None, substrate="auto", peak_q_weigh
     shorted, notes = _shorted_substrate(fit, ("1", "2"), omega_fit[-1], variant["ties"])
     msgs += notes
     msgs += _bound_warnings(variant, x_fit, lower, upper, negligible_at, shorted)
+    tick.note("checking which elements the data determines")
     msgs += _spread_warnings(variant, x_fit, lower, upper, residual_fn_for(segments), best_cost,
                              _uniform_error_cost(goals, SPREAD_RMS_FLOOR), f_fit[-1], shorted)
 
@@ -1278,6 +1291,7 @@ def fit_center_tap(net, basic=False, segments=None, substrate="auto", peak_q_wei
     shorted, notes = _shorted_substrate(fit, ("1", "2", "ct"), omega_fit[-1], ties)
     msgs += notes
     msgs += _bound_warnings(variant, x_fit, lower, upper, negligible_at, shorted)
+    tick.note("checking which elements the data determines")
     msgs += _spread_warnings(variant, x_fit, lower, upper, residual_fn_for(segments), best_cost,
                              _uniform_error_cost(goals, SPREAD_RMS_FLOOR), f_fit[-1], shorted)
 

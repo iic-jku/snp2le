@@ -440,37 +440,64 @@ def test_an_element_the_data_does_not_constrain_is_named():
     names = ["Ls", "Rskin2", "Lskin2"]
     x = np.array([-9.0, 2.0, -11.0])                # skin corner 100 / (2 pi 1e-11) = 1.6 THz
 
-    def flat_in_rskin2(x):
-        return 10 * np.array([x[0] + 9.0, x[2] + 11.0])
+    def flat_in_rskin2(x):                          # 0.1 is the fit's own error, cost 0.005
+        return np.array([10 * (x[0] + 9.0), 10 * (x[2] + 11.0), 0.1])
 
-    assert _spread(names, x, flat_in_rskin2) == [
-        "Rskin2 (x1000 or more) is not determined by the data, it can change by that factor "
+    assert _spread(names, x, flat_in_rskin2, cost=0.005) == [
+        "Rskin2 (x1000) is not determined by the data, it can change by that factor or more "
         "while the fit's RMS error grows by 0.5 % or less (skin section 2 has its corner above "
         "the fit band, where it acts as plain L, and Basic model leaves section 2 out)"]
-    assert _spread(names, x, lambda x: 10 * (x - np.array([-9.0, 2.0, -11.0]))) == []
+    assert _spread(names, x, lambda x: np.append(10 * (x - np.array([-9.0, 2.0, -11.0])), 0.1),
+                   cost=0.005) == []
     # an element at a bound is _bound_warnings' to report
-    assert _spread(names, x, flat_in_rskin2, lower=x - np.array([5, 0, 5])) == []
-    msgs = _spread(["Cox1", "Cox2"], np.zeros(2), lambda x: np.zeros(3), cost=1.0,
+    assert _spread(names, x, flat_in_rskin2, cost=0.005, lower=x - np.array([5, 0, 5])) == []
+    msgs = _spread(["Cox1", "Cox2"], np.zeros(2), lambda x: np.array([0.1]), cost=0.005,
                    ties={"Cox2": "Cox1"})
-    assert msgs[0].startswith("Cox1 = Cox2 (x1000 or more) is not determined by the data")
+    assert msgs[0].startswith("Cox1 = Cox2 (x1000) is not determined by the data")
+
+
+def test_a_near_perfect_fit_is_judged_against_the_floor():
+    """Below the floor a relative 0.5 % of a vanishing error would say nothing, so the message
+    states the absolute bound instead (on synthetic data from the model itself)."""
+    names = ["Ls", "Rskin2", "Lskin2"]
+    x = np.array([-9.0, 2.0, -11.0])
+    msgs = _spread(names, x, lambda x: 10 * np.array([x[0] + 9.0, x[2] + 11.0]), cost=0.0)
+    assert msgs[0].startswith("Rskin2 (x1000) is not determined by the data, it can change by "
+                              "that factor or more while the fit stays as close to the data as "
+                              "a uniform relative error of 0.0001 (skin section 2")
 
 
 def test_the_spread_follows_the_cost_not_the_curvature():
     """A cost that saturates (a skin R far above its corner) was missed by the curvature at
     the fit, which put the bundled coil's R_skin2 at x1.65 while a re-fit at 100 x cost 0.6 %
-    more.  And a direction the curvature calls flat but the cost is not (the reviewer's C_s)
-    must not be named."""
+    more.  And a direction the curvature calls flat but the cost is not must not be named."""
     x = np.array([-9.0, 2.0])
 
-    def saturating(x):                       # 0 at x[1] = 2, approaches 5e-3 as x[1] grows
-        return np.array([10 * (x[0] + 9.0), 0.01 * (1 / (1 + 10 ** (x[1] - 2)) - 0.5)])
+    def saturating(x):                       # 0 at x[1] = 2, approaches 0.011 as x[1] grows
+        return np.array([10 * (x[0] + 9.0), 0.022 * (1 / (1 + 10 ** (x[1] - 2)) - 0.5), 0.1])
 
-    assert _spread(["A", "B"], x, saturating)[0].startswith("B (x10) is not determined")
+    assert _spread(["A", "B"], x, saturating, cost=0.005)[0].startswith(
+        "B (x10) is not determined")
 
     def quartic(x):                          # flat at the fit, steep 0.48 decades away
-        return np.array([10 * (x[0] + 9.0), 1e-4 * (x[1] - 2), 100 * (x[1] - 2) ** 2])
+        return np.array([10 * (x[0] + 9.0), 1e-4 * (x[1] - 2), 100 * (x[1] - 2) ** 2, 0.1])
 
-    assert _spread(["A", "B"], x, quartic) == []
+    assert _spread(["A", "B"], x, quartic, cost=0.005) == []
+
+
+def test_a_flat_direction_elsewhere_does_not_hide_a_free_element():
+    """Near a flat direction of the others (P + Q here) the linear guess moves them hundreds
+    of decades, the start then costs more than the element moved alone, and a free element
+    went unnamed in 10 of 16 noisy synthetic fits.  The search now starts from the cheaper
+    of the two and steps only where the others are determined."""
+    x = np.zeros(3)
+
+    def coupled(x):
+        k, p, q = x
+        return np.array([0.002 * k, 1e3 * (p - q), 1e-6 * (p + q) + 1e-3 * k, 1e-2 * p ** 2,
+                         1e-2 * q ** 2, 0.1])
+
+    assert _spread(["K", "P", "Q"], x, coupled, cost=0.005)[0].startswith("K (x1000)")
 
 
 def test_the_cost_floor_does_not_grow_with_the_number_of_points():
