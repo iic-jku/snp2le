@@ -37,6 +37,35 @@ def load_touchstone(path: str) -> skrf.Network:
     return net
 
 
+# The z0 a conversion works in when the ports do not share one real reference.
+REFERENCE_Z0 = 50.0
+
+
+def uniform_reference(net):
+    """Return (`net` with one real reference impedance on every port, notes).
+
+    A network whose ports share one real z0 at every frequency comes back as it is. Any
+    other (one per port, complex, varying with frequency) is renormalised to `REFERENCE_Z0`,
+    the same device in the single z0 the extractors, the model rebuild and the DC check take.
+    Without it they read port 1's z0 for every port."""
+    if net is None or len(net.f) == 0:
+        return net, []
+    z0 = np.asarray(net.z0)
+    if np.all(z0 == z0.flat[0]) and np.imag(z0.flat[0]) == 0:
+        return net, []
+    from .units import format_eng
+    if np.all(z0 == z0[0]) and not np.any(np.imag(z0)):
+        refs = ", ".join(format_eng(float(r), "ohm") for r in np.real(z0[0]))
+        what = f"port references {refs}"
+    elif np.all(z0 == z0[0]):
+        what = "complex port references"
+    else:
+        what = "port references that vary with frequency"
+    out = net.copy()
+    out.renormalize(REFERENCE_Z0)
+    return out, [f"{what} renormalised to {format_eng(REFERENCE_Z0, 'ohm')}"]
+
+
 def info_for(net: skrf.Network) -> NetworkInfo:
     if net is None:
         return NetworkInfo()
