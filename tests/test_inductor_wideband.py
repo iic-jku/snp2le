@@ -422,6 +422,56 @@ def test_the_messages_name_what_limits_the_fit():
     assert not any("n/a" in m for m in res.messages)
 
 
+def _spread_variant(names, x, ties=None):
+    ties = ties or {}
+    return dict(names=names, free=np.array([n not in ties for n in names]), ties=ties,
+                lower=x - 5, upper=x + 5)
+
+
+def test_an_element_the_data_does_not_constrain_is_named():
+    """A flat direction shows as a large factor wherever along it the fit stopped, for a fit
+    to perfect data too, whose tiny cost would otherwise hide it."""
+    names = ["Ls", "Rskin2", "Lskin2"]
+    x = np.array([-9.0, 2.0, -11.0])                # skin corner 100 / (2 pi 1e-11) = 1.6 THz
+
+    def flat_in_rskin2(x):
+        return 10 * np.array([x[0] + 9.0, x[2] + 11.0])
+
+    msgs = fitmod._spread_warnings(_spread_variant(names, x), x, x - 5, x + 5, flat_in_rskin2,
+                                   0.0, 60e9)
+    assert msgs == ["Rskin2 (x1000 or more) is not determined by the data, it can change by that "
+                    "factor at 1 % more fit error (skin section 2 has its corner above the fit "
+                    "band, where it acts as plain L, and Basic model leaves section 2 out)"]
+    assert fitmod._spread_warnings(_spread_variant(names, x), x, x - 5, x + 5,
+                                   lambda x: 10 * (x - np.array([-9.0, 2.0, -11.0])), 0.0,
+                                   60e9) == []
+    # an element at a bound is _bound_warnings' to report
+    assert fitmod._spread_warnings(_spread_variant(names, x), x, x - np.array([5, 0, 5]), x + 5,
+                                   flat_in_rskin2, 0.0, 60e9) == []
+    tied = _spread_variant(["Cox1", "Cox2"], np.zeros(2), {"Cox2": "Cox1"})
+    msgs = fitmod._spread_warnings(tied, np.zeros(2), -np.ones(2), np.ones(2),
+                                   lambda x: np.zeros(3), 1.0, 60e9)
+    assert msgs[0].startswith("Cox1 = Cox2 (x1000 or more) is not determined by the data")
+
+
+def test_the_center_tapped_fit_names_its_undetermined_skin_sections(center_tap):
+    """Its second skin sections have their corners above the band, so their R is free: a
+    1e-12 change of the data moved R_skin2 by 75 % and L_skin2 by 41 % (2026-10-18).  The
+    elements the data determines stay unnamed, on any numpy, since the flat direction is
+    flat wherever the fit stops along it."""
+    import re
+    msg = [m for m in center_tap.messages if "not determined by the data, each can change" in m]
+    assert len(msg) == 1
+    named = {n for pair in re.findall(r"(\w+)(?: = (\w+))? \(x", msg[0]) for n in pair if n}
+    assert {"Rskin2_h1", "Rskin2_h2"} <= named <= {"Rskin2_h1", "Rskin2_h2", "Lskin2_h1",
+                                                   "Lskin2_h2"}
+    assert "skin section 2 has its corner above the fit band" in msg[0]
+
+
+def test_a_coil_the_data_determines_gets_no_such_note(two_port):
+    assert not any("can change by that factor" in m for m in two_port.messages)
+
+
 def test_a_wideband_conversion_never_reports_a_blank_stage():
     """The engine's tolerance stage is not in the wideband plan, entering it reported an
     empty message near the end of every fit."""

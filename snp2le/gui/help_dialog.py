@@ -50,6 +50,7 @@ does not match the loaded file are greyed out:
   symmetric where the data is. <b>Inductor (center tap)</b> couples its two half coils with
   k and finds the center tap itself (the port in the middle of the coil), the Conversion
   panel names it. A fit takes a few seconds (about 6&nbsp;s for the bundled center tap).
+  An element the data does not determine (one the fit can move by a factor of 3 or more at 1&nbsp;% more fit error, typically a skin section whose corner lies above the fit band) is named in the message line with that factor. <b>Basic model</b> leaves the second skin section out.
   Keep the low-frequency data in the fit range: it pins down the DC resistance and
   inductance.</li>
 <li><b>f<sub>ext</sub></b> (structure mode): the single frequency at which the lumped

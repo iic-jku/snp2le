@@ -53,6 +53,9 @@ MAX_NFEV = 200         # cap per global fit run, the last iterations crawl along
 SEGMENT_CHOICES = (1, 2, 3)
 SEGMENT_COST_TOLERANCE = 1.1    # fewest segments with cost within this factor of the best
 SUBSTRATE_COST_TOLERANCE = 1.1  # simplest substrate variant within this factor of the best
+SPREAD_COST = 0.01     # an element counts as not determined if, at this much more cost,
+SPREAD_FACTOR = 3.0    # the fit can move it by this factor or more (the others following)
+SPREAD_RMS_FLOOR = 1e-3   # a fit closer than this RMS relative residual counts as this close
 SYMMETRY_TOLERANCE = 0.05       # symmetric model if port/half responses differ by less (RMS)
 COX_SPAN = 0.5                  # Cox bound in decades around its low-frequency seed
 MIN_FIT_POINTS = 10
@@ -720,6 +723,56 @@ def _bound_warnings(variant, x_fit, lower, upper, negligible_at, skip=()):
     return out
 
 
+def _spread_warnings(variant, x_fit, lower, upper, residual_fn, cost, f_max, skip=()):
+    """Elements the data do not determine: those the fit can move by SPREAD_FACTOR or more
+    while its cost rises by SPREAD_COST, the other elements following.  From the Gauss-Newton
+    Hessian J^T J at the fit, in the log10 parameters the fit works in, so a flat direction
+    (a skin section whose corner lies above the band acts as plain L, its R is free) shows
+    as a large factor wherever along it the fit stopped.  Elements at a bound and `skip`
+    are reported elsewhere."""
+    names = variant["names"]
+    at_bound = (x_fit - lower < 0.005) | (upper - x_fit < 0.005)
+    idx = [i for i in range(len(names)) if variant["free"][i]]
+    cols = []
+    for i in idx:                                  # central differences, ties move along
+        d = np.zeros(len(names))
+        d[i] = 1.0
+        for dst, src in variant["ties"].items():
+            if src == names[i]:
+                d[names.index(dst)] = 1.0
+        cols.append((residual_fn(x_fit + 1e-5 * d) - residual_fn(x_fit - 1e-5 * d)) / 2e-5)
+    w, V = np.linalg.eigh(np.array(cols) @ np.array(cols).T)
+    floor = (w[-1] if w[-1] > 0 else 1.0) * 1e-15                # all flat: every element free
+    var = (V ** 2) @ (1.0 / np.maximum(w, floor))              # diag of (J^T J)^-1
+    # a near-perfect fit would otherwise hide a flat direction behind its tiny cost
+    cost = max(cost, 0.5 * len(cols[0]) * SPREAD_RMS_FLOOR ** 2)
+    decades = np.minimum(np.sqrt(2 * SPREAD_COST * cost * var), 3.0)
+    loose, above = [], set()
+    for i, dec in zip(idx, decades):
+        if 10 ** dec >= SPREAD_FACTOR and not at_bound[i] and names[i] not in skip:
+            tied = [dst for dst, src in variant["ties"].items() if src == names[i]]
+            factor = ("1000 or more" if dec >= 3.0 else f"{10 ** dec:.0f}" if dec >= 1.0
+                      else f"{10 ** dec:.2g}")
+            loose.append(f"{' = '.join([names[i]] + tied)} (x{factor})")
+            if names[i].startswith("Rskin"):       # corner Rskin / (2 pi Lskin) above the band
+                corner = 10 ** (x_fit[i] - x_fit[names.index("L" + names[i][1:])]) / (2 * math.pi)
+                if corner > f_max:
+                    above.add(names[i][5])
+    if not loose:
+        return []
+    listed = loose[0] if len(loose) == 1 else ", ".join(loose[:-1]) + " and " + loose[-1]
+    why = ""
+    if above:
+        one = len(above) == 1
+        why = (f" (skin section{'' if one else 's'} {' and '.join(sorted(above))} "
+               f"{'has its corner' if one else 'have their corners'} above the fit band, where "
+               f"{'it acts' if one else 'they act'} as plain L, and Basic model leaves section 2 "
+               f"out)")
+    return [f"{listed} {'is' if len(loose) == 1 else 'are'} not determined by the data, "
+            f"{'it' if len(loose) == 1 else 'each'} can change by that factor at "
+            f"{SPREAD_COST * 100:g} % more fit error" + why]
+
+
 def _shorted_substrate(fit, locations, omega_max, tied=()):
     """Where Rsi is negligible against Cox over the whole band, Cox effectively connects to
     ground (a ground shield, a low-ohmic substrate contact) and Rsi, Csi are undetermined."""
@@ -939,6 +992,8 @@ def fit_two_port(net, basic=False, segments=None, substrate="auto", peak_q_weigh
     shorted, notes = _shorted_substrate(fit, ("1", "2"), omega_fit[-1], variant["ties"])
     msgs += notes
     msgs += _bound_warnings(variant, x_fit, lower, upper, negligible_at, shorted)
+    msgs += _spread_warnings(variant, x_fit, lower, upper, residual_fn_for(segments), best_cost,
+                             f_fit[-1], shorted)
 
     metrics = {"segments": segments, "substrate": substrate, "basic": bool(basic),
                "f_fit_min": float(f_fit[0]), "f_fit_max": float(f_fit[-1]),
@@ -1149,6 +1204,8 @@ def fit_center_tap(net, basic=False, segments=None, substrate="auto", peak_q_wei
     shorted, notes = _shorted_substrate(fit, ("1", "2", "ct"), omega_fit[-1], ties)
     msgs += notes
     msgs += _bound_warnings(variant, x_fit, lower, upper, negligible_at, shorted)
+    msgs += _spread_warnings(variant, x_fit, lower, upper, residual_fn_for(segments), best_cost,
+                             f_fit[-1], shorted)
 
     metrics = {"segments": segments, "basic": bool(basic),
                "symmetric": dict(symmetric), "asymmetry": dict(asymmetry),
