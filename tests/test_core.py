@@ -650,6 +650,57 @@ def test_complex_and_frequency_dependent_references_are_renormalised():
         assert np.all(out.z0 == 50) and np.allclose(out.s, truth.s, rtol=0, atol=1e-10)
 
 
+def _touchstone_11(tmp_path, refs, name="refs.s2p"):
+    """The 500 pH coil as a Touchstone 1.1 file with one reference resistance per port."""
+    truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
+    s = _referred(truth, np.array(refs, float)).s
+    path = tmp_path / name
+    with open(path, "w") as fh:
+        fh.write("# Hz S RI R " + " ".join(f"{r:g}" for r in refs) + "\n")
+        for fr, m in zip(truth.f, s):
+            fh.write(f"{fr:.9e} " + " ".join(f"{v.real:.15e} {v.imag:.15e}" for v in m.T.flatten())
+                     + "\n")
+    return str(path), truth
+
+
+def test_an_option_line_with_one_reference_per_port_is_read_as_written_or_refused(tmp_path):
+    """scikit-rf below 2.2 reads only the first R, and the coil's universal netlist then
+    missed the device by 0.126 rms against a fit error of 7e-5, without a word."""
+    path, truth = _touchstone_11(tmp_path, (50, 75))
+    try:
+        net = io.load_touchstone(path)
+    except ValueError as exc:                           # scikit-rf below 2.2
+        assert "one reference resistance per port (50 ohm, 75 ohm)" in str(exc)
+        assert "scikit-rf 2.2 and later read it as written" in str(exc)
+    else:                                               # scikit-rf 2.2 and later
+        assert np.allclose(net.z0[0], [50, 75])
+        st = ConverterState(mode="structure", structure_key="inductor-pi")
+        assert np.isclose(engine.convert(st, net).rms_error, engine.convert(st, truth).rms_error,
+                          rtol=1e-6)
+
+
+def test_a_per_port_option_line_read_as_one_reference_is_refused(tmp_path):
+    """The refusal on any scikit-rf, given the network as one below 2.2 hands it over."""
+    import pytest
+    path, truth = _touchstone_11(tmp_path, (50, 75))
+    with pytest.raises(ValueError, match=r"reads as 50 ohm, 50 ohm\. scikit-rf 2\.2"):
+        io._check_option_references(path, truth)          # truth has 50 ohm on both ports
+    with pytest.raises(ValueError, match="2 reference resistances .* for 3 ports"):
+        io._check_option_references(path, _example("wpd_ihp-sg13g2.s3p"))
+    io._check_option_references(_touchstone_11(tmp_path, (50, 50), "same.s2p")[0], truth)
+    io._check_option_references(_example_path("bpf_ihp-sg13g2.s2p"), truth)
+
+
+def test_the_option_line_references_are_read_in_any_order(tmp_path):
+    for line, want in (("# GHz S RI R 50 75 ! two ports", [50, 75]),
+                       ("# R 50 75 GHz S RI", [50, 75]),
+                       ("#GHZ S MA R 50", [50]),
+                       ("# GHz S MA", [])):
+        path = tmp_path / "head.s2p"
+        path.write_text(f"! a comment # with a hash\n{line}\n1 0 0 1 0 1 0 0 0\n")
+        assert io._option_references(str(path)) == want, line
+
+
 # ---------------------------------------------------------------- edge cases
 def test_dc_point_is_dropped():
     net = inductor_2port(with_dc=True)

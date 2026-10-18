@@ -34,7 +34,50 @@ class NetworkInfo:
 def load_touchstone(path: str) -> skrf.Network:
     """Load any .sNp file. Raises on failure so the GUI can show a message."""
     net = skrf.Network(path)
+    _check_option_references(path, net)
     return net
+
+
+def _option_references(path: str) -> list:
+    """The reference resistances on the file's option line, [] if it gives none."""
+    with open(path, encoding="utf-8-sig", errors="replace") as fh:
+        for line in fh:
+            line = line.split("!", 1)[0].strip()
+            if not line.startswith("#"):
+                continue
+            toks = line[1:].lower().split()
+            if "r" not in toks:
+                return []
+            refs = []
+            for tok in toks[toks.index("r") + 1:]:
+                try:
+                    refs.append(float(tok))
+                except ValueError:                 # the options come in any order
+                    break
+            return refs
+    return []
+
+
+def _check_option_references(path: str, net: skrf.Network) -> None:
+    """Refuse an option line with one R per port that scikit-rf did not read as written.
+
+    Touchstone 1.1 allows one reference resistance per port. scikit-rf below 2.2 reads only
+    the first and refers every port to it, which models another device without a word."""
+    refs = _option_references(path)
+    if len(refs) < 2:
+        return
+    from .units import format_eng
+    given = ", ".join(format_eng(r, "ohm") for r in refs)
+    if len(refs) != net.nports:
+        raise ValueError(f"the option line gives {len(refs)} reference resistances ({given}) "
+                         f"for {net.nports} ports")
+    read = np.real(np.asarray(net.z0)[0])
+    if not np.allclose(read, refs):
+        raise ValueError(
+            f"the option line gives one reference resistance per port ({given}), which "
+            f"scikit-rf {skrf.__version__} reads as "
+            f"{', '.join(format_eng(r, 'ohm') for r in read)}. scikit-rf 2.2 and later "
+            "read it as written")
 
 
 # The z0 a conversion works in when the ports do not share one real reference.

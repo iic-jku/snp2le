@@ -20,7 +20,7 @@ frequency range. A file named on the command line (<tt>snp2le design.s4p</tt>) i
 at start-up in place of the bundled example, which is how a tool such as setupEM hands
 over the result it just wrote, and <b>Reset</b> returns to that file. A file that cannot
 be read is reported and the example is loaded instead.
-A file whose ports do not share one real reference impedance (one per port, complex, or varying with frequency) is renormalised to 50&nbsp;ohm before the conversion, and the message line says so.</li>
+A file whose ports do not share one real reference impedance (one per port, complex, or varying with frequency) is renormalised to 50&nbsp;ohm before the conversion, and the message line says so. A Touchstone 1.1 option line with one reference resistance per port needs scikit-rf 2.2 or later and is refused on older versions, which read only its first value.</li>
 <li><b>Mode</b>:
   <ul>
   <li><b>Universal</b> (any N-port): vector-fits the S-parameters into a passive
