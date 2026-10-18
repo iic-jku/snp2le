@@ -50,6 +50,7 @@ does not match the loaded file are greyed out:
   symmetric where the data is. <b>Inductor (center tap)</b> couples its two half coils with
   k and finds the center tap itself (the port in the middle of the coil), the Conversion
   panel names it. A fit takes a few seconds (about 6&nbsp;s for the bundled center tap).
+  An element the data does not determine is named in the message line with a factor: the fit can move it by that much or more while its RMS error grows by 0.5&nbsp;% or less, the others re-fitted. Typically that is a skin section whose corner lies above the fit band, and <b>Basic model</b> leaves the second section out.
   Keep the low-frequency data in the fit range: it pins down the DC resistance and
   inductance.</li>
 <li><b>f<sub>ext</sub></b> (structure mode): the single frequency at which the lumped
@@ -101,7 +102,9 @@ term, cannot be corrected at any ceiling. <tt>tline_100um_ihp-sg13g2.s2p</tt> at
 has its constant term at 5.24. A file that carries a 0 Hz point, as this one does, then
 also gets a refit that includes it, which scikit-rf meets through the constant term, and
 it is kept if it passes and fits closer than a lower-order refit (the line comes out passive
-at model order 9 that way). The refit needs a fit range that starts at the file's first
+at model order 9 that way).
+That outcome is fragile: a random change of 1e-12 in the file's S values made the refit miss in 1 to 6 of 8 tries, and the line then reads <i>near-passive</i> at 5.24, while order 6 gave the same result every time.
+The refit needs a fit range that starts at the file's first
 sample above 0&nbsp;Hz. With <b>Thermal noise</b> ticked, a strictly passive candidate wins
 over one that only meets a raised ceiling, since only it can carry the noise. When nothing
 reaches the ceiling, the accurate fit is kept rather than a wrecked one and the result

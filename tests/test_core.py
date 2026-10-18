@@ -1226,6 +1226,31 @@ def test_cli_quiet_names_each_file_before_its_tables(tmp_path, capsys, monkeypat
     assert capsys.readouterr().out.splitlines()[0].strip() == "element values:"
 
 
+def test_a_file_that_breaks_the_engine_does_not_end_the_batch(tmp_path, capsys, monkeypatch):
+    """An exception out of engine.convert ended the CLI with a traceback, and the files after
+    it were never converted (the NaN row the port-reference fix first did not handle)."""
+    from snp2le import cli
+    monkeypatch.chdir(tmp_path)
+    real = engine.convert
+
+    def convert(state, net, progress=None):
+        if net.nports == 4:
+            progress(0.4, "fitting")                  # a live progress bar, then the failure
+            raise ValueError("Array must not contain infs or NaNs")
+        return real(state, net, progress)
+
+    monkeypatch.setattr(engine, "convert", convert)
+    stale = tmp_path / "blc_ihp-sg13g2.spice"
+    stale.write_text("left by an earlier run\n")
+    srcs = [_example_path("blc_ihp-sg13g2.s4p"), _example_path("bpf_ihp-sg13g2.s2p")]
+    assert cli.main(["convert", *srcs, "--order", "6", "--progress"]) == 1
+    err = capsys.readouterr().err
+    assert f"[FAIL] {srcs[0]}: Array must not contain infs or NaNs" in err
+    assert "fitting[FAIL]" not in err                 # printed after the bar cleared its line
+    assert "Traceback" not in err
+    assert not stale.exists() and (tmp_path / "bpf_ihp-sg13g2.spice").exists()
+
+
 def test_cli_input_and_output_mistakes_get_one_clear_message(tmp_path, capsys):
     from snp2le import cli
     rc = cli.main(["convert", str(tmp_path / "nothing*.s2p"), "--quiet"])

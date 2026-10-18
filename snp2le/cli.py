@@ -628,11 +628,20 @@ def cmd_convert(args):
             f_min=args.fmin, f_max=args.fmax)
         bar = _progress_for(args, os.path.basename(src))
         t_start = time.monotonic()
+        crash = None
         try:
             res = engine.convert(state, net, progress=bar)
+        except Exception as exc:                          # noqa: BLE001
+            # one file that breaks the engine must not end the batch for the files after it
+            crash = engine.error_text(exc)
         finally:
             if bar is not None:
                 bar.close()
+        if crash is not None:                             # after the bar has cleared its line
+            print(f"[FAIL] {src}: {crash}", file=sys.stderr)
+            _remove_stale(outs, written)
+            rc = 1
+            continue
         elapsed = time.monotonic() - t_start
         if not res.ok:
             print(f"[FAIL] {src}: {res.error}", file=sys.stderr)
