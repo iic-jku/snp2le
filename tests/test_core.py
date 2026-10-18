@@ -644,16 +644,38 @@ def test_complex_and_frequency_dependent_references_are_renormalised():
     truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
     for z0, what in ((50 + 10j, "complex port references"),
                      (np.linspace(40, 60, len(truth.f))[:, None] * np.ones(2),
-                      "port references that vary with frequency")):
+                      "port references that vary with frequency"),
+                     (np.array([50.0, 50.04]), "port references 50 ohm, 50.04 ohm")):
         out, notes = io.uniform_reference(_referred(truth, z0))
         assert notes == [f"{what} renormalised to 50 ohm"]
         assert np.all(out.z0 == 50) and np.allclose(out.s, truth.s, rtol=0, atol=1e-10)
 
 
+def test_a_row_without_finite_data_is_kept_and_the_rest_renormalised():
+    """renormalize rejects NaN, so a mixed-reference file with a solver's NaN at 0 Hz stopped
+    the conversion with an exception, and the CLI with it."""
+    truth = _example("tline_100um_ihp-sg13g2.s2p")
+    plain = truth.copy()
+    plain.s[0] = np.nan
+    mixed = _referred(truth, np.array([50.0, 75.0]))
+    mixed.s[0] = np.nan
+    out, _ = io.uniform_reference(mixed)
+    assert np.isnan(out.s[0]).all() and np.all(out.z0 == 50)
+    assert np.allclose(out.s[1:], truth.s[1:], rtol=0, atol=1e-10)
+    a, b = engine.convert(ConverterState(), plain), engine.convert(ConverterState(), mixed)
+    assert a.ok and b.ok, b.error
+    assert np.isclose(b.rms_error, a.rms_error, rtol=1e-6)
+
+
+def test_load_touchstone_still_takes_a_file_object():
+    with open(_example_path("bpf_ihp-sg13g2.s2p")) as fh:
+        assert io.load_touchstone(fh).nports == 2
+
+
 def test_an_hfss_export_with_imaginary_port_impedances_gives_a_finite_netlist(tmp_path):
     """An HFSS export that is not renormalised carries each port's impedance per frequency,
     imaginary below cutoff.  Port 1's real part, 0 ohm, became both port resistors and put
-    inf and nan into a netlist the conversion reported as fitted."""
+    inf and nan into a netlist the conversion returned as ok."""
     import re
     truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
     net = truth[np.arange(len(truth.f)) % 10 == 0]
@@ -714,6 +736,9 @@ def test_a_per_port_option_line_read_as_one_reference_is_refused(tmp_path):
         io._check_option_references(path, truth)          # truth has 50 ohm on both ports
     with pytest.raises(ValueError, match="2 reference resistances .* for 3 ports"):
         io._check_option_references(path, _example("wpd_ihp-sg13g2.s3p"))
+    one = skrf.Network(frequency=truth.frequency, s=truth.s[:, :1, :1], z0=50)
+    with pytest.raises(ValueError, match="for 1 port$"):
+        io._check_option_references(path, one)
     io._check_option_references(_touchstone_11(tmp_path, (50, 50), "same.s2p")[0], truth)
     io._check_option_references(_example_path("bpf_ihp-sg13g2.s2p"), truth)
 

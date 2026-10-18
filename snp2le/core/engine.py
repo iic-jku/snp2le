@@ -129,7 +129,12 @@ def _convert(state, net, progress=None) -> Results:
 
     from . import io as _io
     track.enter("prepare")
-    loaded, ref_notes = _io.uniform_reference(net)
+    try:
+        loaded, ref_notes = _io.uniform_reference(net)
+    except (TypeError, ValueError) as exc:     # numpy's LinAlgError is a ValueError
+        res.ok = False
+        res.error = error_text(exc)
+        return res
     net = _io.without_dc(loaded)         # a 0 Hz sample breaks the extraction math
     n_file = len(net.f)
     f_file_lo = float(net.f[0]) if n_file else 0.0

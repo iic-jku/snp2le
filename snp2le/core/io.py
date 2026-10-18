@@ -7,6 +7,7 @@ summary, so the file format details stay in one place.  No Qt imports.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+import os
 import numpy as np
 import skrf
 
@@ -34,8 +35,14 @@ class NetworkInfo:
 def load_touchstone(path: str) -> skrf.Network:
     """Load any .sNp file. Raises on failure so the GUI can show a message."""
     net = skrf.Network(path)
-    _check_option_references(path, net)
+    if isinstance(path, (str, os.PathLike)):       # a file object is read once, by scikit-rf
+        _check_option_references(path, net)
     return net
+
+
+def _ohms(values) -> str:
+    """Resistances as ASCII text without an SI prefix, as core messages are."""
+    return ", ".join(f"{float(v):g} ohm" for v in values)
 
 
 def _option_references(path: str) -> list:
@@ -66,17 +73,14 @@ def _check_option_references(path: str, net: skrf.Network) -> None:
     refs = _option_references(path)
     if len(refs) < 2:
         return
-    from .units import format_eng
-    given = ", ".join(format_eng(r, "ohm") for r in refs)
     if len(refs) != net.nports:
-        raise ValueError(f"the option line gives {len(refs)} reference resistances ({given}) "
-                         f"for {net.nports} ports")
+        raise ValueError(f"the option line gives {len(refs)} reference resistances "
+                         f"({_ohms(refs)}) for {net.nports} port{'' if net.nports == 1 else 's'}")
     read = np.real(np.asarray(net.z0)[0])
     if not np.allclose(read, refs):
         raise ValueError(
-            f"the option line gives one reference resistance per port ({given}), which "
-            f"scikit-rf {skrf.__version__} reads as "
-            f"{', '.join(format_eng(r, 'ohm') for r in read)}. scikit-rf 2.2 and later "
+            f"the option line gives one reference resistance per port ({_ohms(refs)}), which "
+            f"scikit-rf {skrf.__version__} reads as {_ohms(read)}. scikit-rf 2.2 and later "
             "read it as written")
 
 
@@ -96,17 +100,24 @@ def uniform_reference(net):
     z0 = np.asarray(net.z0)
     if np.all(z0 == z0.flat[0]) and np.imag(z0.flat[0]) == 0:
         return net, []
-    from .units import format_eng
     if np.all(z0 == z0[0]) and not np.any(np.imag(z0)):
-        refs = ", ".join(format_eng(float(r), "ohm") for r in np.real(z0[0]))
-        what = f"port references {refs}"
+        what = f"port references {_ohms(np.real(z0[0]))}"
     elif np.all(z0 == z0[0]):
         what = "complex port references"
     else:
         what = "port references that vary with frequency"
     out = net.copy()
-    out.renormalize(REFERENCE_Z0)
-    return out, [f"{what} renormalised to {format_eng(REFERENCE_Z0, 'ohm')}"]
+    rows = np.all(np.isfinite(out.s), axis=(1, 2)) & np.all(np.isfinite(z0), axis=1)
+    if rows.all():
+        out.renormalize(REFERENCE_Z0)
+    else:      # a row without finite data, such as a solver's NaN at 0 Hz, stays as it is
+        s = out.s.copy()
+        if rows.any():
+            s[rows] = skrf.network.renormalize_s(s[rows], z0[rows], REFERENCE_Z0,
+                                                 out.s_def, out.s_def)
+        out.z0 = REFERENCE_Z0
+        out.s = s
+    return out, [f"{what} renormalised to {_ohms([REFERENCE_Z0])}"]
 
 
 def info_for(net: skrf.Network) -> NetworkInfo:
