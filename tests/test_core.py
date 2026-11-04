@@ -986,9 +986,9 @@ def test_auto_fit_starts_inside_the_requested_order():
     """The initial pole set is clamped to the cap, which is what makes the cap hold on
     scikit-rf below 1.12.  On 1.12 and later the same two numbers are what scikit-rf
     computes itself, so passing them changes nothing.  Above the default initial order
-    only the cap and the error target are passed and the adaptive growth path is untouched."""
+    only the cap, the error target and alpha are passed and the adaptive growth path is untouched."""
     from snp2le.core import universal
-    target = {"target_error": universal._AUTO_FIT_TARGET}
+    target = {"target_error": universal._AUTO_FIT_TARGET, "alpha": universal._AUTO_FIT_ALPHA}
     seen = {}
 
     class Recorder:
@@ -1058,7 +1058,8 @@ def test_a_fit_that_grows_is_rerun_without_the_error_target(monkeypatch):
     the fit handed back.  The first run names the target the check compares with, so a new
     scikit-rf default cannot split the two."""
     from snp2le.core import universal
-    first = {"target_error": universal._AUTO_FIT_TARGET}
+    alpha = {"alpha": universal._AUTO_FIT_ALPHA}
+    first = {"target_error": universal._AUTO_FIT_TARGET, **alpha}
     calls = []
     nine = np.array([-1.0, -2.0, -3.0, -1 + 1j, -1 + 2j, -1 + 3j])      # order 9
 
@@ -1078,7 +1079,7 @@ def test_a_fit_that_grows_is_rerun_without_the_error_target(monkeypatch):
 
     monkeypatch.setattr(universal, "VectorFitting", StandIn)
     for delta, cap, expected in ((0.5, 13, [{"model_order_max": 13, **first},
-                                            {"model_order_max": 13, "target_error": 0.0}]),
+                                            {"model_order_max": 13, "target_error": 0.0, **alpha}]),
                                  (1e-3, 13, [{"model_order_max": 13, **first}]),
                                  (0.5, 9, [{"model_order_max": 9, **first}])):
         calls.clear()
@@ -1091,31 +1092,36 @@ def test_a_fit_that_grows_is_rerun_without_the_error_target(monkeypatch):
 def _vector_fitting_like_pr_1465():
     """A VectorFitting whose auto_fit has the two changes of scikit-rf PR 1465 (issue 1452):
     the peak error updated every pass, so the growth loop stops once it meets target_error, and
-    the loop limited to max_iterations // iters_inter passes.  The installed one when it has
-    them, patched from its source when it has neither, a skip for any other loop."""
+    the loop limited to max_iterations // iters_inter passes.  Each change the installed one
+    lacks is patched in from its source, and a loop of another shape is a skip."""
     import inspect
     import textwrap
     import pytest
     import skrf.vectorFitting as skvf
     lines = textwrap.dedent(inspect.getsource(skvf.VectorFitting.auto_fit)).splitlines()
-    if any("n_passes_max" in line for line in lines):
-        return skvf.VectorFitting
+    updated = sum(line.strip() == "error_peak = np.max(delta)" for line in lines) >= 2
+    limited = any("n_passes_max" in line for line in lines)
     peak = [i for i, line in enumerate(lines)
             if line.strip() == "error_peak_history.append(np.max(delta))"]
     loop = [i for i, line in enumerate(lines) if line.strip() == "while error_peak > target_error "
             "and model_order < model_order_max and delta_eps > alpha:"]
-    if len(peak) != 1 or len(loop) != 1:
+    if (not updated and len(peak) != 1) or (not limited and len(loop) != 1):
         pytest.skip("this scikit-rf's auto_fit has another loop")
+    if updated and limited:
+        return skvf.VectorFitting
 
     def pad(i):
         return lines[i][:len(lines[i]) - len(lines[i].lstrip())]
-    p, w = peak[0], loop[0]                       # p lies inside the loop, so patch it first
-    lines[p:p + 1] = [pad(p) + "error_peak = np.max(delta)",
-                      pad(p) + "error_peak_history.append(error_peak)"]
-    lines[w:w + 1] = [pad(w) + "n_passes = 0",
-                      pad(w) + "while (error_peak > target_error and model_order < model_order_max"
-                      " and delta_eps > alpha and n_passes < self.max_iterations // iters_inter):",
-                      pad(w) + "    n_passes += 1"]
+    if not updated:                               # inside the loop, below it, so patched first
+        p = peak[0]
+        lines[p:p + 1] = [pad(p) + "error_peak = np.max(delta)",
+                          pad(p) + "error_peak_history.append(error_peak)"]
+    if not limited:
+        w = loop[0]
+        lines[w:w + 1] = [pad(w) + "n_passes = 0",
+                          pad(w) + "while (error_peak > target_error and model_order < model_order_max"
+                          " and delta_eps > alpha and n_passes < self.max_iterations // iters_inter):",
+                          pad(w) + "    n_passes += 1"]
     scope = dict(vars(skvf))
     exec(compile("\n".join(lines), skvf.__file__, "exec"), scope)
 
@@ -1147,7 +1153,8 @@ def test_a_pass_limit_that_ends_the_growth_is_noted(monkeypatch):
     and says so only through a warning, which the muted streams swallow.  The BPF at cap 40
     grows over 4 passes and stops on the stall test.  A limit of 2 passes (max_iterations 6)
     cuts it short below the cap, which gets a note, while the default limit of 33 and scikit-rf
-    as installed end it on the stall test, without one."""
+    as installed end it on the stall test, without one.  At cap 13 the loop ends at the cap after
+    2 passes, which the stall test alone would not end, and that gets no note either."""
     from snp2le.core import universal
     net = io.without_dc(_example("bpf_ihp-sg13g2.s2p"))
     like_pr = _vector_fitting_like_pr_1465()
@@ -1163,12 +1170,13 @@ def test_a_pass_limit_that_ends_the_growth_is_noted(monkeypatch):
         monkeypatch.setattr(universal, "VectorFitting", Limited)
         notes = []
         vf = universal._auto_fit(net, 40, notes=notes)
-        assert [n.split(" and stopped")[0].split("auto_fit ")[1] for n in notes] == expected
+        assert [n.split(" and returned")[0].split("auto_fit ")[1] for n in notes] == expected
         assert "_get_delta" not in vars(vf)
     monkeypatch.undo()
-    notes = []
-    universal._auto_fit(net, 40, notes=notes)
-    assert notes == []
+    for cap in (40, 13):
+        notes = []
+        universal._auto_fit(net, cap, notes=notes)
+        assert notes == [], cap
 
 
 def test_a_failure_without_a_message_still_names_the_error(monkeypatch):
