@@ -66,7 +66,8 @@ states per port in the netlist (an N-port has N times that). A higher order trac
 resonances but enlarges the netlist. The <i>order</i> line in the Result panel reports the
 order the fit settled on and, in brackets, its pole count, where a complex-conjugate pair
 counts once.
-The fit starts at order 9, or at Max order when that is lower. When that start misses scikit-rf's error target (10<sup>-2</sup> on a weighted peak error), poles are added in complex-conjugate pairs, two orders at a time, until the next pair would pass Max order or the error stops improving, and spurious poles are removed at the end. So the order can stay below Max order, and an even Max order is usually missed by one.</li>
+The fit starts at order 9, or at Max order when that is lower. When that start misses scikit-rf's error target (10<sup>-2</sup> on a weighted peak error), poles are added in complex-conjugate pairs, two orders at a time, until the next pair would pass Max order or the error stops improving, and spurious poles are removed at the end. So the order can stay below Max order, and an even Max order is usually missed by one.
+On some EM data scikit-rf's growth loop does not settle. snp2le then stops it after 250 pole relocations and refits at the pole counts it had reached, or keeps the result of a scikit-rf whose loop has a pass limit of its own, and the message line says which.</li>
 <li><b>Enforce passivity</b> / <b>Passivity ceiling</b> (universal mode): a model is
 <i>passive</i> when the largest singular value of its S-matrix, &sigma;<sub>max</sub>,
 stays at or below 1 at every frequency, which is the same as saying it can never deliver
