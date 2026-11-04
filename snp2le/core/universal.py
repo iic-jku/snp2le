@@ -263,8 +263,13 @@ def _fit_watch(vf, report):
     stop = threading.Event()
 
     def loop():
+        done = last = 0
         while not stop.wait(_FIT_POLL_S):
             n = len(getattr(vf, "d_res_history", None) or ())
+            if n < last:                    # auto_fit was rerun, which clears the history
+                done += last
+            last = n
+            n += done
             frac = min(_FIT_MAX_REPORTED, 1.0 - math.exp(-n / _FIT_ITERS_SCALE))
             report(frac, f"vector fitting, {n} iteration{'' if n == 1 else 's'}")
 
