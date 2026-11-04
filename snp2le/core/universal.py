@@ -370,8 +370,8 @@ class _EntryCheck:
 
 
 # auto_fit's stall test, the same in scikit-rf 1.11 to 2.2 and PR 1465: the growth loop ends once
-# the mean change of the peak errors of the three evaluations before the newest is at most alpha
-# (default 0.03, which snp2le leaves alone).
+# the mean change of the peak errors of the three evaluations before the newest is at most alpha.
+# scikit-rf's default 0.03, passed explicitly so that cut_short() and auto_fit compare the same.
 _AUTO_FIT_ALPHA = 0.03
 _AUTO_FIT_STALL_SPAN = 3
 
@@ -461,7 +461,7 @@ def _auto_fit(net, max_order: int, report=null_progress, notes=None):
     """
     vf = VectorFitting(net)
     order = max(2, int(max_order))
-    kwargs = {"model_order_max": order}
+    kwargs = {"model_order_max": order, "alpha": _AUTO_FIT_ALPHA}
     if _AUTO_FIT_INIT_ORDER > order:
         kwargs.update(n_poles_init_real=order % 2, n_poles_init_cmplx=order // 2)
     limit = _RelocationLimit(vf)
@@ -490,7 +490,7 @@ def _auto_fit(net, max_order: int, report=null_progress, notes=None):
         if growth is not None and growth.cut_short(order) and notes is not None:
             final = int(np.sum((np.atleast_1d(vf.poles).imag != 0) + 1))
             notes.append(f"scikit-rf's auto_fit did not settle within its limit of "
-                         f"{len(growth.peaks) - 1} growth passes and stopped at model order {final}")
+                         f"{len(growth.peaks) - 1} growth passes and returned a model of order {final}")
     finally:
         limit.release()
         entry.release()
