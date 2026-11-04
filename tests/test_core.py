@@ -966,8 +966,9 @@ def test_auto_fit_starts_inside_the_requested_order():
     """The initial pole set is clamped to the cap, which is what makes the cap hold on
     scikit-rf below 1.12.  On 1.12 and later the same two numbers are what scikit-rf
     computes itself, so passing them changes nothing.  Above the default initial order
-    nothing is passed and the adaptive growth path is untouched."""
+    only the cap and the error target are passed and the adaptive growth path is untouched."""
     from snp2le.core import universal
+    target = {"target_error": universal._AUTO_FIT_TARGET}
     seen = {}
 
     class Recorder:
@@ -982,14 +983,14 @@ def test_auto_fit_starts_inside_the_requested_order():
     try:
         universal._auto_fit(None, 6)
         assert seen == {"model_order_max": 6, "n_poles_init_real": 0,
-                        "n_poles_init_cmplx": 3}, seen
+                        "n_poles_init_cmplx": 3, **target}, seen
         seen.clear()
         universal._auto_fit(None, 7)
         assert seen == {"model_order_max": 7, "n_poles_init_real": 1,
-                        "n_poles_init_cmplx": 3}, seen
+                        "n_poles_init_cmplx": 3, **target}, seen
         seen.clear()
         universal._auto_fit(None, 13)
-        assert seen == {"model_order_max": 13}, seen
+        assert seen == {"model_order_max": 13, **target}, seen
     finally:
         universal.VectorFitting = real
 
@@ -1028,6 +1029,80 @@ def test_the_fit_handed_back_carries_no_relocation_limit():
     from snp2le.core import universal
     fit = universal.fit_universal(io.without_dc(_example("bpf_ihp-sg13g2.s2p")), max_order=13)
     assert "_pole_relocation" not in vars(fit.vf)
+
+
+def test_a_fit_that_grows_is_rerun_without_the_error_target(monkeypatch):
+    """auto_fit decides at its first error evaluation whether to grow the model.  When it
+    will, the fit is rerun with target_error=0, so the cap decides where growth stops.  A fit
+    that meets the target at once, or starts at the cap, runs once, and no wrapper is left on
+    the fit handed back.  The first run names the target the check compares with, so a new
+    scikit-rf default cannot split the two."""
+    from snp2le.core import universal
+    first = {"target_error": universal._AUTO_FIT_TARGET}
+    calls = []
+    nine = np.array([-1.0, -2.0, -3.0, -1 + 1j, -1 + 2j, -1 + 3j])      # order 9
+
+    class StandIn:
+        delta = 0.0
+
+        def __init__(self, net):
+            pass
+
+        @staticmethod
+        def _get_delta(poles, *args):
+            return np.array([StandIn.delta])
+
+        def auto_fit(self, **kwargs):
+            calls.append(kwargs)
+            self._get_delta(nine)
+
+    monkeypatch.setattr(universal, "VectorFitting", StandIn)
+    for delta, cap, expected in ((0.5, 13, [{"model_order_max": 13, **first},
+                                            {"model_order_max": 13, "target_error": 0.0}]),
+                                 (1e-3, 13, [{"model_order_max": 13, **first}]),
+                                 (0.5, 9, [{"model_order_max": 9, **first}])):
+        calls.clear()
+        StandIn.delta = delta
+        vf = universal._auto_fit(None, cap)
+        assert calls == expected, (delta, cap, calls)
+        assert "_get_delta" not in vars(vf)
+
+
+def test_the_cap_still_bounds_a_fit_whose_growth_stops_at_the_target(monkeypatch):
+    """scikit-rf PR 1465 (issue 1452) makes auto_fit's growth loop stop once its peak error
+    meets target_error, where up to 2.2 the target is compared only on entry.  Applied to the
+    installed auto_fit, that change ends the BPF at cap 13 at order 11 with a max error of
+    6.5e-3, while the rerun with target_error=0 keeps the order 13 and the 1.1e-4 of today."""
+    import inspect
+    import textwrap
+    import pytest
+    import skrf.vectorFitting as skvf
+    from snp2le.core import universal
+    lines = textwrap.dedent(inspect.getsource(skvf.VectorFitting.auto_fit)).splitlines()
+    hit = [i for i, line in enumerate(lines)
+           if line.strip() == "error_peak_history.append(np.max(delta))"]
+    if hit:
+        pad = lines[hit[0]][:len(lines[hit[0]]) - len(lines[hit[0]].lstrip())]
+        lines[hit[0]:hit[0] + 1] = [pad + "error_peak = np.max(delta)",
+                                    pad + "error_peak_history.append(error_peak)"]
+    elif sum(line.strip() == "error_peak = np.max(delta)" for line in lines) < 2:
+        pytest.skip("this scikit-rf's auto_fit has another loop")
+    src = "\n".join(lines)
+    scope = dict(vars(skvf))
+    exec(compile(src, skvf.__file__, "exec"), scope)
+
+    class StopsAtTarget(skvf.VectorFitting):
+        auto_fit = scope["auto_fit"]
+
+    net = io.without_dc(_example("bpf_ihp-sg13g2.s2p"))
+    plain = StopsAtTarget(net)
+    plain.auto_fit(model_order_max=13)
+    assert int(np.sum((plain.poles.imag != 0) + 1)) == 11      # what the change alone gives
+    monkeypatch.setattr(universal, "VectorFitting", StopsAtTarget)
+    vf = universal._auto_fit(net, 13)
+    s = universal.model_sparams(vf, net.f)
+    assert int(np.sum((vf.poles.imag != 0) + 1)) == 13
+    assert np.max(np.abs(s - net.s)) < 2e-4
 
 
 def test_a_failure_without_a_message_still_names_the_error(monkeypatch):

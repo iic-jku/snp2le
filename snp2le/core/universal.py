@@ -263,8 +263,13 @@ def _fit_watch(vf, report):
     stop = threading.Event()
 
     def loop():
+        done = last = 0
         while not stop.wait(_FIT_POLL_S):
             n = len(getattr(vf, "d_res_history", None) or ())
+            if n < last:                    # auto_fit was rerun, which clears the history
+                done += last
+            last = n
+            n += done
             frac = min(_FIT_MAX_REPORTED, 1.0 - math.exp(-n / _FIT_ITERS_SCALE))
             report(frac, f"vector fitting, {n} iteration{'' if n == 1 else 's'}")
 
@@ -325,6 +330,45 @@ class _RelocationLimit:
             self._vf = None
 
 
+# scikit-rf's default target_error, passed explicitly so that _EntryCheck and auto_fit compare
+# the same number.  Up to 2.2 auto_fit compares it only on entry to the growth loop.  PR 1465
+# also stops the loop once it is met, which ends the BPF at cap 13 at order 11 (max error
+# 6.5e-3) instead of 13 (1.1e-4).
+_AUTO_FIT_TARGET = 1e-2
+
+
+class _GrowthLoopEntered(Exception):
+    """auto_fit's initial fit missed _AUTO_FIT_TARGET below the order cap."""
+
+
+class _EntryCheck:
+    """Raises _GrowthLoopEntered from auto_fit's first error evaluation when its growth loop is
+    about to run, so that the caller can rerun it with target_error=0: on scikit-rf up to 2.2
+    the same fit, on a loop that checks the target every pass the growth those versions had.
+    Set on the instance for that one call, like _RelocationLimit."""
+
+    def __init__(self, vf, order: int):
+        self._vf = None
+        evaluate = getattr(vf, "_get_delta", None)
+        if evaluate is None:
+            return
+
+        def checked(poles, *args, **kwargs):
+            delta = evaluate(poles, *args, **kwargs)
+            self.release()
+            below_cap = int(np.sum((np.asarray(poles).imag != 0) + 1)) < order
+            if below_cap and np.max(delta) > _AUTO_FIT_TARGET:
+                raise _GrowthLoopEntered
+            return delta
+        vf._get_delta = checked
+        self._vf = vf
+
+    def release(self):
+        if self._vf is not None:
+            vars(self._vf).pop("_get_delta", None)
+            self._vf = None
+
+
 def _refit_stuck(net, limit, report, notes):
     """vector_fit at the pole counts auto_fit was cycling at.  On the six ORCA files that
     cycle it fits as well as the neighbouring caps that converge (max error 1.7e-3 to
@@ -362,6 +406,10 @@ def _auto_fit(net, max_order: int, report=null_progress, notes=None):
 
     A fit that is still relocating poles after _AUTO_FIT_MAX_RELOCATIONS is cycling and
     is redone with vector_fit, with a line in `notes` saying so.
+
+    A fit whose growth loop runs is redone with target_error=0 (see _EntryCheck), at the cost
+    of auto_fit's three initial relocations, so the growth stops at the cap or when the error
+    stalls, whether or not the installed scikit-rf compares its target after every pass.
     """
     vf = VectorFitting(net)
     order = max(2, int(max_order))
@@ -369,18 +417,25 @@ def _auto_fit(net, max_order: int, report=null_progress, notes=None):
     if _AUTO_FIT_INIT_ORDER > order:
         kwargs.update(n_poles_init_real=order % 2, n_poles_init_cmplx=order // 2)
     limit = _RelocationLimit(vf)
+    entry = _EntryCheck(vf, order)
     report(0.0, "vector fitting")
     try:
         with _fit_watch(vf, report):
             try:
-                vf.auto_fit(**kwargs)
+                try:
+                    vf.auto_fit(target_error=_AUTO_FIT_TARGET, **kwargs)
+                except _GrowthLoopEntered:
+                    limit.count = 0
+                    vf.auto_fit(target_error=0.0, **kwargs)
             except TypeError:                      # different scikit-rf signature
+                entry.release()
                 limit.count = 0
                 vf.auto_fit()
     except _AutoFitStuck:
         vf = _refit_stuck(net, limit, report, notes)
     finally:
         limit.release()
+        entry.release()
     report(1.0, "vector fitting done")
     return vf
 

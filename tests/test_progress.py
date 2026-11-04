@@ -183,6 +183,23 @@ def test_fit_watch_stops_with_the_fit():
                    for t in threading.enumerate())
 
 
+def test_fit_watch_counts_on_across_a_rerun():
+    """A fit whose growth loop runs is rerun (universal._EntryCheck), and auto_fit clears
+    its history when it starts again.  The reported iteration count carries on instead of
+    dropping back."""
+    seen, cb = _recorder()
+    vf = _FakeFit()
+    with _fit_watch(vf, cb):
+        for i in range(6):
+            if i == 3:
+                vf.d_res_history = []                     # the rerun starts
+            vf.d_res_history.append(1.0)
+            time.sleep(0.3)
+    counts = [int(m.split()[2]) for _, m in seen]
+    assert counts == sorted(counts), counts
+    assert counts[-1] > 3, counts                         # more than the rerun's own 3
+
+
 # ---- end to end through engine.convert -----------------------------------
 def _example(name):
     return io.load_touchstone(os.path.join(

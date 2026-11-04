@@ -65,7 +65,8 @@ counted as n<sub>real</sub> + 2 x n<sub>complex</sub>, which is the number of in
 states per port in the netlist (an N-port has N times that). A higher order tracks sharp
 resonances but enlarges the netlist. The <i>order</i> line in the Result panel reports the
 order the fit settled on and, in brackets, its pole count, where a complex-conjugate pair
-counts once.</li>
+counts once.
+The fit starts at order 9, or at Max order when that is lower. When that start misses scikit-rf's error target (10<sup>-2</sup> on a weighted peak error), poles are added until the order reaches Max order or the error stops improving, and spurious poles are removed at the end, so the order can stay below Max order.</li>
 <li><b>Enforce passivity</b> / <b>Passivity ceiling</b> (universal mode): a model is
 <i>passive</i> when the largest singular value of its S-matrix, &sigma;<sub>max</sub>,
 stays at or below 1 at every frequency, which is the same as saying it can never deliver
