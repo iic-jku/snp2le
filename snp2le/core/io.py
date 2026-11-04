@@ -8,6 +8,7 @@ summary, so the file format details stay in one place.  No Qt imports.
 from __future__ import annotations
 from dataclasses import dataclass
 import os
+import re
 import numpy as np
 import skrf
 
@@ -238,6 +239,12 @@ def restrict_band(net, f_min=None, f_max=None):
     return out, notes
 
 
+# Matched whole, since a bench's own columns can start like an S-parameter (the pair column
+# s41_31_db), and in any case, since ngspice lower-cases the wrdata header but the .sch
+# testbenches declare s11_dB.
+_SIM_COLUMN = re.compile(r"(s\d+)_(db|deg)", re.IGNORECASE)
+
+
 def load_ngspice_sim(path: str) -> dict:
     """Parse an Ngspice S-parameter table into a plain dict for the plot overlay.
 
@@ -246,9 +253,10 @@ def load_ngspice_sim(path: str) -> dict:
 
         frequency   s11_db   s21_db   ...   s11_deg   s21_deg   ...
 
-    The first three characters of a column name are the S-parameter (``s11`` ->
-    ``S11``), the ``_db`` suffix is magnitude in dB and ``_deg`` is phase in
-    degrees.  Returns ``{"f": Hz, "S11": {"db": arr, "deg": arr}, ...}``.
+    A column named ``sIJ_db`` or ``sIJ_deg``, in any case, is S-parameter
+    ``SIJ`` in dB or its phase in degrees.  Every other column is skipped, such as
+    a bench's own pair columns (``s41_31_db``).  Returns
+    ``{"f": Hz, "S11": {"db": arr, "deg": arr}, ...}``.
     """
     with open(path) as fh:
         lines = [ln for ln in fh if ln.strip()]
@@ -274,12 +282,9 @@ def load_ngspice_sim(path: str) -> dict:
     for name in header:
         if name == fname:
             continue
-        key = name[:3].upper()                    # "s11_db" -> "S11"
-        low = name.lower()                        # ngspice lower-cases the header names,
-        if low.endswith("_db"):                   # but don't rely on it (.sch says s11_dB)
-            out.setdefault(key, {})["db"] = cols[name]
-        elif low.endswith("_deg"):
-            out.setdefault(key, {})["deg"] = cols[name]
+        m = _SIM_COLUMN.fullmatch(name)
+        if m:
+            out.setdefault(m.group(1).upper(), {})[m.group(2).lower()] = cols[name]
     if len(out) < 2:
         raise ValueError("no S-parameter columns (expected names like 's11_db')")
     return out

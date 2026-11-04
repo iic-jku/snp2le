@@ -369,6 +369,51 @@ class _EntryCheck:
             self._vf = None
 
 
+# auto_fit's stall test, the same in scikit-rf 1.11 to 2.2 and PR 1465: the growth loop ends once
+# the mean change of the peak errors of the three evaluations before the newest is at most alpha
+# (default 0.03, which snp2le leaves alone).
+_AUTO_FIT_ALPHA = 0.03
+_AUTO_FIT_STALL_SPAN = 3
+
+
+class _GrowthLog:
+    """Records the model order and peak error of each error evaluation of the rerun, so that
+    cut_short() can tell a growth loop that ended on one of its own exits from one a pass limit
+    ended (scikit-rf PR 1465), which scikit-rf reports only through a warning snp2le mutes.
+    Set on the instance for that one call, like _RelocationLimit."""
+
+    def __init__(self, vf):
+        self.orders, self.peaks = [], []
+        self._vf = None
+        evaluate = getattr(vf, "_get_delta", None)
+        if evaluate is None:
+            return
+
+        def logged(poles, *args, **kwargs):
+            delta = evaluate(poles, *args, **kwargs)
+            self.orders.append(int(np.sum((np.asarray(poles).imag != 0) + 1)))
+            self.peaks.append(np.max(delta))
+            return delta
+        vf._get_delta = logged
+        self._vf = vf
+
+    def release(self):
+        if self._vf is not None:
+            vars(self._vf).pop("_get_delta", None)
+            self._vf = None
+
+    def cut_short(self, cap: int) -> bool:
+        """The loop ran and stopped with none of its own exits due: the order below the cap and
+        the stall test, replayed with auto_fit's arithmetic, not met (the rerun's target of 0
+        never is).  Up to scikit-rf 2.2 the loop has no other exit, so this is never true there."""
+        if len(self.peaks) < 2 or self.orders[-1] >= cap:
+            return False
+        span = _AUTO_FIT_STALL_SPAN
+        if len(self.peaks) <= span:
+            return True
+        return np.mean(np.abs(np.diff(self.peaks[-1 - span:-1]))) > _AUTO_FIT_ALPHA
+
+
 def _refit_stuck(net, limit, report, notes):
     """vector_fit at the pole counts auto_fit was cycling at.  On the six ORCA files that
     cycle it fits as well as the neighbouring caps that converge (max error 1.7e-3 to
@@ -410,6 +455,9 @@ def _auto_fit(net, max_order: int, report=null_progress, notes=None):
     A fit whose growth loop runs is redone with target_error=0 (see _EntryCheck), at the cost
     of auto_fit's three initial relocations, so the growth stops at the cap or when the error
     stalls, whether or not the installed scikit-rf compares its target after every pass.
+
+    A pass limit that ends the growth loop first (scikit-rf PR 1465) keeps scikit-rf's result,
+    with a line in `notes` saying so (see _GrowthLog).
     """
     vf = VectorFitting(net)
     order = max(2, int(max_order))
@@ -418,6 +466,7 @@ def _auto_fit(net, max_order: int, report=null_progress, notes=None):
         kwargs.update(n_poles_init_real=order % 2, n_poles_init_cmplx=order // 2)
     limit = _RelocationLimit(vf)
     entry = _EntryCheck(vf, order)
+    growth = None
     report(0.0, "vector fitting")
     try:
         with _fit_watch(vf, report):
@@ -426,16 +475,27 @@ def _auto_fit(net, max_order: int, report=null_progress, notes=None):
                     vf.auto_fit(target_error=_AUTO_FIT_TARGET, **kwargs)
                 except _GrowthLoopEntered:
                     limit.count = 0
+                    growth = _GrowthLog(vf)
                     vf.auto_fit(target_error=0.0, **kwargs)
             except TypeError:                      # different scikit-rf signature
                 entry.release()
+                if growth is not None:
+                    growth.release()
+                    growth = None
                 limit.count = 0
                 vf.auto_fit()
     except _AutoFitStuck:
         vf = _refit_stuck(net, limit, report, notes)
+    else:
+        if growth is not None and growth.cut_short(order) and notes is not None:
+            final = int(np.sum((np.atleast_1d(vf.poles).imag != 0) + 1))
+            notes.append(f"scikit-rf's auto_fit did not settle within its limit of "
+                         f"{len(growth.peaks) - 1} growth passes and stopped at model order {final}")
     finally:
         limit.release()
         entry.release()
+        if growth is not None:
+            growth.release()
     report(1.0, "vector fitting done")
     return vf
 

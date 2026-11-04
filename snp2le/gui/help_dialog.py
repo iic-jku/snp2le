@@ -66,7 +66,8 @@ states per port in the netlist (an N-port has N times that). A higher order trac
 resonances but enlarges the netlist. The <i>order</i> line in the Result panel reports the
 order the fit settled on and, in brackets, its pole count, where a complex-conjugate pair
 counts once.
-The fit starts at order 9, or at Max order when that is lower. When that start misses scikit-rf's error target (10<sup>-2</sup> on a weighted peak error), poles are added in complex-conjugate pairs, two orders at a time, until the next pair would pass Max order or the error stops improving, and spurious poles are removed at the end. So the order can stay below Max order, and an even Max order is usually missed by one.</li>
+The fit starts at order 9, or at Max order when that is lower. When that start misses scikit-rf's error target (10<sup>-2</sup> on a weighted peak error), poles are added in complex-conjugate pairs, two orders at a time, until the next pair would pass Max order or the error stops improving, and spurious poles are removed at the end. So the order can stay below Max order, and an even Max order is usually missed by one.
+On some EM data scikit-rf's growth loop does not settle. snp2le then stops it after 250 pole relocations and refits at the pole counts it had reached, or keeps the result of a scikit-rf whose loop has a pass limit of its own, and the message line says which.</li>
 <li><b>Enforce passivity</b> / <b>Passivity ceiling</b> (universal mode): a model is
 <i>passive</i> when the largest singular value of its S-matrix, &sigma;<sub>max</sub>,
 stays at or below 1 at every frequency, which is the same as saying it can never deliver
@@ -302,7 +303,8 @@ button): with it on, click a curve to drop a labelled data-point marker (up to t
 plot), click a marker to remove it, right-click to clear all. The plots pop out into their
 own window and export to CSV. <b>Import simulation</b> loads a simulation result table by
 hand (Ngspice or VACASK, from <tt>plot_simulations/data/</tt>) and turns into <b>Clear
-simulation</b> once one is shown.</p>
+simulation</b> once one is shown.
+The overlay reads the columns named <tt>sIJ_db</tt> and <tt>sIJ_deg</tt> (any case) and skips every other column, such as a testbench's own pair columns (<tt>s41_31_db</tt>).</p>
 
 <h3>Simulating a testbench</h3>
 <p>To verify the netlist in a real simulator, export it, drop the subcircuit into an

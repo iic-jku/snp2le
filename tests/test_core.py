@@ -811,6 +811,26 @@ def test_load_ngspice_sim_mixed_case_headers():
     assert sim["S11"]["deg"][0] == 45.0
 
 
+def test_load_ngspice_sim_skips_a_benchs_own_columns():
+    """A bench can write its own columns next to the S-parameters, such as a pair imbalance
+    s41_31_db.  Keyed by their first three characters, they landed on S41 and, sitting later in
+    the header, replaced it in the overlay."""
+    import tempfile
+    text = (" frequency  s31_db  s41_db  s31_deg  s41_deg  s41_31_db  s41_31_deg  gain \n"
+            " 1.0e9  -3.0  -3.2  -90.0  -180.0  -0.2  -90.0  7.0 \n"
+            " 2.0e9  -3.1  -3.3  -91.0  -181.0  -0.2  -90.0  7.0 \n")
+    fd, path = tempfile.mkstemp(suffix=".txt")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(text)
+        sim = io.load_ngspice_sim(path)
+    finally:
+        os.unlink(path)
+    assert sorted(k for k in sim if k != "f") == ["S31", "S41"]
+    assert list(sim["S41"]["db"]) == [-3.2, -3.3]
+    assert list(sim["S41"]["deg"]) == [-180.0, -181.0]
+
+
 # ------------------------------------------------------------- passivity bound
 def test_passivity_ceiling_is_clamped_and_applies_only_when_enforcing():
     """An out-of-range number clamps to the limit it overshot, so the GUI can show the
@@ -1068,32 +1088,49 @@ def test_a_fit_that_grows_is_rerun_without_the_error_target(monkeypatch):
         assert "_get_delta" not in vars(vf)
 
 
+def _vector_fitting_like_pr_1465():
+    """A VectorFitting whose auto_fit has the two changes of scikit-rf PR 1465 (issue 1452):
+    the peak error updated every pass, so the growth loop stops once it meets target_error, and
+    the loop limited to max_iterations // iters_inter passes.  The installed one when it has
+    them, patched from its source when it has neither, a skip for any other loop."""
+    import inspect
+    import textwrap
+    import pytest
+    import skrf.vectorFitting as skvf
+    lines = textwrap.dedent(inspect.getsource(skvf.VectorFitting.auto_fit)).splitlines()
+    if any("n_passes_max" in line for line in lines):
+        return skvf.VectorFitting
+    peak = [i for i, line in enumerate(lines)
+            if line.strip() == "error_peak_history.append(np.max(delta))"]
+    loop = [i for i, line in enumerate(lines) if line.strip() == "while error_peak > target_error "
+            "and model_order < model_order_max and delta_eps > alpha:"]
+    if len(peak) != 1 or len(loop) != 1:
+        pytest.skip("this scikit-rf's auto_fit has another loop")
+
+    def pad(i):
+        return lines[i][:len(lines[i]) - len(lines[i].lstrip())]
+    p, w = peak[0], loop[0]                       # p lies inside the loop, so patch it first
+    lines[p:p + 1] = [pad(p) + "error_peak = np.max(delta)",
+                      pad(p) + "error_peak_history.append(error_peak)"]
+    lines[w:w + 1] = [pad(w) + "n_passes = 0",
+                      pad(w) + "while (error_peak > target_error and model_order < model_order_max"
+                      " and delta_eps > alpha and n_passes < self.max_iterations // iters_inter):",
+                      pad(w) + "    n_passes += 1"]
+    scope = dict(vars(skvf))
+    exec(compile("\n".join(lines), skvf.__file__, "exec"), scope)
+
+    class LikePR1465(skvf.VectorFitting):
+        auto_fit = scope["auto_fit"]
+    return LikePR1465
+
+
 def test_the_cap_still_bounds_a_fit_whose_growth_stops_at_the_target(monkeypatch):
     """scikit-rf PR 1465 (issue 1452) makes auto_fit's growth loop stop once its peak error
     meets target_error, where up to 2.2 the target is compared only on entry.  Applied to the
     installed auto_fit, that change ends the BPF at cap 13 at order 11 with a max error of
     6.5e-3, while the rerun with target_error=0 keeps the order 13 and the 1.1e-4 of today."""
-    import inspect
-    import textwrap
-    import pytest
-    import skrf.vectorFitting as skvf
     from snp2le.core import universal
-    lines = textwrap.dedent(inspect.getsource(skvf.VectorFitting.auto_fit)).splitlines()
-    hit = [i for i, line in enumerate(lines)
-           if line.strip() == "error_peak_history.append(np.max(delta))"]
-    if hit:
-        pad = lines[hit[0]][:len(lines[hit[0]]) - len(lines[hit[0]].lstrip())]
-        lines[hit[0]:hit[0] + 1] = [pad + "error_peak = np.max(delta)",
-                                    pad + "error_peak_history.append(error_peak)"]
-    elif sum(line.strip() == "error_peak = np.max(delta)" for line in lines) < 2:
-        pytest.skip("this scikit-rf's auto_fit has another loop")
-    src = "\n".join(lines)
-    scope = dict(vars(skvf))
-    exec(compile(src, skvf.__file__, "exec"), scope)
-
-    class StopsAtTarget(skvf.VectorFitting):
-        auto_fit = scope["auto_fit"]
-
+    StopsAtTarget = _vector_fitting_like_pr_1465()
     net = io.without_dc(_example("bpf_ihp-sg13g2.s2p"))
     plain = StopsAtTarget(net)
     plain.auto_fit(model_order_max=13)
@@ -1103,6 +1140,35 @@ def test_the_cap_still_bounds_a_fit_whose_growth_stops_at_the_target(monkeypatch
     s = universal.model_sparams(vf, net.f)
     assert int(np.sum((vf.poles.imag != 0) + 1)) == 13
     assert np.max(np.abs(s - net.s)) < 2e-4
+
+
+def test_a_pass_limit_that_ends_the_growth_is_noted(monkeypatch):
+    """scikit-rf PR 1465 ends auto_fit's growth loop after max_iterations // iters_inter passes
+    and says so only through a warning, which the muted streams swallow.  The BPF at cap 40
+    grows over 4 passes and stops on the stall test.  A limit of 2 passes (max_iterations 6)
+    cuts it short below the cap, which gets a note, while the default limit of 33 and scikit-rf
+    as installed end it on the stall test, without one."""
+    from snp2le.core import universal
+    net = io.without_dc(_example("bpf_ihp-sg13g2.s2p"))
+    like_pr = _vector_fitting_like_pr_1465()
+    for max_iterations, expected in ((6, ["did not settle within its limit of 2 growth passes"]),
+                                     (100, [])):
+        class Limited(like_pr):
+            passes = max_iterations
+
+            def __init__(self, network):
+                super().__init__(network)
+                self.max_iterations = type(self).passes
+
+        monkeypatch.setattr(universal, "VectorFitting", Limited)
+        notes = []
+        vf = universal._auto_fit(net, 40, notes=notes)
+        assert [n.split(" and stopped")[0].split("auto_fit ")[1] for n in notes] == expected
+        assert "_get_delta" not in vars(vf)
+    monkeypatch.undo()
+    notes = []
+    universal._auto_fit(net, 40, notes=notes)
+    assert notes == []
 
 
 def test_a_failure_without_a_message_still_names_the_error(monkeypatch):
