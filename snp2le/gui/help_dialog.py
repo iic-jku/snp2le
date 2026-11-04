@@ -303,7 +303,8 @@ button): with it on, click a curve to drop a labelled data-point marker (up to t
 plot), click a marker to remove it, right-click to clear all. The plots pop out into their
 own window and export to CSV. <b>Import simulation</b> loads a simulation result table by
 hand (Ngspice or VACASK, from <tt>plot_simulations/data/</tt>) and turns into <b>Clear
-simulation</b> once one is shown.</p>
+simulation</b> once one is shown.
+The overlay reads the columns named <tt>sIJ_db</tt> and <tt>sIJ_deg</tt> (any case) and skips every other column, such as a testbench's own pair columns (<tt>s41_31_db</tt>).</p>
 
 <h3>Simulating a testbench</h3>
 <p>To verify the netlist in a real simulator, export it, drop the subcircuit into an

@@ -811,6 +811,26 @@ def test_load_ngspice_sim_mixed_case_headers():
     assert sim["S11"]["deg"][0] == 45.0
 
 
+def test_load_ngspice_sim_skips_a_benchs_own_columns():
+    """A bench can write its own columns next to the S-parameters, such as a pair imbalance
+    s41_31_db.  Keyed by their first three characters, they landed on S41 and, sitting later in
+    the header, replaced it in the overlay."""
+    import tempfile
+    text = (" frequency  s31_db  s41_db  s31_deg  s41_deg  s41_31_db  s41_31_deg  gain \n"
+            " 1.0e9  -3.0  -3.2  -90.0  -180.0  -0.2  -90.0  7.0 \n"
+            " 2.0e9  -3.1  -3.3  -91.0  -181.0  -0.2  -90.0  7.0 \n")
+    fd, path = tempfile.mkstemp(suffix=".txt")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(text)
+        sim = io.load_ngspice_sim(path)
+    finally:
+        os.unlink(path)
+    assert sorted(k for k in sim if k != "f") == ["S31", "S41"]
+    assert list(sim["S41"]["db"]) == [-3.2, -3.3]
+    assert list(sim["S41"]["deg"]) == [-180.0, -181.0]
+
+
 # ------------------------------------------------------------- passivity bound
 def test_passivity_ceiling_is_clamped_and_applies_only_when_enforcing():
     """An out-of-range number clamps to the limit it overshot, so the GUI can show the

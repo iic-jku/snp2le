@@ -326,7 +326,7 @@ A conversion runs its linear algebra on one thread of the BLAS library (through 
 Drop the exported subcircuit into an Xschem testbench, then run it from the GUI:
 
 1. **Load .sch.** Pick the testbench. The **Simulator** auto-selects from the file name (a name containing `vacask` selects VACASK, any other name selects Ngspice) and can be overridden.
-2. **Run Simulation.** Both simulators netlist and simulate through Xschem and write their result table to `plot_simulations/data/`, which is imported and overlaid on the plots automatically. The button turns green on success or red on failure. On failure the dialog shows the simulator log.
+2. **Run Simulation.** Both simulators netlist and simulate through Xschem and write their result table to `plot_simulations/data/`, which is imported and overlaid on the plots automatically. The overlay reads the columns named `sIJ_db` and `sIJ_deg` (any case) and skips every other column, such as a testbench's own pair columns (`s41_31_db`). The button turns green on success or red on failure. On failure the dialog shows the simulator log.
 3. **Show output.** Tick it to show the simulator's console and plot windows. Leave it unticked to run quietly. The result is imported either way.
 
 > [!NOTE]
