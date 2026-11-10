@@ -28,8 +28,10 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Operating System :: OS Independent",
 ]
+# The PySide6 6.12.0 Linux wheels drop references to None, which aborts Python 3.10 and 3.11 (PYSIDE-3474, fixed for 6.12.1).
 dependencies = [
-    "PySide6-Essentials>=6.6",
+    "PySide6-Essentials>=6.6,<6.12; sys_platform == 'linux' and python_version < '3.12'",
+    "PySide6-Essentials>=6.6; sys_platform != 'linux' or python_version >= '3.12'",
     "scikit-rf>=1.12",
     "numpy>=1.24",
     "scipy>=1.10",
