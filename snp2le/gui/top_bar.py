@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """top_bar.py - control strip.
 
-Dark title bar: snp2le logo + title, then (right) the two-segment View switch
+Dark title bar: title + version, then (right) the two-segment View switch
 (Design & Schematic | Plot) + Help.
 Light controls row: Load .sNp, Mode (Universal / Structure), Structure, Max
 order, Enforce passivity, Passivity ceiling, Thermal noise, Fit range (GHz).  Structures that
@@ -113,15 +113,14 @@ class TopBar(QtWidgets.QWidget):
 
     # ---- title bar -------------------------------------------------------
     def _build_titlebar(self):
-        from .logo import logo_pixmap
+        # No logo here: the window manager already draws the window icon in its title bar
+        # right above. Same side margins as the control strip, so the title lines up with Load.
         bar = QtWidgets.QWidget(); bar.setObjectName("titlebar"); bar.setFixedHeight(34)
-        lay = QtWidgets.QHBoxLayout(bar); lay.setContentsMargins(12, 0, 12, 0)
-        logo = QtWidgets.QLabel(); logo.setPixmap(logo_pixmap(26))
-        logo.setFixedWidth(32); logo.setAlignment(QtCore.Qt.AlignVCenter)
-        title = QtWidgets.QLabel("S-Parameter to Lumped-Element Netlist Converter")
-        title.setObjectName("title")
+        lay = QtWidgets.QHBoxLayout(bar); lay.setContentsMargins(16, 0, 16, 0)
+        self.title = QtWidgets.QLabel("S-Parameter to Lumped-Element Netlist Converter")
+        self.title.setObjectName("title")
         ver = QtWidgets.QLabel(f"v{__version__}"); ver.setObjectName("version")
-        lay.addWidget(logo); lay.addWidget(title); lay.addWidget(ver); lay.addStretch(1)
+        lay.addWidget(self.title); lay.addWidget(ver); lay.addStretch(1)
         vlab = QtWidgets.QLabel("View"); vlab.setObjectName("viewLabel")
         # Both views on screen at once, so the plots are visible as a destination
         # before anything is clicked.  As a drop-down they were one more white
