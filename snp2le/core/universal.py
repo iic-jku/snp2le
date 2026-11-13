@@ -551,8 +551,8 @@ def _enforce_passivity_path(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT,
     2. The convex refit at the fit's own poles (passive_refit.py), while the realisation has
        at most `convex_max_states` states: the most accurate model with those poles whose
        sigma_max stays at or below the ceiling, D included.  It is a candidate like the
-       others below, which all still run as they did without it, so a file the old ladder
-       made passive ends at the same or a smaller error.
+       others below, which all still run as they did without it, so the result never ranks
+       below the old ladder's: strictly passive first with `prefer_strict`, then by error.
     3. Enforce from a *pristine copy* of the fit at an escalating sample count
        (this catches narrow violation bands, and replaces scraping scikit-rf's
        warning text, which is brittle).  Each attempt starts from the clean fit
