@@ -14,7 +14,8 @@ enforced down to the passivity ceiling rather than only to 1 (see PASSIVITY_CEIL
 The passivity-enforcement strategy in `_enforce_passivity` (escalate the sample
 count, then fall back to a lower model order) was inspired by the COBRA project's
 vector-fitting wrapper: https://github.com/DI-PASSIONATE/COBRA
-(src/cobra/spice_sim/vector_fit.py).
+(src/cobra/spice_sim/vector_fit.py).  Ahead of it runs the convex passive refit of
+passive_refit.py, which solves for the residues and the constant term together.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -28,6 +29,7 @@ import numpy as np
 from skrf.vectorFitting import VectorFitting
 
 from .ir import CircuitIR
+from .state import ConverterState
 from .progress import null_progress
 from .process_state import ProcessSetting
 from . import netlist as _nl
@@ -44,7 +46,7 @@ class FitResult:
     sigma_max: float = float("nan")     # largest singular value of the model S-matrix
     sigma_max_freq: float = float("nan")   # where that peak sits [Hz]
     passivity_ceiling: float = 1.0      # sigma_max the fit was judged against
-    # how the model came out of passivity enforcement: off, not needed, perturbed,
+    # how the model came out of passivity enforcement: off, not needed, convex, perturbed,
     # reduced order, dc refit or near-passive (enforcement ran and the free fit was kept)
     passivity_path: str = "off"
     rms_error: float = float("nan")     # fraction (0..1) over all Sij
@@ -69,6 +71,14 @@ _USABLE_RMS = 0.1
 PASSIVITY_CEILING_MIN = 1.0
 PASSIVITY_CEILING_DEFAULT = 1.0
 PASSIVITY_CEILING_MAX = 1.2
+
+# The convex passive refit (passive_refit.py) runs while the realisation has at most this many
+# states, ports x model order.  Its cost grows steeply with them: on one core of an AMD Ryzen 9
+# 3950X 72 states took 6.4 s and 0.7 GB, 88 states 12.5 s and 1.3 GB, 104 states 26 s and 2.2 GB.
+CONVEX_MAX_STATES_DEFAULT = ConverterState.convex_max_states
+# It aims this far below the ceiling, so the solver's residual cannot leave the model above
+# it, and a model refitted at the strict ceiling stays strictly passive for the noise generator.
+_CONVEX_MARGIN = 1e-4
 
 # sigma_max grid: log-spaced points over the model's whole frequency range, plus this
 # many extra points inside each violation band scikit-rf reports (the peaks sit there).
@@ -127,7 +137,8 @@ def effective_ceiling(enforce_passivity: bool,
 
 def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
                   passivity_ceiling: float = PASSIVITY_CEILING_DEFAULT,
-                  progress=None, dc_net=None, prefer_strict: bool = False) -> FitResult:
+                  progress=None, dc_net=None, prefer_strict: bool = False,
+                  convex_max_states: int = CONVEX_MAX_STATES_DEFAULT) -> FitResult:
     """Vector-fit `net` and synthesise a lumped-element SPICE subcircuit.
 
     `passivity_ceiling` is the sigma_max the enforcement brings the model down to.  It
@@ -137,7 +148,8 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
     `dc_net` is the fitted band with the file's 0 Hz point still in it, when the file has
     one.  Passivity enforcement tries a refit of it when residue perturbation cannot reach
     the ceiling, see `_enforce_passivity_path`.  `prefer_strict` is set when thermal noise
-    is asked for, see there too.
+    is asked for, see there too.  `convex_max_states` bounds the convex refit enforcement
+    tries first, 0 turns it off.
 
     `progress` is an optional `cb(fraction, message)` covering this call alone, from 0
     (nothing fitted) to 1 (subcircuit parsed and scored)."""
@@ -157,7 +169,8 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
         if enforce_passivity:
             vf, msgs, attempted, res.passivity_path = _enforce_passivity_path(
                 vf, net, ceiling, _span(report, end_fit, _END_PASSIVITY), dc_net=dc_net,
-                max_order=max_order, prefer_strict=prefer_strict)
+                max_order=max_order, prefer_strict=prefer_strict,
+                convex_max_states=convex_max_states)
             res.messages.extend(msgs)
         report(_END_PASSIVITY, "measuring the passivity margin")
         res.sigma_max, res.sigma_max_freq = max_singular_value(vf)
@@ -530,16 +543,21 @@ def _enforce_passivity(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT,
 
 def _enforce_passivity_path(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT,
                             report=null_progress, dc_net=None, max_order=None,
-                            prefer_strict=False):
+                            prefer_strict=False, convex_max_states=CONVEX_MAX_STATES_DEFAULT):
     """Bring the model's sigma_max down to `ceiling`, escalating effort only as needed,
     never shipping a worse model than the original fit.
 
     1. If it already sits below the ceiling, do nothing.
-    2. Enforce from a *pristine copy* of the fit at an escalating sample count
+    2. The convex refit at the fit's own poles (passive_refit.py), while the realisation has
+       at most `convex_max_states` states: the most accurate model with those poles whose
+       sigma_max stays at or below the ceiling, D included.  It is a candidate like the
+       others below, which all still run as they did without it, so the result never ranks
+       below the old ladder's: strictly passive first with `prefer_strict`, then by error.
+    3. Enforce from a *pristine copy* of the fit at an escalating sample count
        (this catches narrow violation bands, and replaces scraping scikit-rf's
        warning text, which is brittle).  Each attempt starts from the clean fit
        so perturbations do not compound.
-    3. Last resorts: one lower-order refit (a smaller model is often easier to
+    4. Last resorts: one lower-order refit (a smaller model is often easier to
        make passive, at some accuracy cost), and with `dc_net`, the band including the
        file's 0 Hz point, a refit at `max_order` that includes it.  scikit-rf meets that
        point through the constant term, so the refit lands on other poles and residues and
@@ -563,7 +581,7 @@ def _enforce_passivity_path(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT,
     "nothing needed doing" is the answer to "why did my ceiling of 1.20 leave the model
     at 1.019", and the near-passive case must not borrow that wording: there the ceiling
     was missed, not unneeded.  `path` names the branch that produced the model: not needed,
-    perturbed, reduced order, dc refit or near-passive.
+    convex, perturbed, reduced order, dc refit or near-passive.
     """
     import copy
     msgs = []
@@ -576,20 +594,30 @@ def _enforce_passivity_path(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT,
     at = "" if ceiling <= PASSIVITY_CEILING_MIN else f" at {ceiling:.2f}"
 
     def keep_if_good(cand, how, path, notes=()):
+        """Rank `cand` among the candidates.  True if it is usable, whether or not it beat
+        an earlier one, so a usable perturbation ends the ladder as it always did."""
         if not _meets_ceiling(cand, None, ceiling):
             return False
         r = _rms_error(cand, net)
         rank = (bool(prefer_strict and not _is_passive(cand)), r)
-        if r < _USABLE_RMS and (best[0] is None or rank < best[0][0]):
+        if r >= _USABLE_RMS:
+            return False
+        if best[0] is None or rank < best[0][0]:
             best[0] = (rank, cand, how, path, list(notes))
-            return True
-        return False
+        return True
 
     def kept():
         (_, r), cand, how, path, notes = best[0]
         msgs.extend(notes)
         msgs.append(f"passivity enforced{at} ({how}, rms={r:.2e})")
         return cand, msgs, True, path
+
+    if convex_max_states:
+        cand, note = _convex_candidate(vf, net, ceiling, convex_max_states, report)
+        if cand is not None:
+            keep_if_good(cand, "convex refit", "convex")
+        if note:
+            msgs.append(note)
 
     # escalate the sample count, enforcing from the clean fit each time
     for i, n_samples in enumerate(_PASSIVITY_N_SAMPLES):
@@ -633,7 +661,7 @@ def _enforce_passivity_path(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT,
                                                       (n + 0.8) / (n + 1)), notes)
             cand, _, _, how = _enforce_passivity_path(
                 cand, dc_net, ceiling, _span(report, (n + 0.8) / (n + 1), (n + 0.95) / (n + 1)),
-                prefer_strict=prefer_strict)
+                prefer_strict=prefer_strict, convex_max_states=convex_max_states)
         except Exception:                          # noqa: BLE001
             cand = None
         if cand is not None:
@@ -644,6 +672,27 @@ def _enforce_passivity_path(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT,
 
     msgs.append("passivity enforced (near-passive)")
     return vf, msgs, True, "near-passive"
+
+
+def _convex_candidate(vf, net, ceiling, max_states, report):
+    """(candidate, note): the convex refit of `vf` at its own poles, aimed _CONVEX_MARGIN below
+    `ceiling`, or None with the reason it was skipped or missed."""
+    from . import passive_refit
+    n = passive_refit.n_states(vf, int(net.nports))
+    if n > max_states:
+        return None, (f"convex passive refit skipped: {n} states (ports x model order), above "
+                      f"the limit of {max_states}")
+    report(0.0, f"convex passive refit, {n} states")
+    try:
+        cand, why = passive_refit.refit(vf, net, ceiling * (1.0 - _CONVEX_MARGIN))
+    except Exception as exc:                       # noqa: BLE001
+        cand, why = None, str(exc) or type(exc).__name__
+    if cand is None:
+        return None, f"convex passive refit failed: {why}"
+    if not _meets_ceiling(cand, None, ceiling):
+        return None, (f"convex passive refit missed the ceiling: sigma_max "
+                      f"{max_singular_value(cand)[0]:.6f}")
+    return cand, None
 
 
 def _is_passive(vf) -> bool:

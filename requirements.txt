@@ -6,6 +6,7 @@ scipy>=1.10
 matplotlib>=3.7
 schemdraw>=0.18
 threadpoolctl>=3.5   # 3.5 is the first release that finds the scipy-openblas of numpy 2 and scipy wheels
+clarabel>=0.11       # the semidefinite solver of the convex passive refit (passive_refit.py)
 
 # dev / build only (optional):
 #   pytest          run the test suite

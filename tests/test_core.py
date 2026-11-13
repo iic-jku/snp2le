@@ -1191,10 +1191,13 @@ def test_a_failure_without_a_message_still_names_the_error(monkeypatch):
 
 def test_the_result_names_how_passivity_enforcement_went():
     """Results.passivity_path says which branch produced the model, so a caller does not
-    have to read it out of the messages."""
+    have to read it out of the messages.  Without the convex refit, which the WPD and the
+    balun take by default, they show the perturbation and the near-passive fallback."""
     cases = (("bpf_ihp-sg13g2.s2p", dict(max_order=6), "not needed"),
-             ("wpd_ihp-sg13g2.s3p", dict(max_order=6), "perturbed"),
-             ("balun_ihp-sg13cmos5l.s4p", dict(max_order=6), "near-passive"),
+             ("wpd_ihp-sg13g2.s3p", dict(max_order=6), "convex"),
+             ("wpd_ihp-sg13g2.s3p", dict(max_order=6, convex_max_states=0), "perturbed"),
+             ("balun_ihp-sg13cmos5l.s4p", dict(max_order=6), "convex"),
+             ("balun_ihp-sg13cmos5l.s4p", dict(max_order=6, convex_max_states=0), "near-passive"),
              ("wpd_ihp-sg13g2.s3p", dict(max_order=6, enforce_passivity=False), "off"))
     for name, kw, path in cases:
         res = engine.convert(ConverterState(mode="universal", **kw), _example(name))
@@ -1208,7 +1211,8 @@ def test_a_constant_term_above_the_ceiling_is_named():
     """The balun at order 6 has a constant term D above 1, a violation band that runs to
     infinity and that the residue perturbation cannot move.  The message names D and the
     knob that is left.  A model that violates elsewhere (the raw WPD, at 0 Hz) gets no
-    such line, and the line never reads as an enforcement the GUI would call near-passive."""
+    such line, and the line never reads as an enforcement the GUI would call near-passive.
+    The convex refit bounds D, so the enforced case runs without it."""
     import re
 
     def d_lines(res):
@@ -1220,7 +1224,7 @@ def test_a_constant_term_above_the_ceiling_is_named():
     sigma_d = float(re.search(r"has sigma ([0-9.]+)", line).group(1))
     assert sigma_d > 1.0 and "would have to refit at a lower order" in line
     assert not any("passivity enforced" in m for m in free.messages)
-    tried = engine.convert(ConverterState(mode="universal", max_order=6),
+    tried = engine.convert(ConverterState(mode="universal", max_order=6, convex_max_states=0),
                            _example("balun_ihp-sg13cmos5l.s4p"))
     (line,) = d_lines(tried)
     assert tried.passivity_path == "near-passive" and line.endswith("try another Max order")
