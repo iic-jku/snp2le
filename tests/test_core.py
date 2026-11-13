@@ -831,6 +831,41 @@ def test_load_ngspice_sim_skips_a_benchs_own_columns():
     assert list(sim["S41"]["deg"]) == [-180.0, -181.0]
 
 
+def test_load_sim_reads_a_touchstone_file():
+    """Xyce writes S-parameters only as Touchstone, so the overlay reads .sNp too, with every
+    S_ij in dB and degrees (wrapped, the overlay unwraps it)."""
+    path = _example_path("wpd_ihp-sg13g2.s3p")
+    net = io.load_touchstone(path)
+    sim = io.load_sim(path)
+    assert sorted(k for k in sim if k != "f") == [f"S{i}{j}" for i in (1, 2, 3) for j in (1, 2, 3)]
+    assert np.array_equal(sim["f"], net.f)
+    assert np.allclose(sim["S21"]["db"], 20 * np.log10(np.abs(net.s[:, 1, 0])), rtol=0, atol=1e-12)
+    assert np.allclose(sim["S32"]["deg"], np.angle(net.s[:, 2, 1], deg=True), rtol=0, atol=1e-12)
+
+
+def test_load_sim_reads_a_mixed_reference_at_one_reference(monkeypatch):
+    """As the conversion reads its input: ports at 50 and 75 ohm come back renormalised to one
+    real reference, so the overlay compares like with like.  scikit-rf writes no file with
+    unequal references, so the network is handed in where the file would be read."""
+    net = _example("bpf_ihp-sg13g2.s2p")
+    mixed = net.copy()
+    mixed.renormalize(np.array([50.0, 75.0]))
+    monkeypatch.setattr(io, "load_touchstone", lambda path: mixed)
+    sim = io.load_sim("mixed.s2p")
+    assert not np.allclose(np.abs(mixed.s[:, 1, 0]), np.abs(net.s[:, 1, 0]), atol=1e-3)
+    assert np.allclose(sim["S21"]["db"], 20 * np.log10(np.abs(net.s[:, 1, 0])), atol=1e-9)
+
+
+def test_load_sim_reads_a_table_as_before():
+    """Anything that is not .sNp is an Ngspice-style table, read exactly as before."""
+    table = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "testbenches", "xschem", "plot_simulations", "data",
+                         "two_port_tb_acsp_ngspice.txt")
+    a, b = io.load_sim(table), io.load_ngspice_sim(table)
+    assert a.keys() == b.keys() and np.array_equal(a["f"], b["f"])
+    assert all(np.array_equal(a[k][u], b[k][u]) for k in a if k != "f" for u in a[k])
+
+
 # ------------------------------------------------------------- passivity bound
 def test_passivity_ceiling_is_clamped_and_applies_only_when_enforcing():
     """An out-of-range number clamps to the limit it overshot, so the GUI can show the
@@ -1229,12 +1264,15 @@ def test_a_constant_term_above_the_ceiling_is_named():
     assert wpd.sigma_max > 1.0 and not d_lines(wpd)
 
 
-def test_cli_picks_the_simulator_from_the_file_name():
-    """As the GUI does: a folder named vacask_runs/ must not pick VACASK for an Ngspice
-    testbench."""
-    from snp2le import cli
-    assert cli._simulator_for("tb/two_port_tb_acsp_vacask.sch") == "vacask"
-    assert cli._simulator_for("vacask_runs/two_port_tb_acsp_ngspice.sch") == "ngspice"
+def test_the_simulator_comes_from_the_file_name():
+    """One rule for the CLI and the GUI: a folder named vacask_runs/ must not pick VACASK
+    for an Ngspice testbench, and a name that names no simulator runs Ngspice."""
+    from snp2le.core import xschem
+    assert xschem.simulator_for("tb/two_port_tb_acsp_vacask.sch") == "vacask"
+    assert xschem.simulator_for("tb/two_port_tb_acsp_xyce.sch") == "xyce"
+    assert xschem.simulator_for("tb/Four_Port_TB_XYCE.sch") == "xyce"
+    assert xschem.simulator_for("vacask_runs/two_port_tb_acsp_ngspice.sch") == "ngspice"
+    assert xschem.simulator_for("xyce_runs/my_bench.sch") == "ngspice"
 
 
 def test_every_structure_has_a_solvable_dc_operating_point():

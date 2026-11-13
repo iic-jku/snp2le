@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """log_dialog.py - a non-modal window that shows (and live-tails) a simulator log.
 
-Used for VACASK's "Show output": xschem launches VACASK detached and then quits, so
-its console never reaches a terminal.  The run redirects it to a log file, which this
+Used for the "Show output" of VACASK and Xyce: xschem launches them detached and then
+quits, so their console never reaches a terminal.  The run redirects it to a log file, which this
 window displays and refreshes while the simulation runs.
 """
 from __future__ import annotations

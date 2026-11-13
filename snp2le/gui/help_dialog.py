@@ -284,7 +284,8 @@ loss) and keep their noise. In VACASK the
 subcircuit's ground is node <tt>GND</tt>: Spectre has no implicit node-0 ground the way
 SPICE does, so your testbench must declare <tt>ground&nbsp;GND</tt> (Xschem's spectre
 netlist does this automatically). A subcircuit grounded to a bare <tt>0</tt> would float
-and give a flat / wrong result. Ngspice and Xyce keep node <tt>0</tt>. The subcircuit is named
+and give a flat / wrong result. Ngspice and Xyce keep node <tt>0</tt>.
+In an Xschem testbench for Xyce, the ground symbol's node <tt>GND</tt> is ground only with <tt>.PREPROCESS&nbsp;REPLACEGROUND&nbsp;TRUE</tt>, which the bundled Xyce testbenches carry. The subcircuit is named
 after the export file, but only letters, digits and '_' are valid in a SPICE / Spectre
 subcircuit name: a file like <tt>two-port</tt> is exported as subckt <tt>two_port</tt>
 (since '-' is the minus operator), and a note window reports the actual name. Use '_'
@@ -303,21 +304,22 @@ L<sub>p</sub>/R<sub>p</sub>, Q<sub>p</sub>/Q<sub>s</sub> and k/M for the balun).
 <p>Each plot has a live x/y read-out and a <b>marker mode</b> (the crosshair toolbar
 button): with it on, click a curve to drop a labelled data-point marker (up to three per
 plot), click a marker to remove it, right-click to clear all. The plots pop out into their
-own window and export to CSV. <b>Import simulation</b> loads a simulation result table by
-hand (Ngspice or VACASK, from <tt>plot_simulations/data/</tt>) and turns into <b>Clear
+own window and export to CSV. <b>Import simulation</b> loads a simulation result by
+hand (a table from Ngspice or VACASK, or a Touchstone file from Xyce or a measurement, from <tt>plot_simulations/data/</tt>) and turns into <b>Clear
 simulation</b> once one is shown.
-The overlay reads the frequency column and the columns named <tt>sIJ_db</tt> and <tt>sIJ_deg</tt> (any case), and skips every other column, such as a testbench's own pair columns (<tt>s41_31_db</tt>).</p>
+From a table the overlay reads the frequency column and the columns named <tt>sIJ_db</tt> and <tt>sIJ_deg</tt> (any case), and skips every other column, such as a testbench's own pair columns (<tt>s41_31_db</tt>).
+A <tt>.sNp</tt> file it reads as Touchstone, at one reference impedance as the conversion reads its input.</p>
 
 <h3>Simulating a testbench</h3>
 <p>To verify the netlist in a real simulator, export it, drop the subcircuit into an
 Xschem testbench, then run it from here:</p>
 <ul>
 <li><b>Load .sch</b>: pick the Xschem testbench. The <b>Simulator</b> is auto-set from the
-file name (a name containing <i>vacask</i> selects VACASK) and can be overridden.</li>
-<li><b>Simulator</b>: <b>Ngspice</b> or <b>VACASK</b>. Both netlist&nbsp;+&nbsp;simulate
-through Xschem and write their result to the testbench's <tt>plot_simulations/data/</tt>
+file name (a name containing <i>vacask</i> selects VACASK, one containing <i>xyce</i> selects Xyce) and can be overridden.</li>
+<li><b>Simulator</b>: <b>Ngspice</b>, <b>VACASK</b> or <b>Xyce</b>. Each netlists&nbsp;+&nbsp;simulates
+through Xschem and writes its result to the testbench's <tt>plot_simulations/data/</tt>
 folder, which is imported and overlaid on the plots automatically. The location is read from the
-testbench itself (its <tt>wrdata</tt> target, or VACASK's log), so a testbench with a
+testbench itself (its <tt>wrdata</tt> target, the <tt>FILE</tt> of Xyce's <tt>.LIN</tt> line, or VACASK's log), so a testbench with a
 custom output folder imports just the same.</li>
 <li><b>Run Simulation</b>: runs the loaded testbench. The button turns green (successful)
 or red (failed). If no result appears, the dialog shows the simulator log. Loading another
@@ -328,14 +330,14 @@ band as the data the model was fitted to (the full file unless a <b>Fit range</b
 set). The design point <tt>f0</tt> stays in the testbench, and the testbench still runs
 standalone in Xschem with the last-written range.</li>
 <li><b>Show output</b>: tick to show the simulator's console and plot windows during the
-run. For Ngspice these are its own console and plot windows. VACASK is launched detached,
-so instead a live <b>VACASK output</b> window tails its captured log (banner, analysis
+run. For Ngspice these are its own console and plot windows. VACASK and Xyce are launched detached,
+so instead a live <b>VACASK output</b> or <b>Xyce output</b> window tails the captured log (banner, analysis
 progress, <i>Completed</i> / <i>Failed</i> / <i>aborted</i> messages, postprocess lines).
-Leave it unticked to run quietly. The result is imported either way, and VACASK's captured
+Leave it unticked to run quietly. The result is imported either way, and the captured
 log still appears in the dialog if a run fails or aborts.</li>
 </ul>
 
-<p><b>How a run's outcome is detected.</b> The two simulators report differently, so snp2le
+<p><b>How a run's outcome is detected.</b> The simulators report differently, so snp2le
 uses the most reliable signal for each:</p>
 <ul>
 <li><b>Ngspice</b>: a non-zero Xschem exit code, or a failure line in Xschem's output, is
@@ -358,6 +360,7 @@ rather than passing them back. So the outcome is read from the <b>result file</b
   VACASK runs detached, so snp2le watches for the result file and the abort marker and
   reports the outcome as soon as VACASK finishes. Either way, open VACASK's console or log
   for the specific cause.</li>
+<li><b>Xyce</b> runs like VACASK, detached, through Xschem's own Xyce batch entry, with its console captured to a log. It writes S-parameters only as Touchstone, so its result is <tt>plot_simulations/data/&lt;testbench&gt;.sNp</tt>, imported as soon as it appears. A run that ends without one reports <b>failed!</b>, and the dialog shows the end of Xyce's log, where Xyce names the error.</li>
 </ul>
 <p><b>VACASK and high-order universal macromodels.</b> The vector-fit realisation is
 numerically ill-conditioned at high order (its pole gains span ~1e-5 to ~1e11). Ngspice's
@@ -369,13 +372,13 @@ as they do in Ngspice. No action is needed, and structure-specific models are un
 Xyce reproduces them as Ngspice does, within 1.4e-9 in S on the bundled examples at orders 6 and 13.</p>
 
 <p>While a run is in progress the status reads <i>running...</i> (for as long as the
-simulation takes, and for a VACASK run until its result appears) and then, for Ngspice,
+simulation takes, and for a VACASK or Xyce run until its result appears) and then, for Ngspice,
 <i>importing...</i>. The <b>Run Simulation</b> button becomes a <b>Stop</b> button you can
 press to cancel. A run is not stopped for being slow. An Ngspice run without <b>Show
 output</b> is stopped when it has used no CPU for 60&nbsp;s and looks hung, or after
 30&nbsp;min on a system without <tt>/proc</tt>, such as Windows, where idle detection is
-not available. A VACASK run, which Xschem starts detached, ends as failed 1.5&nbsp;s after
-VACASK exits without a result. Every run has a 1&nbsp;h backstop.</p>
+not available. A VACASK or Xyce run, which Xschem starts detached, ends as failed 1.5&nbsp;s after
+the simulator exits without a result. Every run has a 1&nbsp;h backstop.</p>
 
 <p style="color:#7d828c"><i>Universal mode is built on scikit-rf vector fitting. The VACASK
 passive, controlled-source (vccs, cccs) and ground (<tt>GND</tt>) handling are confirmed

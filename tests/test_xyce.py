@@ -192,3 +192,41 @@ def test_xyce_noise_is_the_models(tmp_path, thermal):
             want = _K_T * _port_noise(res.ir, fi)[0][k, k].real
             assert (want > 0) == thermal
             assert got == pytest.approx(want, rel=1e-6, abs=1e-30), (k, fi)
+
+
+# --------------------------------------------------------------------------- #
+#  The bundled Xyce testbench, through xschem
+# --------------------------------------------------------------------------- #
+needs_xschem_and_xyce = pytest.mark.skipif(
+    shutil.which("xschem") is None or shutil.which("Xyce") is None,
+    reason="xschem and Xyce are not both on PATH")
+
+
+@needs_xschem_and_xyce
+def test_the_bundled_xyce_bench_runs_from_the_cli(tmp_path):
+    """The whole path in a copy of the tree: export, the synced band, xschem's Xyce entry,
+    Xschem's GND as ground, the .LIN Touchstone and its import, against the model."""
+    import time
+    import skrf
+    from snp2le import cli
+    repo = os.path.dirname(os.path.dirname(_EXAMPLES))
+    for sub in ("testbenches/xschem", "schematic/xschem"):
+        shutil.copytree(os.path.join(repo, *sub.split("/")), tmp_path / sub)
+    out = tmp_path / "netlist" / "xyce" / "two_port.cir"
+    out.parent.mkdir(parents=True)
+    bench = tmp_path / "testbenches" / "xschem" / "two_port_tb_acsp_xyce.sch"
+    start = time.time()
+    assert cli.main(["convert", _path("bpf_ihp-sg13g2.s2p"), "--order", "13", "--format",
+                     "xyce", "-o", str(out), "--simulate", str(bench), "--timeout", "120",
+                     "--quiet"]) == 0
+    result = bench.parent / "plot_simulations" / "data" / "two_port_tb_acsp_xyce.s2p"
+    assert os.path.getmtime(result) >= start - 1             # this run's, not the copied one
+    assert (bench.parent / "sim_range.cir").read_text(encoding="utf-8").splitlines()[1:] == [
+        ".param f_min=1.200000e+11", ".param f_max=2.000000e+11"]
+    res = _universal("bpf_ihp-sg13g2.s2p", 13)
+    x = skrf.Network(str(result))
+    f = np.asarray(res.freq)
+    idx = np.array([int(np.argmin(np.abs(x.f - fi))) for fi in f])
+    on = np.abs(x.f[idx] - f) < 1.0                         # the data points on the sweep
+    assert on.sum() == 41
+    assert np.max(np.abs(x.s[idx][on] - np.asarray(res.model_s)[on])) < 1e-6
