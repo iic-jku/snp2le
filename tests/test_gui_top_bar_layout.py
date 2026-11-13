@@ -150,3 +150,14 @@ def test_the_run_status_uses_the_caption_slot(bar):
         bar.layout().activate()
         assert _indicator_y(bar.passive, row) == _indicator_y(bar.sim_output, row)
     bar.clear_sim_status()
+
+
+def test_the_title_bar_has_no_logo(bar):
+    """The window manager draws the window icon in its own title bar right above this one,
+    so a logo here showed it twice. The title starts where Load starts in the strip below."""
+    titlebar = bar.layout().itemAt(0).widget()
+    assert all(lab.pixmap().isNull() for lab in titlebar.findChildren(QtWidgets.QLabel))
+
+    def left(w):
+        return w.mapTo(bar, QtCore.QPoint(0, 0)).x()
+    assert left(bar.title) == left(bar.load)
