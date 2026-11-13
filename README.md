@@ -82,6 +82,7 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │  │  ├─ mna.py               rebuild N-port S-parameters from an RLC IR
 │  │  ├─ netlist.py           render the IR to Ngspice, VACASK and Xyce
 │  │  ├─ noise.py             thermal-noise generator of a universal model
+│  │  ├─ passive_refit.py     convex passive refit of a vector fit
 │  │  ├─ process_state.py     process-wide settings shared by parallel conversions
 │  │  ├─ progress.py          progress reporting for long conversions
 │  │  ├─ state.py             ConverterState and Results dataclasses
@@ -111,6 +112,7 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │     └─ 📁 simulations/      generated netlists and raw output (not tracked)
 ├─ 📁 tests/                  pytest suite
 │  ├─ test_blas_threads.py    a conversion runs on one BLAS thread
+│  ├─ test_convex_passivity.py  the convex passive refit (no Qt)
 │  ├─ test_core.py
 │  ├─ test_dc_point.py        the 0 Hz point of a universal fit (no Qt)
 │  ├─ test_gui_fit_progress.py  headless non-blocking-conversion regressions
@@ -202,11 +204,11 @@ Naming a `.sNp` file on the command line opens the GUI on it instead of the exam
 
 A macromodel is **passive** when the largest singular value of its S-matrix, sigma_max, stays at or below 1 at every frequency. That is the same statement as "it can never deliver more power than it absorbs". A non-passive model is not merely inaccurate: a transient run can feed on the excess energy and grow without bound, so the simulation diverges or refuses to converge even though its AC response looked fine.
 
-Making a model passive is not free. A vector fit typically violates passivity *outside* the band it was fitted to, and pushing it back below 1 there costs accuracy inside the band. On the bundled `bpf_ihp-sg13g2.s2p` at order 13, the raw fit reaches sigma_max = 1.016 with an RMS error of 2.9e-5, and enforcing passivity takes it to 1.000 at 1.5e-3, which is 50x worse.
+Making a model passive is not free. A vector fit typically violates passivity *outside* the band it was fitted to, and pushing it back below 1 there costs accuracy inside the band. On the bundled `bpf_ihp-sg13g2.s2p` at order 13, the raw fit reaches sigma_max = 1.016 with an RMS error of 2.9e-5, and enforcing passivity takes it to 0.9999 at 3.5e-4, which is 12x worse. Perturbing the residues alone, all that enforcement did before the convex refit, gave 1.5e-3, 50x worse.
 
-The **Passivity ceiling** is how far the enforcement has to go. It is the sigma_max the perturbation works towards, so it buys accuracy back in exchange for a bounded, known violation:
+The **Passivity ceiling** is how far the enforcement has to go. It is the sigma_max the enforcement works towards, so it buys accuracy back in exchange for a bounded, known violation:
 
-- **Enforce passivity ticked** (the default): the fit is perturbed until it reaches the ceiling. At `1.00` that is strict passivity, exactly what the tool did before the field existed. Raise it to stop short.
+- **Enforce passivity ticked** (the default): the fit is brought down to the ceiling by the convex refit or by perturbation, whichever ends closer to the data (see [How enforcement works](https://github.com/iic-jku/snp2le#how-enforcement-works)). At `1.00` that is strict passivity. Raise it to stop short.
 - **Unticked**: nothing is enforced and the raw fit is exported as it is. The ceiling field greys out at `1.00`, since nothing is aiming at it, and sigma_max is still measured and reported so you can see what you are shipping.
 
 A ceiling above what the fit already measures leaves the model untouched rather than *adding* gain to reach it. On `wpd_ihp-sg13g2.s3p` at order 6, where the raw fit sits at 1.083:
@@ -214,9 +216,11 @@ A ceiling above what the fit already measures leaves the model untouched rather 
 | Target | resulting sigma_max | RMS error | vs. the raw fit |
 | --- | --- | --- | --- |
 | not enforced | 1.0826 | 8.7e-04 | the fit itself |
-| `1.00` (strict) | 0.9999 | 2.6e-03 | 2.9x worse |
-| `1.05` | 1.0499 | 1.3e-03 | 1.5x worse |
+| `1.00` (strict) | 0.9999 | 9.8e-04 | 1.1x worse |
+| `1.05` | 1.0499 | 8.9e-04 | 1.02x worse |
 | `1.15` | 1.0826 | 8.7e-04 | untouched, already below |
+
+Residue perturbation alone gave 2.6e-03 at `1.00` and 1.3e-03 at `1.05`, which is the trade the ceiling was introduced for.
 
 Reasonable ceilings:
 
@@ -232,7 +236,33 @@ Why those two limits, and what an out-of-range entry does:
 - **`1.20` is the ceiling** because past roughly 20 % of voltage gain (1.44x in power, +1.6 dB) at the worst frequency there is enough excess energy to grow a transient run without bound. It is also well clear of the bundled examples: at orders 6 and 13 their raw fits stay at or below 1.02, the WPD at order 6 reaches 1.08, and a broken fit jumps to 2.18 or 5.24.
 - **A number outside the range is replaced by the limit it overshot.** Type `9.9` and the field shows `1.20`, type `0.5` and it shows `1.00`. That is deliberate: the field teaches you the limits without anyone reading this paragraph first. Text that is not a number at all has no limit to snap to, so it falls back to `1.00`. The CLI is stricter and refuses the run outright rather than substituting, since a batch script silently getting a different ceiling than it asked for is worse than a visible error.
 
-**A ceiling is not always reachable.** The perturbation only moves the model's residues, so a violation band that runs to infinity, caused by a non-passive constant term, cannot be corrected at any ceiling. The bundled `tline_100um_ihp-sg13g2.s2p` at order 13 is one: its constant term sits at 5.24. A file that carries a 0 Hz point, as this one does, then also gets a refit that includes it, which scikit-rf meets through the constant term, so the refit lands on another model and is kept if it clears the ceiling and fits closer than a lower-order refit. The line at order 13 comes out passive that way, at model order 9 and an RMS error of 1.5e-3, with scikit-rf 1.12, 2.1.0 and 2.2.0 alike. That outcome is fragile, though: changing every S value of the file by a random 1e-12 made the refit miss in 1 to 6 of 8 tries (order 9 and 13 alike, depending on the draw and the platform's numerics), and the line then reads near-passive at 5.24. Order 6 gave the same result in all 8. Like the lower-order refit, a passing refit replaces the accurate near-passive fit even at a larger error (the 500 pH coil with a 0 Hz point added, at order 6: 7.0e-5 becomes 3.7e-2), and with **Thermal noise** ticked a strictly passive candidate wins over one that only meets a raised ceiling, since only it can carry the noise. The refit needs a fit range that starts at the file's first sample above 0 Hz. When nothing reaches the ceiling, the accurate fit is kept rather than a wrecked one, and the result reads *near-passive*. The fix is a lower **Max order**, not a higher ceiling, since order 6 brings the same file to 0.9997 by plain perturbation. Whenever the constant term D, the model's value at infinite frequency, is above the ceiling, the message line says so with its sigma, so this case cannot be mistaken for a violation inside your band.
+#### How enforcement works
+
+Enforcement tries up to four candidates and keeps the one closest to the data that meets the ceiling and stays within an RMS error of 0.1. With **Thermal noise** ticked a strictly passive candidate wins over one that only meets a raised ceiling, since only it can carry the noise.
+
+1. **The convex refit** keeps the fit's poles and solves for its residues and its constant term D together, under the condition that sigma_max stays at or below the ceiling at every frequency (the bounded-real lemma, after Coelho, Phillips and Silveira, IEEE Trans. CAD 23(2), 2004). The problem is convex, so the result is the most accurate model with those poles that meets the ceiling, and such a model always exists. It aims 1e-4 below the ceiling, so a model refitted at `1.00` is strictly passive and can carry thermal noise. [Clarabel](https://clarabel.org) solves it on one thread, and the same file gives the same bits every run.
+2. **Residue perturbation** (scikit-rf's `passivity_enforce`), at two sample counts. It keeps D, the model's value at infinite frequency, so a violation band that runs to infinity, caused by a constant term above the ceiling, is out of its reach. When it reaches the ceiling, nothing further is tried.
+3. **A refit at a lower order**, enforced by perturbation.
+4. **A refit that includes the file's 0 Hz point**, for a file that has one and a fit range that starts at its first sample above 0 Hz. scikit-rf meets that point through the constant term, so the refit lands on other poles and residues. It is enforced the same way, convex refit first.
+
+When no candidate qualifies, the accurate fit is kept rather than a wrecked one and the result reads *near-passive*. Whenever the constant term D is above the ceiling, the message line says so with its sigma, so this case cannot be mistaken for a violation inside your band. Like every candidate, a passing one replaces the accurate near-passive fit even at a larger error: the bundled 500 pH coil at order 6 goes from 7.0e-5 at sigma_max 2.18 to 8.0e-4 at 0.9999.
+
+What the convex refit changes on the bundled examples:
+
+- Where perturbation reached the ceiling, the convex refit comes closer with the same poles: `bpf_ihp-sg13g2.s2p` at order 13 3.5e-4 instead of 1.5e-3, `wpd_ihp-sg13g2.s3p` at order 13 6.0e-5 instead of 4.2e-4, `tline_100um_ihp-sg13g2.s2p` at order 6 7.9e-4 instead of 3.9e-3.
+- `ind_500pH_ihp-sg13cmos5l.s2p` and `balun_ihp-sg13cmos5l.s4p` at order 6 have their constant term above 1, which perturbation cannot move. Both stayed near-passive and could not carry thermal noise, and both now come out strictly passive with the generator.
+- `tline_100um_ihp-sg13g2.s2p` at order 13 leans on a constant term of 5.24. The convex refit at those poles is passive but 3.4e-2 off the data, and the refit with the 0 Hz point, convex itself, comes out passive at model order 9 and 7.5e-4 and wins. Changing every S value of the file by a random 1e-12 made that refit lose in 2 of 8 tries, at order 9 and 13 alike, and the line then reads 3.4e-2, still passive. Order 6 gave 7.9e-4 in all 8.
+
+The convex refit has about n<sup>2</sup>/2 unknowns for a model with n states, ports x model order, and its time and memory grow steeply with n. On one core of an AMD Ryzen 9 3950X:
+
+| States | Time | Memory |
+| --- | --- | --- |
+| 36 | 0.6 s | 0.2 GB |
+| 72 | 6.4 s | 0.7 GB |
+| 88 | 12.5 s | 1.3 GB |
+| 104 | 26 s | 2.2 GB |
+
+So it runs only up to 100 states by default, a 4-port at order 25 or an 8-port at order 12. A larger model goes to perturbation directly, and the message line names its state count and the limit. The window has no control for the limit: set it with `--convex-max-states N` on the CLI or `convex_max_states` in a saved design, where 0 skips the refit, and the message line names a value off the default.
 
 The **Result** panel reports the measured sigma_max next to the ceiling it was judged against, green inside the ceiling and red outside it, so a raised ceiling never reads as a clean pass without the number that earned it. When there is a violation, the message line under the panel (and the CLI's `note:` line) names the frequency of the peak. Read it before you decide what to do:
 
@@ -402,6 +432,7 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `--order N` | universal | maximum model order, counted as `n_real + 2 x n_complex`, 2 or more (default 6) |
 | `--passive` / `--no-passive` | universal | enforce passivity (default on) |
 | `--passivity-ceiling SIGMA` | universal | sigma_max the enforcement works towards, `1.0` to `1.2`, needs `--passive` (default `1.0`) |
+| `--convex-max-states N` | universal | largest model, in states (ports x model order), for which enforcement first tries the convex refit, 0 skips it, needs `--passive` (default 100). See [How enforcement works](https://github.com/iic-jku/snp2le#how-enforcement-works) |
 | `--thermal-noise` / `--no-thermal-noise` | universal | add the passive's thermal noise, kT(I - S S<sup>H</sup>) at the ports, or emit the noiseless model (default noiseless). A model that is not strictly passive cannot carry it: nothing is written and the exit code is non-zero |
 | `--dc-pin` / `--no-dc-pin` | universal | pin the model to the file's 0 Hz sample, so its DC admittance (a coil's DC resistance) is the file's, or leave the DC point to the fit (default on, acts only on a file with a 0 Hz sample) |
 | `--dc-pin-fc FREQ` | universal | corner of the DC pin's low-pass, e.g. `1kHz` (default 160 Hz). Above it the band moves by about fc/f, below it the model is the pin's |
@@ -509,7 +540,7 @@ New structures plug in by subclassing `snp2le.core.structures.base.Structure` an
 
 The GUI offers the two weights at their defaults and *Segments* from 1 to 3. Other weights, up to 10 segments and `--substrate` are CLI options.
 
-On `ind_500pH_ihp-sg13cmos5l.s2p` (10 MHz to 50 GHz) the fit picks 3 segments and reproduces S21 to 0.55 % (RMS error over RMS data) and the peak Q11 of 15.3 at 21 GHz as 15.4 at 20.5 GHz. `inductor-pi` misses S21 by 4.3 % to 16 % over the same band, depending on f_ext (2 to 40 GHz). A universal fit at order 6 is closer still (0.009 %), but its elements are not a coil and it is not passive (sigma_max 2.18 at 500 THz, far above the data, so it cannot carry thermal noise). A full fit takes about 2 s for a 2-port and 6 s for the bundled center-tapped coil, the basic model under 1 s, and the center-tapped coil at `--segments 10` about 35 s.
+On `ind_500pH_ihp-sg13cmos5l.s2p` (10 MHz to 50 GHz) the fit picks 3 segments and reproduces S21 to 0.55 % (RMS error over RMS data) and the peak Q11 of 15.3 at 21 GHz as 15.4 at 20.5 GHz. `inductor-pi` misses S21 by 4.3 % to 16 % over the same band, depending on f_ext (2 to 40 GHz). A universal fit at order 6 is closer still, 0.009 % unenforced (sigma_max 2.18 at 500 THz, far above the data) and 0.10 % once enforcement makes it passive, but its elements are not a coil. A full fit takes about 2 s for a 2-port and 6 s for the bundled center-tapped coil, the basic model under 1 s, and the center-tapped coil at `--segments 10` about 35 s.
 
 
 ## Cite This Work
@@ -530,6 +561,7 @@ On `ind_500pH_ihp-sg13cmos5l.s2p` (10 MHz to 50 GHz) the fit picks 3 segments an
 
 - The structure-specific extractors (inductor, MIM capacitor, RLGC line) were inspired by Volker Mühlhaus' [lumpedmodel](https://github.com/VolkerMuehlhaus/lumpedmodel). The wideband inductor models (`inductor-wideband`, `inductor-ct`) and the bundled `ind_ct_n2_d82_w4_s4_ihp-sg13g2.s3p` are his inductor_fit and its example, used under Apache-2.0 with his permission.
 - The passivity-enforcement strategy for the universal macromodel was adapted from the [COBRA project](https://github.com/DI-PASSIONATE/COBRA).
+- The convex passive refit follows C. P. Coelho, J. R. Phillips and L. M. Silveira, "A convex programming approach for generating guaranteed passive approximations to tabulated frequency-data", IEEE Trans. Computer-Aided Design 23(2), pp. 293-301, 2004, [doi:10.1109/TCAD.2003.822107](https://doi.org/10.1109/TCAD.2003.822107), in its bounded-real form for S-parameters, and is solved with [Clarabel](https://clarabel.org).
 - Vector fitting is provided by [scikit-rf](https://scikit-rf.org).
 
 <p align="center">

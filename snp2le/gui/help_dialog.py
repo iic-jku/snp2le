@@ -80,12 +80,13 @@ often by one to two orders of magnitude in RMS error. The <b>Passivity ceiling</
 far the enforcement has to go, so it buys that accuracy back in exchange for a bounded,
 known violation.</p>
   <ul>
-  <li><b>Ticked</b> (the default): the fit is perturbed until it reaches the ceiling. At
-  <i>1.00</i> that is strict passivity, which is what you want for anything simulated in
-  the time domain. Raise it to stop short: on <tt>wpd_ihp-sg13g2.s3p</tt> at order 6 the
-  raw fit sits at 1.083 with RMS 8.7e-04, a ceiling of 1.00 gives 0.9999 at 2.6e-03, and a
-  ceiling of 1.05 gives 1.0499 at 1.3e-03, half the accuracy cost. A ceiling above what the
-  fit already measures leaves the model untouched rather than adding gain to reach it.</li>
+  <li><b>Ticked</b> (the default): the fit is brought down to the ceiling by the convex
+  refit or by perturbation, whichever ends closer to the data (below). At <i>1.00</i> that
+  is strict passivity, which is what you want for anything simulated in the time domain.
+  Raise it to stop short: on <tt>wpd_ihp-sg13g2.s3p</tt> at order 6 the raw fit sits at
+  1.083 with RMS 8.7e-04, a ceiling of 1.00 gives 0.9999 at 9.8e-04, and a ceiling of 1.05
+  gives 1.0499 at 8.9e-04. A ceiling above what the fit already measures leaves the model
+  untouched rather than adding gain to reach it.</li>
   <li><b>Unticked</b>: nothing is enforced and the raw fit is exported as it is. The
   ceiling field greys out at <i>1.00</i>, since nothing is aiming at it, and
   &sigma;<sub>max</sub> is still measured and reported so you can see what you are
@@ -98,22 +99,34 @@ number falls back to <i>1.00</i>. Reasonable ceilings: <i>1.00</i> for a transie
 long harmonic-balance run, <i>1.01</i> to <i>1.05</i> for an AC or S-parameter sweep where
 a per-cent-level violation outside your band cannot do anything, and up to <i>1.20</i>
 only as a diagnostic while you are looking at what the fit is doing.
-<p><b>A ceiling is not always reachable.</b> The perturbation only moves the model's
-residues, so a violation band that runs to infinity, caused by a non-passive constant
-term, cannot be corrected at any ceiling. <tt>tline_100um_ihp-sg13g2.s2p</tt> at order 13
-has its constant term at 5.24. A file that carries a 0 Hz point, as this one does, then
-also gets a refit that includes it, which scikit-rf meets through the constant term, and
-it is kept if it passes and fits closer than a lower-order refit (the line comes out passive
-at model order 9 that way).
-That outcome is fragile: a random change of 1e-12 in the file's S values made the refit miss in 1 to 6 of 8 tries, and the line then reads <i>near-passive</i> at 5.24, while order 6 gave the same result every time.
-The refit needs a fit range that starts at the file's first
-sample above 0&nbsp;Hz. With <b>Thermal noise</b> ticked, a strictly passive candidate wins
-over one that only meets a raised ceiling, since only it can carry the noise. When nothing
-reaches the ceiling, the accurate fit is kept rather than a wrecked one and the result
-reads <i>near-passive</i>. The fix is a lower <b>Max order</b>, not a higher ceiling, since
-order 6 brings the same file to 0.9997. Whenever the constant term D, the model's value
-at infinite frequency, is above the ceiling, the message line says so with its singular
-value.</p></li>
+<p><b>How enforcement works.</b> It tries up to four candidates and keeps the one closest
+to the data that meets the ceiling:</p>
+  <ol>
+  <li>The <b>convex refit</b> keeps the fit's poles and solves for its residues and its
+  constant term D together, under the condition that &sigma;<sub>max</sub> stays at or below
+  the ceiling at every frequency (after Coelho, Phillips and Silveira, IEEE Trans. CAD, 2004).
+  It is the most accurate model with those poles that meets the ceiling, and it aims 1e-4
+  below it, so at <i>1.00</i> it is strictly passive and can carry thermal noise.</li>
+  <li><b>Residue perturbation</b>. It cannot move D, the model's value at infinite
+  frequency, so a violation band that runs to infinity is out of its reach.</li>
+  <li>A refit at a lower order.</li>
+  <li>A refit that includes the file's 0&nbsp;Hz point, for a file that has one and a fit
+  range that starts at its first sample above 0&nbsp;Hz, enforced the same way.</li>
+  </ol>
+<p>On <tt>bpf_ihp-sg13g2.s2p</tt> at order 13 the convex refit ends at 3.5e-4 where
+perturbation gave 1.5e-3, and the 500&nbsp;pH coil and the balun at order 6, whose constant
+term sits above 1, come out strictly passive where they stayed near-passive. On
+<tt>tline_100um_ihp-sg13g2.s2p</tt> at order 13 the refit with the 0&nbsp;Hz point wins at
+7.5e-4. With <b>Thermal noise</b> ticked, a strictly passive candidate wins over one that
+only meets a raised ceiling, since only it can carry the noise. When nothing reaches the
+ceiling, the accurate fit is kept rather than a wrecked one and the result reads
+<i>near-passive</i>. Whenever the constant term D is above the ceiling, the message line says
+so with its singular value.</p>
+<p>The convex refit's time and memory grow steeply with the model's states, ports x model
+order (about 26&nbsp;s and 2.2&nbsp;GB at 104 states on one core), so it runs only up to 100
+states. A larger model goes to perturbation directly and the message line says so. The
+window has no control for the limit, the command line sets it with
+<tt>--convex-max-states</tt>, a saved design with <tt>convex_max_states</tt>.</p></li>
 <li><b>Thermal noise</b> (universal mode): a lossy passive at temperature T is a noise
 source, and its noise follows from its S-parameters alone, kT(I&nbsp;&minus;&nbsp;S&nbsp;S<sup>H</sup>)
 at its ports (Bosma's theorem). Unticked (the default), the model is noiseless, an ideal

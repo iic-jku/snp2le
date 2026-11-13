@@ -73,8 +73,8 @@ PASSIVITY_CEILING_DEFAULT = 1.0
 PASSIVITY_CEILING_MAX = 1.2
 
 # The convex passive refit (passive_refit.py) runs while the realisation has at most this many
-# states, ports x model order.  Its cost grows steeply with them: on one laptop core 72 states
-# took 12 s and 0.7 GB, 88 states 28 s and 1.3 GB, 104 states 79 s and 2.3 GB.
+# states, ports x model order.  Its cost grows steeply with them: on one core of an AMD Ryzen 9
+# 3950X 72 states took 6.4 s and 0.7 GB, 88 states 12.5 s and 1.3 GB, 104 states 26 s and 2.2 GB.
 CONVEX_MAX_STATES_DEFAULT = ConverterState.convex_max_states
 # It aims this far below the ceiling, so the solver's residual cannot leave the model above
 # it, and a model refitted at the strict ceiling stays strictly passive for the noise generator.

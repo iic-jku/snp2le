@@ -12,7 +12,7 @@ Guidance for coding agents and contributors working in this repo (snp2le, a conv
 ## Layout
 
 - `snp2le/__main__.py`: the `snp2le` command (`main`). No argument or one file opens the GUI, `-b` hands the rest to `snp2le/cli.py`.
-- `snp2le/core/`: `engine.py` (pipeline), `universal.py` (vector fit, passivity), `structures/` (extractors, registry in `__init__.py`), `ir.py` (dialect-agnostic Circuit IR), `netlist.py` (Ngspice, VACASK and Xyce renderers), `noise.py` (thermal-noise generator), `dcpin.py` (DC pin), `state.py` (`ConverterState`, `Results`), `mna.py`, `dc.py`, `io.py`, `progress.py`, `process_state.py`, `units.py`, `xschem.py`.
+- `snp2le/core/`: `engine.py` (pipeline), `universal.py` (vector fit, passivity), `passive_refit.py` (convex passive refit), `structures/` (extractors, registry in `__init__.py`), `ir.py` (dialect-agnostic Circuit IR), `netlist.py` (Ngspice, VACASK and Xyce renderers), `noise.py` (thermal-noise generator), `dcpin.py` (DC pin), `state.py` (`ConverterState`, `Results`), `mna.py`, `dc.py`, `io.py`, `progress.py`, `process_state.py`, `units.py`, `xschem.py`.
 - `snp2le/gui/`: Qt widgets only, no maths. `fit_runner.py` runs `engine.convert` on a worker thread, `help_dialog.py` is the in-app guide.
 - `snp2le/examples/`: bundled 2-, 3- and 4-port `.sNp` files, shipped as package data and used by the tests.
 - `netlist/`, `schematic/xschem/`, `testbenches/xschem/`: exported example netlists, Xschem symbols, and Ngspice/VACASK testbenches with their plot scripts.
