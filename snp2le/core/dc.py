@@ -11,7 +11,7 @@ open at DC) or a controlled-source loop is degenerate.
 
 This builds that DC matrix (capacitors open, ports terminated in z0 to mimic a testbench)
 and reports how far it is from singular, so the GUI can warn *before* the netlist is handed
-to Ngspice or VACASK.  Because the macromodel is linear, only true singularity matters, not
+to a simulator.  Because the macromodel is linear, only true singularity matters, not
 conditioning: an ill-conditioned but non-singular matrix still yields the (zero) DC solution.
 
 Calibration (BPF and inductor fits, orders 4 to 24): healthy fits sit at margin >= ~6e-8, a
