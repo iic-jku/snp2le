@@ -15,7 +15,7 @@ Guidance for coding agents and contributors working in this repo (snp2le, a conv
 - `snp2le/core/`: `engine.py` (pipeline), `universal.py` (vector fit, passivity), `structures/` (extractors, registry in `__init__.py`), `ir.py` (dialect-agnostic Circuit IR), `netlist.py` (Ngspice, VACASK and Xyce renderers), `noise.py` (thermal-noise generator), `dcpin.py` (DC pin), `state.py` (`ConverterState`, `Results`), `mna.py`, `dc.py`, `io.py`, `progress.py`, `process_state.py`, `units.py`, `xschem.py`.
 - `snp2le/gui/`: Qt widgets only, no maths. `fit_runner.py` runs `engine.convert` on a worker thread, `help_dialog.py` is the in-app guide.
 - `snp2le/examples/`: bundled 2-, 3- and 4-port `.sNp` files, shipped as package data and used by the tests.
-- `netlist/`, `schematic/xschem/`, `testbenches/xschem/`: exported example netlists, Xschem symbols, and Ngspice/VACASK testbenches with their plot scripts.
+- `netlist/`, `schematic/xschem/`, `testbenches/xschem/`: exported example netlists, Xschem symbols, and Ngspice, VACASK and Xyce testbenches with their plot scripts.
 - `tests/`: pytest suite. `test_core.py` covers the core, the `test_gui_*.py` files drive the real window offscreen.
 
 ## Install and run
@@ -38,7 +38,7 @@ snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p --order 13 --format both --
 
 - Start the GUI through `snp2le` or `python -m snp2le`, never as `python snp2le/app.py`: the package import fails that way.
 - The last command writes `bpf_ihp-sg13g2.spice` and `bpf_ihp-sg13g2.inc` to the current directory. `-o PATH` sets the path and the `.SUBCKT` name.
-- Only `--simulate` and the GUI's Run Simulation need Xschem plus Ngspice or VACASK. Conversion and export are pure Python.
+- Only `--simulate` and the GUI's Run Simulation need Xschem plus Ngspice, VACASK or Xyce. Conversion and export are pure Python.
 
 ## Test
 
@@ -78,11 +78,12 @@ reuse lint                                 # the license check CI runs
 ## Traps
 
 - VACASK has no implicit ground: the VACASK subcircuit uses node `GND`, Ngspice and Xyce keep `0`, and a VACASK testbench must declare `ground GND`.
+- Xyce takes Xschem's `GND` for a node of its own, so an Xschem testbench for Xyce needs `.PREPROCESS REPLACEGROUND TRUE`, as the bundled ones carry. Without it the ports float, and the band-pass filter's S came out wrong by up to 0.96.
 - Resistor noise follows `ir.physical` unless an element's `noisy` overrides it. Universal-mode resistors are fit artefacts and are written with `noisy=0`, structure-mode resistors are real loss and keep their noise, the noise generator's `Rnz_e*` are noisy and the DC pin's `Rdcp_*` are not. The reasoning sits above `netlist._NOISY_OFF`. Xyce refuses `noisy=0` and its resistor has no noise switch, so `netlist.render_xyce` writes each silenced resistor as a VCCS `G<name>` that senses its own terminals, and refuses a `G<name>` another element already has (Xyce ignores case).
 - `universal.fit_universal` redirects `sys.stdout` and `sys.stderr` for the whole process during a fit, so a GUI traceback raised while a fit runs is swallowed. Remember this when a GUI bug only shows up during a fit.
 - At a passivity ceiling of `1.0` the scalings in `universal._enforce_at()` are the identity, which keeps the strict path bit-for-bit what it was. Preserve that.
 - The GUI clamps an out-of-range passivity ceiling to the limit it overshot, the CLI refuses it. The difference is deliberate.
-- Running a bundled testbench (GUI Run Simulation or `--simulate`) rewrites tracked files: `testbenches/xschem/sim_range.inc`, `testbenches/xschem/sim_range.spice` and the result table under `testbenches/xschem/plot_simulations/data/` (VACASK runs also write the figure). Do not commit them unless the change is about them.
+- Running a bundled testbench (GUI Run Simulation or `--simulate`) rewrites tracked files: `testbenches/xschem/sim_range.inc`, `testbenches/xschem/sim_range.spice`, `testbenches/xschem/sim_range.cir` and the result under `testbenches/xschem/plot_simulations/data/`, a table or, from Xyce, a Touchstone file (VACASK runs also write the figure). Do not commit them unless the change is about them.
 
 ## Do not touch
 

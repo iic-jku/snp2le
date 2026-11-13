@@ -615,16 +615,16 @@ class PlotView(QtWidgets.QWidget):
     def import_sim(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "Import simulation", self._sim_dir(),
-            "Simulation result table (*.txt);;All files (*)")
+            "Simulation result (*.txt *.s*p);;All files (*)")
         if path:
             self.import_sim_file(path)
 
     def import_sim_file(self, path):
-        """Load an Ngspice S-parameter table from `path` and overlay it.  Returns
-        True on success.  Shared by the Import button and by auto-import after a
-        successful Xschem run."""
+        """Load a simulation result from `path` and overlay it: an Ngspice-style table, or
+        a Touchstone file such as Xyce's (`io.load_sim`).  Returns True on success.  Shared
+        by the Import button and by auto-import after a successful Xschem run."""
         try:
-            self._sim = io.load_ngspice_sim(path)
+            self._sim = io.load_sim(path)
         except Exception as exc:                          # noqa: BLE001
             self._sim = None
             self._update_sim_button()

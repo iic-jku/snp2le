@@ -400,10 +400,10 @@ class TopBar(QtWidgets.QWidget):
         self.load_sch = QtWidgets.QPushButton("Load .sch")
         self.load_sch.setObjectName("primary"); self.load_sch.setFixedHeight(30)
         self.load_sch.setIcon(_load_icon()); self.load_sch.setIconSize(QtCore.QSize(16, 16))
-        # simulator used to run the loaded testbench (Ngspice, or VACASK via xschem)
+        # simulator used to run the loaded testbench through xschem
         self.simulator = QtWidgets.QComboBox()
-        self.simulator.addItem("Ngspice", "ngspice")
-        self.simulator.addItem("VACASK", "vacask")
+        for key in xschem.SIMULATORS:
+            self.simulator.addItem(xschem.NAMES[key], key)
         self.simulator.setFixedWidth(120)
         self.simulator.setToolTip("Simulator that runs the loaded testbench.\n"
                                   "Auto-set from the testbench name when one is loaded.")
@@ -525,7 +525,7 @@ class TopBar(QtWidgets.QWidget):
         self._apply_constraints()
 
     def set_simulator(self, key):
-        """Select the simulator ('ngspice' / 'vacask'), e.g. from the testbench name."""
+        """Select the simulator (a key of xschem.SIMULATORS), e.g. from the testbench name."""
         i = self.simulator.findData(key)
         if i >= 0:
             self.simulator.setCurrentIndex(i)
