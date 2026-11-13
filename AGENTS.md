@@ -4,7 +4,7 @@ Guidance for coding agents and contributors working in this repo (snp2le, a conv
 
 ## What this is
 
-- `snp2le` reads a Touchstone `.sNp` file and writes an equivalent lumped-element subcircuit in two dialects: Ngspice (`.spice`) and VACASK/Spectre (`.inc`).
+- `snp2le` reads a Touchstone `.sNp` file and writes an equivalent lumped-element subcircuit in three dialects: Ngspice (`.spice`), VACASK/Spectre (`.inc`) and Xyce (`.cir`).
 - Two modes: `universal` (scikit-rf vector fit with optional passivity enforcement, any port count) and `structure` (a known physical topology, one extractor per structure key, extracted at one frequency except the wideband inductors, which are fitted over the band).
 - `snp2le.core` is pure Python and Qt-free. `snp2le.gui` is a thin PySide6-Essentials layer. The GUI and the CLI both call the single entry point `engine.convert(state, net)` in `snp2le/core/engine.py`, which returns a `Results` dataclass from `snp2le/core/state.py`.
 - `README.md` is the user documentation. `doc/architecture.md` covers data flow, threading, internals and known limitations. Read the relevant part before changing behaviour.
@@ -12,7 +12,7 @@ Guidance for coding agents and contributors working in this repo (snp2le, a conv
 ## Layout
 
 - `snp2le/__main__.py`: the `snp2le` command (`main`). No argument or one file opens the GUI, `-b` hands the rest to `snp2le/cli.py`.
-- `snp2le/core/`: `engine.py` (pipeline), `universal.py` (vector fit, passivity), `structures/` (extractors, registry in `__init__.py`), `ir.py` (dialect-agnostic Circuit IR), `netlist.py` (Ngspice and VACASK renderers), `noise.py` (thermal-noise generator), `dcpin.py` (DC pin), `state.py` (`ConverterState`, `Results`), `mna.py`, `dc.py`, `io.py`, `progress.py`, `process_state.py`, `units.py`, `xschem.py`.
+- `snp2le/core/`: `engine.py` (pipeline), `universal.py` (vector fit, passivity), `structures/` (extractors, registry in `__init__.py`), `ir.py` (dialect-agnostic Circuit IR), `netlist.py` (Ngspice, VACASK and Xyce renderers), `noise.py` (thermal-noise generator), `dcpin.py` (DC pin), `state.py` (`ConverterState`, `Results`), `mna.py`, `dc.py`, `io.py`, `progress.py`, `process_state.py`, `units.py`, `xschem.py`.
 - `snp2le/gui/`: Qt widgets only, no maths. `fit_runner.py` runs `engine.convert` on a worker thread, `help_dialog.py` is the in-app guide.
 - `snp2le/examples/`: bundled 2-, 3- and 4-port `.sNp` files, shipped as package data and used by the tests.
 - `netlist/`, `schematic/xschem/`, `testbenches/xschem/`: exported example netlists, Xschem symbols, and Ngspice/VACASK testbenches with their plot scripts.
@@ -69,7 +69,7 @@ reuse lint                                 # the license check CI runs
 
 1. Write down the differences you intend before you diff (the pull request description is a good place), so the result reads as confirmation rather than something negotiated afterwards.
 2. Produce the outputs twice, once from a detached worktree at the base commit (`git worktree add --detach ../snp2le-base <base-commit>`) and once from your branch, in the same environment. The float tails depend on the BLAS the fit ran on (`doc/architecture.md`). The netlist header names the snp2le version, so the outputs of two versions differ in that line: normalise it before the byte-diff.
-3. Cover every file in `snp2le/examples/`: both dialects (`res.ngspice` and `res.vacask`), universal mode at two or more orders (for example the default 6 and 13) with Thermal noise off and on and with `--no-dc-pin` on the files that carry a 0 Hz sample, and every structure whose port count matches the file (`snp2le -b list-structures`). A short script over `io.load_touchstone`, `ConverterState`, `engine.convert` and `structures.structure_items()` does it.
+3. Cover every file in `snp2le/examples/`: every dialect (`res.ngspice`, `res.vacask` and `res.xyce`), universal mode at two or more orders (for example the default 6 and 13) with Thermal noise off and on and with `--no-dc-pin` on the files that carry a 0 Hz sample, and every structure whose port count matches the file (`snp2le -b list-structures`). A short script over `io.load_touchstone`, `ConverterState`, `engine.convert` and `structures.structure_items()` does it.
 4. Dump the derived values of each `Results` next to the netlists, because identical netlists do not prove the GUI shows identical numbers: `ok`, `error`, `passive`, `passivity_path`, `sigma_max`, `sigma_max_freq`, `rms_error`, `n_poles`, `model_order`, `band_limited`, `dc` (its `ok` and `margin`), `noise` (its `ok` and `message`) and `dc_pin` (its `ok`, `dc_move` and `rf_change`), these three universal mode only, then `value_rows`, `value_drift` and `messages`.
 5. Print floats with an explicit format such as `format(x, ".17g")`. Six significant digits hide the 1e-16 shifts `tests/test_reproducibility.py` was written to catch, and the `repr` of numpy scalars differs between numpy 1 and 2 (both satisfy `numpy>=1.24`).
 6. Run under a fixed `PYTHONHASHSEED`, and before trusting any diff, check that two different seeds give identical output on the base commit.
@@ -77,8 +77,8 @@ reuse lint                                 # the license check CI runs
 
 ## Traps
 
-- VACASK has no implicit ground: the VACASK subcircuit uses node `GND`, Ngspice keeps `0`, and a VACASK testbench must declare `ground GND`.
-- Resistor noise follows `ir.physical` unless an element's `noisy` overrides it. Universal-mode resistors are fit artefacts and are written with `noisy=0`, structure-mode resistors are real loss and keep their noise, the noise generator's `Rnz_e*` are noisy and the DC pin's `Rdcp_*` are not. The reasoning sits above `netlist._NOISY_OFF`.
+- VACASK has no implicit ground: the VACASK subcircuit uses node `GND`, Ngspice and Xyce keep `0`, and a VACASK testbench must declare `ground GND`.
+- Resistor noise follows `ir.physical` unless an element's `noisy` overrides it. Universal-mode resistors are fit artefacts and are written with `noisy=0`, structure-mode resistors are real loss and keep their noise, the noise generator's `Rnz_e*` are noisy and the DC pin's `Rdcp_*` are not. The reasoning sits above `netlist._NOISY_OFF`. Xyce refuses `noisy=0` and its resistor has no noise switch, so `netlist.render_xyce` writes each silenced resistor as a VCCS `G<name>` that senses its own terminals, and refuses a `G<name>` another element already has (Xyce ignores case).
 - `universal.fit_universal` redirects `sys.stdout` and `sys.stderr` for the whole process during a fit, so a GUI traceback raised while a fit runs is swallowed. Remember this when a GUI bug only shows up during a fit.
 - At a passivity ceiling of `1.0` the scalings in `universal._enforce_at()` are the identity, which keeps the strict path bit-for-bit what it was. Preserve that.
 - The GUI clamps an out-of-range passivity ceiling to the limit it overshot, the CLI refuses it. The difference is deliberate.
