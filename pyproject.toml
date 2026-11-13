@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "snp2le"
 version = "0.1.20"
-description = "Convert Touchstone S-parameter files into lumped-element netlists for Ngspice and VACASK"
+description = "Convert Touchstone S-parameter files into lumped-element netlists for Ngspice, VACASK and Xyce"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Simon Dorrer", email = "simon.dorrer@jku.at" }]
 keywords = [
-    "EDA", "S-parameters", "Touchstone", "SPICE", "ngspice", "VACASK",
+    "EDA", "S-parameters", "Touchstone", "SPICE", "ngspice", "VACASK", "Xyce",
     "vector-fitting", "macromodel", "RF", "microwave",
 ]
 classifiers = [

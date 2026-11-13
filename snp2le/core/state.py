@@ -101,6 +101,7 @@ class Results:
     ir: object = None                     # CircuitIR
     ngspice: str = ""
     vacask: str = ""
+    xyce: str = ""
 
     n_poles: int = 0                      # pole entries, a conjugate pair counted once
     model_order: int = 0                  # n_real + 2 x n_complex, the unit max_order is in

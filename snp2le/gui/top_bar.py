@@ -98,7 +98,7 @@ class TopBar(QtWidgets.QWidget):
     view_changed = QtCore.Signal(str)
     help_clicked = QtCore.Signal()
     load_clicked = QtCore.Signal()
-    export_clicked = QtCore.Signal(str)      # "ngspice" | "vacask"
+    export_clicked = QtCore.Signal(str)      # "ngspice" | "vacask" | "xyce"
     load_sch_clicked = QtCore.Signal()       # pick an Xschem testbench
     run_sim_clicked = QtCore.Signal()        # simulate the selected testbench
     reset_clicked = QtCore.Signal()          # restore the freshly-opened state
@@ -380,12 +380,21 @@ class TopBar(QtWidgets.QWidget):
         self.sep.setStyleSheet(f"background-color:{PANEL_BORDER};")
         self.sep.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Expanding)
 
-        # export buttons live here (not in the netlist panel) so they are reachable
-        # from the Plot view too
-        self.exp_ng = QtWidgets.QPushButton("Export Ngspice")
-        self.exp_ng.setObjectName("primary"); self.exp_ng.setFixedHeight(30)
-        self.exp_va = QtWidgets.QPushButton("Export VACASK")
-        self.exp_va.setObjectName("primary"); self.exp_va.setFixedHeight(30)
+        # Export lives here (not in the netlist panel) so it is reachable from the Plot view
+        # too.  One button with a menu, since a button per dialect does not fit the bar.
+        self.export = QtWidgets.QPushButton("Export")
+        self.export.setObjectName("primary"); self.export.setFixedHeight(30)
+        self.export.setProperty("hasMenu", True)
+        self.export.setToolTip("Write the finished conversion to a netlist file, in the "
+                               "dialect picked from the menu.")
+        self.export_menu = QtWidgets.QMenu(self.export)
+        self.export_actions = {}
+        for dialect, text in (("ngspice", "Ngspice (.spice)"), ("vacask", "VACASK (.inc)"),
+                              ("xyce", "Xyce (.cir)")):
+            act = self.export_menu.addAction(text)
+            act.triggered.connect(lambda _=False, d=dialect: self.export_clicked.emit(d))
+            self.export_actions[dialect] = act
+        self.export.setMenu(self.export_menu)
 
         # Xschem testbench: load a .sch and simulate it. Only usable if xschem
         # is installed (checked once), otherwise both are greyed out
@@ -437,8 +446,7 @@ class TopBar(QtWidgets.QWidget):
         lay.addWidget(self.mode_stack)         # f_ext+option (structure) or order+passivity
         lay.addWidget(self.band_box)           # fit range (both modes)
         lay.addWidget(self.sep)                # fixed divider, one ordinary gap either side
-        lay.addLayout(self._labeled("", self.exp_ng))
-        lay.addLayout(self._labeled("", self.exp_va))
+        lay.addLayout(self._labeled("", self.export))
         lay.addLayout(self._labeled("", self.load_sch))
         lay.addLayout(self._labeled("Simulator", self.simulator))
         lay.addLayout(self._labeled("", self.run_sim))
@@ -474,8 +482,6 @@ class TopBar(QtWidgets.QWidget):
         self.p_ceiling.editingFinished.connect(self._on_ceiling)
         self.thermal_noise.toggled.connect(lambda _=None: self.changed.emit())
         self.dc_pin.toggled.connect(lambda _=None: self.changed.emit())
-        self.exp_ng.clicked.connect(lambda: self.export_clicked.emit("ngspice"))
-        self.exp_va.clicked.connect(lambda: self.export_clicked.emit("vacask"))
         self.load_sch.clicked.connect(self.load_sch_clicked.emit)
         self.run_sim.clicked.connect(self.run_sim_clicked.emit)
         self.reset.clicked.connect(self.reset_clicked.emit)

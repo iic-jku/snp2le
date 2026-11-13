@@ -5,7 +5,8 @@
 Left: a "Conversion" panel with the loaded-file header, the fit/extraction result
 (RMS, passivity, order or extraction frequency, noise), and the element-values table.
 Right: the schematic panel (drawn for physical models, a note for the universal
-macromodel) above the netlist panel (Ngspice / VACASK tabs, exported from the top bar).
+macromodel) above the netlist panel (Ngspice / VACASK / Xyce tabs, exported from the top
+bar).
 """
 from __future__ import annotations
 from PySide6 import QtCore, QtWidgets
@@ -165,8 +166,10 @@ class DesignView(QtWidgets.QWidget):
         self.tabs = QtWidgets.QTabWidget()
         self.ngspice_edit = QtWidgets.QPlainTextEdit(); self.ngspice_edit.setReadOnly(True)
         self.vacask_edit = QtWidgets.QPlainTextEdit(); self.vacask_edit.setReadOnly(True)
+        self.xyce_edit = QtWidgets.QPlainTextEdit(); self.xyce_edit.setReadOnly(True)
         self.tabs.addTab(self.ngspice_edit, "Ngspice (SPICE)")
         self.tabs.addTab(self.vacask_edit, "VACASK (Spectre)")
+        self.tabs.addTab(self.xyce_edit, "Xyce (SPICE)")
         self.tabs.setCurrentIndex(0)
         net_lay.addWidget(self.tabs, 1)
         right.addWidget(net_frame, 4)
@@ -319,6 +322,7 @@ class DesignView(QtWidgets.QWidget):
                              if res.messages else "")
         self.ngspice_edit.setPlainText(res.ngspice or "")
         self.vacask_edit.setPlainText(res.vacask or "")
+        self.xyce_edit.setPlainText(res.xyce or "")
 
         # schematic
         if not res.ok:

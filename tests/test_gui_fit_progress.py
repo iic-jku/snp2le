@@ -62,7 +62,7 @@ def test_the_first_fit_runs_off_the_event_loop(win):
     """Construction leaves a usable window with a rendered result behind it."""
     assert not win._fit.busy()
     assert win._res is not None and win._res.ok
-    assert win.top.exp_ng.isEnabled() and win.top.exp_va.isEnabled()
+    assert win.top.export.isEnabled()
 
 
 def test_both_views_report_the_outcome(win):
@@ -213,17 +213,16 @@ def test_changing_a_control_greys_export_before_the_fit_starts(win):
     # deliberately abandons a run, which leaves Export greyed.
     win.recompute()
     _settle(win)
-    assert win.top.exp_ng.isEnabled()
+    assert win.top.export.isEnabled()
     win.on_change()                             # what a control change emits
     assert not win._fit.busy(), "the debounce fired early, the window is untested"
-    assert not win.top.exp_ng.isEnabled(), "Export stayed live during the debounce"
-    assert not win.top.exp_va.isEnabled()
+    assert not win.top.export.isEnabled(), "Export stayed live during the debounce"
     _settle(win)                                # let the debounced fit run
     deadline = time.time() + _TIMEOUT
-    while time.time() < deadline and not win.top.exp_ng.isEnabled():
+    while time.time() < deadline and not win.top.export.isEnabled():
         _app().processEvents()
         time.sleep(0.02)
-    assert win.top.exp_ng.isEnabled(), "Export never came back"
+    assert win.top.export.isEnabled(), "Export never came back"
 
 
 def test_a_superseded_result_keeps_the_typed_extraction_frequency(win, monkeypatch):
@@ -239,7 +238,7 @@ def test_a_superseded_result_keeps_the_typed_extraction_frequency(win, monkeypat
     stale.metrics = {"f_extract": 3e9}          # what the outgoing fit used
     win._on_fit_finished(stale)
     assert win.top._f_extract_hz == pytest.approx(12e9)
-    assert not win.top.exp_ng.isEnabled(), "a superseded model must not be exportable"
+    assert not win.top.export.isEnabled(), "a superseded model must not be exportable"
 
 
 def test_no_time_left_is_ever_shown(win, monkeypatch):
@@ -302,4 +301,4 @@ def test_a_crashing_worker_does_not_take_the_window_down(win, monkeypatch):
     assert "exploded" in win._res.error
     for indicator in win._fit_indicators():
         assert "conversion failed" in indicator.message.toolTip()
-    assert not win.top.exp_ng.isEnabled(), "a crashed fit must not leave Export live"
+    assert not win.top.export.isEnabled(), "a crashed fit must not leave Export live"

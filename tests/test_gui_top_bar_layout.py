@@ -85,8 +85,8 @@ def test_the_divider_has_the_same_gap_on_both_sides(bar):
 
     field_end = span(wide.f_max)[1]
     div_start, div_end = span(wide.sep)
-    export_start = span(wide.exp_ng)[0]
-    button_gap = span(wide.load_sch)[0] - span(wide.exp_va)[1]
+    export_start = span(wide.export)[0]
+    button_gap = span(wide.load_sch)[0] - span(wide.export)[1]
     wide.close()
     assert div_start - field_end == export_start - div_end == button_gap
 

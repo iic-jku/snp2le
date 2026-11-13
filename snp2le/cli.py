@@ -26,6 +26,9 @@
     # add the passive's thermal noise, kT(I - S S^H) at the ports, to the macromodel
     snp2le -b convert wpd.s3p --mode universal --order 13 --thermal-noise --format both
 
+    # one fit, written for Ngspice (.spice), VACASK (.inc) and Xyce (.cir)
+    snp2le -b convert bpf.s2p --mode universal --order 13 --format all
+
     # a file with a 0 Hz sample is pinned to it by default, so a coil keeps its DC resistance.
     # Here the DC modes without a path to ground also get 1 uS, for harmonic balance
     snp2le -b convert coil.s2p --mode universal --order 13 --dc-island-leak 1e-6
@@ -35,7 +38,8 @@
         -o netlist/spice/two_port.spice \\
         --simulate testbenches/xschem/two_port_tb_acsp_ngspice.sch --plot
 
-Globs are expanded.  With --format both, two files are written per input.  The exit code is
+Globs are expanded.  With --format both, two files are written per input (Ngspice and
+VACASK), with --format all three (plus Xyce).  The exit code is
 non-zero if any conversion or a requested simulation fails.  A failed conversion writes
 nothing and removes the files an earlier run left at its output paths.
 """
@@ -252,11 +256,11 @@ def _passivity_ceiling(text):
 
 
 def _out_path(src, explicit, dialect, n_inputs, n_formats):
-    ext = "inc" if dialect == "vacask" else "spice"          # VACASK writes .inc
+    ext = netlist.EXTENSION[dialect]
     if explicit and n_inputs == 1:
         if n_formats == 1:
             return explicit
-        return f"{os.path.splitext(explicit)[0]}.{ext}"      # both: keep -o dir + stem
+        return f"{os.path.splitext(explicit)[0]}.{ext}"      # both/all: keep -o dir + stem
     base = os.path.splitext(os.path.basename(src))[0]         # many inputs: after each source
     return f"{base}.{ext}"
 
@@ -527,7 +531,8 @@ def cmd_convert(args):
               "source", file=sys.stderr)
     elif args.output and (os.path.isdir(args.output)
                           or args.output.endswith(("/", os.sep))):
-        # with --format both the stem would be the folder's name, or empty after a separator
+        # with --format both or all the stem would be the folder's name, or empty after a
+        # separator
         print(f"[FAIL] -o {args.output}: that is a folder, -o takes a file name",
               file=sys.stderr)
         return 1
@@ -597,7 +602,8 @@ def cmd_convert(args):
     elif pin_given and args.dc_pin is False:
         print(f"[WARN] {', '.join(pin_given)} ignored with --no-dc-pin", file=sys.stderr)
 
-    formats = ["ngspice", "vacask"] if args.format == "both" else [args.format]
+    formats = {"both": ["ngspice", "vacask"], "all": list(netlist.DIALECTS)}.get(
+        args.format, [args.format])
     rc = 1 if missing else 0
     last_res = None
     written = set()                     # absolute paths this run wrote
@@ -665,13 +671,12 @@ def cmd_convert(args):
                 res.ir.name = netlist.safe_subckt_name(stem)
                 if res.ir.name != stem and named:
                     print(f"[WARN] {out}: the subcircuit is named {res.ir.name}, since "
-                          f"'{stem}' is not a valid name in both Ngspice and VACASK. Name "
+                          f"'{stem}' is not a valid name in Ngspice, VACASK and Xyce. Name "
                           f"the file {res.ir.name}{os.path.splitext(out)[1]} to keep the "
                           f"two equal", file=sys.stderr)
-                text = (netlist.render_vacask(res.ir) if dialect == "vacask"
-                        else netlist.render_ngspice(res.ir))
+                text = netlist.render(res.ir, dialect)
             else:
-                text = res.vacask if dialect == "vacask" else res.ngspice
+                text = getattr(res, dialect)
             if os.path.isdir(out):
                 print(f"[FAIL] {src} -> {out}: that is a folder, -o takes a file name",
                       file=sys.stderr)
@@ -856,8 +861,10 @@ def build_parser():
     c.add_argument("--ct-port", type=int, choices=(1, 2, 3), default=None,
                    help="center tap port of inductor-ct (default: detected from the data)")
     # output
-    c.add_argument("--format", choices=["ngspice", "vacask", "both"], default="ngspice",
-                   help="output dialect(s), default ngspice. VACASK writes .inc")
+    c.add_argument("--format", choices=["ngspice", "vacask", "xyce", "both", "all"],
+                   default="ngspice",
+                   help="output dialect(s), default ngspice. VACASK writes .inc, Xyce .cir, "
+                        "both is Ngspice and VACASK, all is the three")
     c.add_argument("-o", "--output", default=None, help="output path (single input)")
     c.add_argument("--values", action="store_true", help="print the extracted element values")
     c.add_argument("--tolerances", action="store_true",
