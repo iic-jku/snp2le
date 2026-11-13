@@ -202,7 +202,8 @@ def _convert_universal(state, net, res, track, dc_net=None, dc_s=None):
                              enforce_passivity=state.enforce_passivity,
                              passivity_ceiling=state.passivity_ceiling,
                              progress=track.sub("fit"), dc_net=dc_net,
-                             prefer_strict=state.thermal_noise)
+                             prefer_strict=state.thermal_noise,
+                             convex_max_states=_convex_limit(state))
     res.ir = fit.ir
     res.physical = False
     res.n_poles = fit.n_poles
@@ -214,6 +215,10 @@ def _convert_universal(state, net, res, track, dc_net=None, dc_s=None):
     res.passivity_path = fit.passivity_path
     res.rms_error = fit.rms_error
     res.messages = fit.messages
+    limit = _convex_limit(state)
+    if state.enforce_passivity and limit != ConverterState.convex_max_states:
+        res.messages.append((f"convex refit limit {limit} states" if limit else "convex refit off")
+                            + f" (default limit {ConverterState.convex_max_states} states)")
     res.model_s = _uni.model_sparams(fit.vf, net.f, progress=track.sub("model"))
     if state.thermal_noise:
         from . import noise as _noise
@@ -264,6 +269,15 @@ def _pin_dc(state, net, res, fit, dc_s, z0):
         res.rms_error = _rms(res.model_s, net.s)
     res.dc_pin.message += _pin_settings(state)
     res.messages.append(res.dc_pin.message)
+
+
+def _convex_limit(state):
+    """The convex refit's state limit as a count of 0 or more.  Only the CLI and a loaded design
+    set it, the window has no control for it, so the messages name a value off the default."""
+    try:
+        return max(0, int(state.convex_max_states))
+    except (TypeError, ValueError, OverflowError):
+        return ConverterState.convex_max_states
 
 
 def _pin_settings(state):

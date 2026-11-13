@@ -24,9 +24,10 @@ def _example(name):
         os.path.abspath(__file__))), "snp2le", "examples", name))
 
 
-def _convert(name, order=6, passive=True, thermal=True):
+def _convert(name, order=6, passive=True, thermal=True, convex=ConverterState.convex_max_states):
     return engine.convert(ConverterState(mode="universal", max_order=order,
-                                         enforce_passivity=passive, thermal_noise=thermal),
+                                         enforce_passivity=passive, thermal_noise=thermal,
+                                         convex_max_states=convex),
                           _example(name))
 
 
@@ -218,8 +219,10 @@ def test_a_model_that_is_not_strictly_passive_is_refused():
 
 def test_the_refusal_advice_follows_what_enforcement_already_did():
     """Enforced at 1.00 and still above 1, the advice is another order or band, not the
-    enforcement that already ran.  The BPF at order 9 stays at 3.35 at 0 Hz."""
-    res = _convert("bpf_ihp-sg13g2.s2p", order=9)
+    enforcement that already ran.  Without the convex refit the BPF at order 9 stays at 3.35
+    at 0 Hz, with it it comes out passive and carries the generator."""
+    assert _convert("bpf_ihp-sg13g2.s2p", order=9).noise.ok
+    res = _convert("bpf_ihp-sg13g2.s2p", order=9, convex=0)
     assert res.ok and not res.noise.ok and res.sigma_max > 1.0
     assert "could not bring it below 1, try another Max order" in res.noise.message
     assert "Enforce passivity at" not in res.noise.message
@@ -227,10 +230,11 @@ def test_the_refusal_advice_follows_what_enforcement_already_did():
 
 
 def test_the_refusal_names_a_constant_term_above_one():
-    """The balun at order 6 has a constant term D above 1, which passivity enforcement
-    cannot change.  The refusal names D.  Enforced, it advises another order, unenforced,
-    it says that enforcing could only refit at a lower order."""
-    res = _convert("balun_ihp-sg13cmos5l.s4p")
+    """The balun at order 6 has a constant term D above 1, which residue perturbation cannot
+    change (the convex refit can, so the enforced case runs without it).  The refusal names D.
+    Enforced, it advises another order, unenforced, it says that enforcing could only refit at
+    a lower order."""
+    res = _convert("balun_ihp-sg13cmos5l.s4p", convex=0)
     assert res.ok and not res.noise.ok and res.sigma_max > 1.0
     assert "constant term D" in res.noise.message
     assert res.noise.message.endswith("Try another Max order")

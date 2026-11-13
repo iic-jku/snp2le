@@ -241,6 +241,18 @@ def _wideband_options_given(args):
                                   ("--ct-port", args.ct_port)) if on]
 
 
+def _convex_states(text):
+    """argparse type for --convex-max-states (a whole number of 0 or more)."""
+    try:
+        v = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"invalid state count '{text}' (a whole number, 0 turns the convex refit off)")
+    if v < 0:
+        raise argparse.ArgumentTypeError(f"--convex-max-states must be 0 or more (got {v})")
+    return v
+
+
 def _passivity_ceiling(text):
     """argparse type for the passivity ceiling (a float from 1.0 to 1.2)."""
     try:
@@ -543,6 +555,10 @@ def cmd_convert(args):
               "raw fit untouched", file=sys.stderr)
     p_ceiling = (universal.PASSIVITY_CEILING_DEFAULT if args.passivity_ceiling is None
                 else args.passivity_ceiling)
+    if args.convex_max_states is not None and (args.mode == "structure" or not args.passive):
+        print("[WARN] --convex-max-states is ignored "
+              + ("in structure mode" if args.mode == "structure" else "with --no-passive"),
+              file=sys.stderr)
     given = _wideband_options_given(args)
     struct = get_structure(key) if args.mode == "structure" else None
     named_wideband = getattr(STRUCTURES.get(key), "wideband", False)
@@ -622,6 +638,8 @@ def cmd_convert(args):
             mode=args.mode, structure_key=key,
             max_order=args.order, enforce_passivity=args.passive,
             passivity_ceiling=p_ceiling, thermal_noise=args.thermal_noise,
+            convex_max_states=(ConverterState.convex_max_states if args.convex_max_states is None
+                               else args.convex_max_states),
             dc_pin=args.dc_pin is not False,
             dc_pin_fc=ConverterState.dc_pin_fc if args.dc_pin_fc is None else args.dc_pin_fc,
             dc_island_leak=(ConverterState.dc_island_leak if args.dc_island_leak is None
@@ -797,6 +815,14 @@ def build_parser():
                         f"{universal.PASSIVITY_CEILING_MAX:.1f}. Universal mode, needs "
                         f"--passive. Default "
                         f"{universal.PASSIVITY_CEILING_DEFAULT:.1f} (strictly passive)")
+    c.add_argument("--convex-max-states", dest="convex_max_states", type=_convex_states,
+                   default=None, metavar="N",
+                   help=f"largest model, in states (ports x model order), for which passivity "
+                        f"enforcement first tries the convex refit, the most accurate passive "
+                        f"model with the fit's poles. Its time and memory grow steeply: on one "
+                        f"core about 12 s at 72 states and 80 s and 2.3 GB at 104. 0 turns it "
+                        f"off. Universal mode, needs --passive. Default "
+                        f"{ConverterState.convex_max_states}")
     c.add_argument("--thermal-noise", dest="thermal_noise", action="store_true",
                    default=False,
                    help="add the passive's thermal noise, kT(I - S S^H) at the ports, as a "
