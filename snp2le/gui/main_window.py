@@ -298,7 +298,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if last and os.path.isdir(last):
             return last
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        sub = "spectre" if dialect == "vacask" else "spice"
+        sub = {"vacask": "spectre", "xyce": "xyce"}.get(dialect, "spice")
         default = os.path.join(repo_root, "netlist", sub)
         return default if os.path.isdir(default) else os.getcwd()
 
@@ -326,7 +326,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"export.\n\n{with_symbols(res.noise.message)}.\n\nUntick 'Thermal noise' "
                 "to export the noiseless (ideal) model.")
             return
-        ext = "inc" if dialect == "vacask" else "spice"   # VACASK include file (.inc)
+        ext = netlist.EXTENSION[dialect]
         # default name: <source>_le, falling back to the subcircuit's own name
         src = os.path.splitext(os.path.basename(self.state.source_path))[0] \
             if self.state.source_path else ""
@@ -347,10 +347,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 path = os.path.join(os.path.dirname(path),  # FILE under the valid name too,
                                     res.ir.name + "." + ext)  # so file = subckt = the note
                 renamed = True
-            text = (netlist.render_vacask(res.ir) if dialect == "vacask"
-                    else netlist.render_ngspice(res.ir))
+            text = netlist.render(res.ir, dialect)
         else:
-            text = res.vacask if dialect == "vacask" else res.ngspice
+            text = getattr(res, dialect)
         with open(path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
         # a file name like 'two-port' is not a legal subckt identifier ('-' is the minus
@@ -920,8 +919,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _set_exports_enabled(self, enabled):
         """Export is only offered while `_res` matches what the controls say."""
-        for button in (self.top.exp_ng, self.top.exp_va):
-            button.setEnabled(bool(enabled))
+        self.top.export.setEnabled(bool(enabled))
 
     def _on_fit_started(self):
         for indicator in self._fit_indicators():

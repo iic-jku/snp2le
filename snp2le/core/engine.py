@@ -3,7 +3,7 @@
 """engine.py - the conversion pipeline (pure Python, no Qt).
 
 convert(state, net) restricts the data to the requested fit band (state.f_min /
-state.f_max, both optional), runs the chosen mode, renders both netlist dialects
+state.f_max, both optional), runs the chosen mode, renders every netlist dialect
 from the resulting CircuitIR, and assembles the data-vs-model S-parameters for the
 plot view.  Everything downstream (RMS error, tolerances, plots) therefore refers
 to the fitted band.  Both the GUI and the CLI call this one function.
@@ -181,6 +181,7 @@ def _convert(state, net, progress=None) -> Results:
     track.enter("netlist")
     res.ngspice = _nl.render_ngspice(res.ir)
     res.vacask = _nl.render_vacask(res.ir)
+    res.xyce = _nl.render_xyce(res.ir)
     if not res.value_rows:
         res.value_rows = res.ir.value_rows()
     track.finish(_summary(res))

@@ -17,22 +17,22 @@ Institute for Integrated Circuits and Quantum Computing (IICQC), Johannes Kepler
 
 > [!IMPORTANT]
 > The converter (GUI and CLI) runs anywhere with **Python ≥ 3.10**, see [Install](https://github.com/iic-jku/snp2le#install) below.
-> *Running* the exported netlists in a testbench additionally needs **Xschem** plus **Ngspice** and/or **VACASK**. The easiest way to get all of them is the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container. Since tag `2026.07`, `snp2le` has been installed directly in the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container.
+> *Running* the exported netlists additionally needs **Ngspice**, **VACASK** or **Xyce**, and the bundled testbenches need **Xschem** plus Ngspice or VACASK. The easiest way to get all of them is the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container. Since tag `2026.07`, `snp2le` has been installed directly in the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container.
 
 
 
 ## Description
 
-**snp2le** turns a Touchstone **`.sNp`** S-parameter file (for example from an [AWS Palace](https://awslabs.github.io/palace/) EM simulation) into an equivalent **lumped-element netlist** for **Ngspice** (Berkeley SPICE3) and **VACASK** (Spectre syntax). An EM-extracted structure can then be co-simulated at circuit level, without re-running the field solve.
+**snp2le** turns a Touchstone **`.sNp`** S-parameter file (for example from an [AWS Palace](https://awslabs.github.io/palace/) EM simulation) into an equivalent **lumped-element netlist** for **Ngspice** (Berkeley SPICE3), **VACASK** (Spectre syntax) and **Xyce**. An EM-extracted structure can then be co-simulated at circuit level, without re-running the field solve.
 
 It offers two conversion philosophies:
 
-- **Universal (any N-port).** Vector-fits the S-parameters with [scikit-rf](https://scikit-rf.org) `VectorFitting`, optionally enforces passivity, and synthesises a passive macromodel of R, C and controlled sources. It works for any structure and port count, and is electrically exact but not physically interpretable. Its resistors are emitted noiseless (`noisy=0`, understood by both Ngspice and VACASK): they exist to reproduce the fitted response, not to model a device, and charging thermal noise against them would report noise that tracks the fit order instead of the structure. So by default the model is noiseless (ideal), and the **Thermal noise** option adds the noise the lossy passive really has, kT(I - S S<sup>H</sup>) at its ports, as a generator computed from the fit. See [Thermal noise](https://github.com/iic-jku/snp2le#thermal-noise).
+- **Universal (any N-port).** Vector-fits the S-parameters with [scikit-rf](https://scikit-rf.org) `VectorFitting`, optionally enforces passivity, and synthesises a passive macromodel of R, C and controlled sources. It works for any structure and port count, and is electrically exact but not physically interpretable. Its resistors are emitted noiseless (`noisy=0` in Ngspice and VACASK, a noiseless conductance in Xyce, see [Simulate the Xyce netlist](https://github.com/iic-jku/snp2le#simulate-the-xyce-netlist)): they exist to reproduce the fitted response, not to model a device, and charging thermal noise against them would report noise that tracks the fit order instead of the structure. So by default the model is noiseless (ideal), and the **Thermal noise** option adds the noise the lossy passive really has, kT(I - S S<sup>H</sup>) at its ports, as a generator computed from the fit. See [Thermal noise](https://github.com/iic-jku/snp2le#thermal-noise).
 - **Structure-specific.** Fits a known physical topology, so every component maps to reality (series L, shunt C, coupling k, and so on) at a chosen **extraction frequency**. The two wideband inductor models are the exception: they are fitted over the whole band, up to past the self-resonance, and also handle a center-tapped coil. Its resistors model real loss (a Wilkinson's isolation resistor, a coil's conductor loss), so they keep their thermal noise. See [Available structures](https://github.com/iic-jku/snp2le#available-structures).
 
 Either mode fits the file's full frequency range by default, or a **fit range** of your choosing (e.g. only 110 GHz to 170 GHz of an 80 GHz to 240 GHz EM sweep), so the model order is spent on the band the block actually operates in.
 
-A single dialect-agnostic **Circuit IR** drives both netlist backends and the on-screen schematic, so the outputs always agree. The code is split into a pure-Python, Qt-free `snp2le.core` (fully unit-tested) and a thin `snp2le.gui` on PySide6-Essentials, both driven by one entry point, `engine.convert(state, net)`.
+A single dialect-agnostic **Circuit IR** drives the three netlist backends and the on-screen schematic, so the outputs always agree. The code is split into a pure-Python, Qt-free `snp2le.core` (fully unit-tested) and a thin `snp2le.gui` on PySide6-Essentials, both driven by one entry point, `engine.convert(state, net)`.
 
 A fit of a large N-port runs for seconds to minutes, so it runs on a worker thread and reports as it goes: the GUI shows what the fit is doing, how long it has been running and a progress bar, then leaves the outcome on screen when it finishes, and the CLI draws the same progress on a terminal. See [Watching a conversion](https://github.com/iic-jku/snp2le#watching-a-conversion).
 
@@ -56,7 +56,8 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │  └─ architecture.md         data flow, internals, how to extend
 ├─ 📁 netlist/                exported lumped-element netlists
 │  ├─ 📁 spectre/             VACASK (.inc) + syntax_cheatsheet.inc
-│  └─ 📁 spice/               Ngspice (.spice)
+│  ├─ 📁 spice/               Ngspice (.spice)
+│  └─ 📁 xyce/                Xyce (.cir)
 ├─ 📁 schematic/
 │  └─ 📁 xschem/              DUT symbols (*.sym) and xschemrc
 ├─ 📁 snp2le/                 the application package (pip-installable)
@@ -79,7 +80,7 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │  │  ├─ io.py                load Touchstone, parse Ngspice tables
 │  │  ├─ ir.py                dialect-agnostic Circuit IR
 │  │  ├─ mna.py               rebuild N-port S-parameters from an RLC IR
-│  │  ├─ netlist.py           render the IR to Ngspice and VACASK
+│  │  ├─ netlist.py           render the IR to Ngspice, VACASK and Xyce
 │  │  ├─ noise.py             thermal-noise generator of a universal model
 │  │  ├─ process_state.py     process-wide settings shared by parallel conversions
 │  │  ├─ progress.py          progress reporting for long conversions
@@ -192,7 +193,7 @@ Naming a `.sNp` file on the command line opens the GUI on it instead of the exam
 3. **Restrict the fit range** (optional, both modes). The *Fit range (GHz)* fields start at the loaded file's own span, so they always name the band being fitted. Enter two plain numbers in GHz (e.g. `110` and `170`) to fit only a sub-band. The *Result* panel shows the band actually fitted, and the RMS error, the tolerances, the plots and a testbench run's sweep all follow it. An edge outside the data is clamped to the data and reported, an empty or inverted band is refused. The **DC pin** tick box on the caption line (universal mode, ticked by default) makes the model meet a file's 0 Hz sample, see [The 0 Hz point](https://github.com/iic-jku/snp2le#the-0-hz-point).
 4. **Inspect** the result, element values, per-element **tolerances** at the extraction frequency, the drawn schematic, and the generated netlist in the **Design & Schematic** view.
 5. **Compare** the loaded data (grey) against the extracted model (blue) in the **Plot** view (up to four traces, magnitude and phase). The **View** switch at the right of the title bar carries both views side by side and fills the one you are on, so a click moves between them.
-6. **Export** the netlist. *Export Ngspice* writes a `.spice` file and *Export VACASK* writes an `.inc` file. The `.SUBCKT` is named after the file, so a testbench that instantiates it resolves the include. The header names the snp2le version that wrote the netlist.
+6. **Export** the netlist. The *Export* button opens a menu: *Ngspice* writes a `.spice` file, *VACASK* an `.inc` file and *Xyce* a `.cir` file. The `.SUBCKT` is named after the file, so a testbench that instantiates it resolves the include. The header names the snp2le version that wrote the netlist.
 
 > [!TIP]
 > The **Help** button in the top bar opens a full in-app guide to every control.
@@ -269,7 +270,7 @@ A universal model cannot take that noise from its own resistors, which place the
 - N resistors of 0.25 ohm, one per port, are its only noise sources (`Rnz_e1` to `Rnz_eN`), since 4kTR = kT is the noise power a matched port emits. They drive a copy of the model's state dynamics (`Cnz_x*` and controlled sources `Gnz_*`), which injects the noise waves into each port's internal sensor node.
 - Nothing feeds back into the fitted network, so its S-parameters and its DC operating point stay what they are without the option. The option only steers passivity enforcement at a raised ceiling, where a strictly passive candidate then wins (see [Passivity and the passivity ceiling](https://github.com/iic-jku/snp2le#passivity-and-the-passivity-ceiling)).
 - The noise follows the simulator temperature like any resistor's, while the S-parameters do not change with it.
-- In a noise analysis the block's share is the sum of its `Rnz_e*` entries. Both dialects carry the generator, the simulators differ in which analyses see it. VACASK sees it in `noise`, `hbnoise`, `pnoise` and transient noise (`noisemode="sde"`). Ngspice sees it in `.noise` only, since it has no periodic noise analysis and adds no resistor noise to a transient run, so a mixer's noise figure through a fitted passive is a VACASK job.
+- In a noise analysis the block's share is the sum of its `Rnz_e*` entries. Every dialect carries the generator, the simulators differ in which analyses see it. VACASK sees it in `noise`, `hbnoise`, `pnoise` and transient noise (`noisemode="sde"`). Ngspice and Xyce see it in `.noise` only, since it has no periodic noise analysis and adds no resistor noise to a transient run, so a mixer's noise figure through a fitted passive is a VACASK job.
 - The netlist grows by about 2N + 3 lines per state, where a model has N times its model order states: the bundled WPD at order 6 (fitted at model order 4, 12 states) gains 113 lines, a 7-port at order 23 goes from 1892 to 4659.
 
 The *Result* panel's *noise* row says what the netlist carries: *noiseless*, *thermal (R) ✓* in green once the generator is added, *NOT added* in red when it cannot be, and *thermal (R)* for a structure model with resistors, which carry their own noise.
@@ -350,6 +351,29 @@ python3 testbenches/xschem/plot_simulations/plot_n_port_tb_acsp_ngspice.py two_p
 
 The plot windows open when a display is available. Headless, only the PNGs are written.
 
+### Simulate the Xyce netlist
+
+**Run Simulation** drives Ngspice and VACASK. A Xyce netlist (*Export* > *Xyce*, or `--format xyce`) goes into a testbench of your own:
+
+- It is the Ngspice text with one change. Xyce's resistor has no `noisy=0`, so each resistor the other dialects write with it becomes a VCCS that senses its own terminals, for example `GR1 s1 0 s1 0 0.02` for `R1 s1 0 50.0 noisy=0`. That is the same conductance without thermal noise. A structure model has no such resistor, so its Xyce text is its Ngspice text.
+- S-parameters come from `P` ports with `.AC` and `.LIN`, which writes them as a Touchstone file:
+
+```spice
+* S-parameters of the exported two_port in Xyce
+.include "two_port.cir"
+P1 p1 0 port=1 z0=50
+P2 p2 0 port=2 z0=50
+X1 p1 p2 two_port
+.AC LIN 1001 120G 200G
+.LIN SPARCALC=1 FORMAT=TOUCHSTONE2 DATAFORMAT=RI FILE=two_port_xyce.s2p
+.END
+```
+
+- `.NOISE` reports `ONOISE` in V<sup>2</sup>/Hz, where Ngspice reports V/&radic;Hz. Xyce's Boltzmann constant, 1.3806226e-23 against CODATA's 1.380649e-23, puts its noise power 1.9e-5 below Ngspice's.
+- `.HB` prints a two-sided spectrum, so a tone reads half its amplitude.
+
+Checked with Xyce 7.10 against Ngspice 47 on 75 models, every bundled example in universal mode at orders 6 and 13 with and without thermal noise and in every structure that matches its port count: the S-parameters agree within 1.4e-9 and the output noise within 4e-7 of that constant ratio. The exception is an `inductor-pi` forced onto the band-pass filter at 155 GHz, whose series resistance sits at the 1e-12 ohm floor, where the two simulators differ by 5e-3 in S.
+
 ### Run the tests
 
 ```bash
@@ -393,8 +417,8 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `--peak-q-weight [A]` | structure | wideband inductors: weight L and Q up to 1+A times near the Q peak (A = 2 without a value) |
 | `--shunt-accuracy [K]` | structure | wideband inductors: measure substrate errors against at least K x the series branch, for measured or FDTD data (K = 0.01 without a value) |
 | `--ct-port {1,2,3}` | structure | `inductor-ct`: center tap port (default: detected from the data) |
-| `--format ngspice\|vacask\|both` | both | output dialect(s), default `ngspice`. VACASK writes `.inc` |
-| `-o, --output PATH` | both | output path (single input), names the `.SUBCKT`. A file stem that is not a valid name in both dialects is changed for the `.SUBCKT` (`my-model` to `my_model`), with a warning |
+| `--format ngspice\|vacask\|xyce\|both\|all` | both | output dialect(s), default `ngspice`. VACASK writes `.inc`, Xyce `.cir`. `both` is Ngspice and VACASK, `all` the three from one fit |
+| `-o, --output PATH` | both | output path (single input), names the `.SUBCKT`. A file stem that is not a valid name in every dialect is changed for the `.SUBCKT` (`my-model` to `my_model`), with a warning |
 | `--values` | both | print the element values (extracted, or the synthesised network's) |
 | `--tolerances` | structure | print per-element tolerances at `f_ext` (the inductor, MIM capacitor, line and balun models) |
 | `--simulate SCH` | sim | run an Xschem testbench after converting |
@@ -435,6 +459,9 @@ snp2le -b convert bpf.s2p --mode universal --order 13 --passivity-ceiling 1.05
 
 # add the passive's thermal noise to the macromodel, both dialects
 snp2le -b convert wpd.s3p --mode universal --order 13 --thermal-noise --format both
+
+# one fit, written for Ngspice (.spice), VACASK (.inc) and Xyce (.cir)
+snp2le -b convert bpf.s2p --mode universal --order 13 --format all
 
 # a file with a 0 Hz sample is pinned to it by default, so a coil keeps its DC resistance.
 # Here the DC modes without a path to ground also get 1 uS, for harmonic balance

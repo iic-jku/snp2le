@@ -35,6 +35,7 @@ def build_stylesheet() -> str:
     # QSS url() wants forward slashes, even on Windows
     spin_up = os.path.join(_assets, "spin_up.svg").replace("\\", "/")
     spin_down = os.path.join(_assets, "spin_down.svg").replace("\\", "/")
+    menu_down = os.path.join(_assets, "menu_down.svg").replace("\\", "/")
     from .combobox_style import combobox_qss
     return f"""
 * {{ font-family: "DejaVu Sans", "Segoe UI", sans-serif; font-size: 12px;
@@ -125,6 +126,10 @@ QPushButton#primary {{ background: {JKU_BLUE}; color: #ffffff; border: none;
     font-weight: 600; }}
 QPushButton#primary:hover {{ background: #0072a3; }}
 QPushButton#primary:disabled {{ background: #aab2bd; color: #eef1f5; }}
+/* a primary button that opens a menu (Export): white arrow in the right padding */
+QPushButton#primary[hasMenu="true"] {{ padding-right: 26px; }}
+QPushButton#primary::menu-indicator {{ image: url("{menu_down}"); width: 9px; height: 9px;
+    subcontrol-origin: padding; subcontrol-position: right center; right: 10px; }}
 /* Run Simulation outcome: green on success, red on failure (white, bold) */
 QPushButton#runOk {{ background: {JKU_GREEN}; color: #ffffff; border: none; font-weight: 600; }}
 QPushButton#runOk:hover {{ background: #4f9249; }}

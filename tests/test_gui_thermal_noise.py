@@ -98,6 +98,7 @@ def test_ticking_it_adds_the_generator(win, top):
     assert win.design.noise_out.value.text() == "thermal (R) ✓"
     assert "Rnz_e1" in win.design.ngspice_edit.toPlainText()
     assert "Rnz_e1" in win.design.vacask_edit.toPlainText()
+    assert "Rnz_e1" in win.design.xyce_edit.toPlainText()
     top.thermal_noise.setChecked(False)
     _settle(win)
     assert win._res.noise is None

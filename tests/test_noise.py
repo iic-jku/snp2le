@@ -166,9 +166,10 @@ def test_without_the_option_the_model_stays_noiseless():
     assert np.max(np.abs(cov)) == 0.0
 
 
-def test_only_the_sources_are_noisy_in_both_dialects():
+def test_only_the_sources_are_noisy_in_every_dialect():
     """Inside the noisy model the fit's resistors keep noisy=0, and the N source resistors
-    are the only ones without it."""
+    are the only ones without it.  Xyce has no noisy=0, so there the source resistors are the
+    only resistors left."""
     res = _convert("blc_ihp-sg13g2.s4p")
     n_ports = res.n_ports
     src = {f"Rnz_e{k + 1}" for k in range(n_ports)}
@@ -181,6 +182,7 @@ def test_only_the_sources_are_noisy_in_both_dialects():
         if " resistor r=" in line:
             assert ("noisy=0" in line) == (line.split()[0] not in src), line
     assert sum(ln.endswith(" resistor r=0.25") for ln in res.vacask.splitlines()) == n_ports
+    assert {ln.split()[0] for ln in res.xyce.splitlines() if ln.startswith("R")} == src
     assert res.dc.ok                                      # the generator adds no DC trouble
 
 

@@ -10,7 +10,7 @@ _HTML = """
 <p>This tool turns a Touchstone <b>.sNp</b> S-parameter file (for example from an
 AWS&nbsp;Palace EM simulation) into an equivalent <b>lumped-element netlist</b> that
 reproduces the same S-parameters when simulated. The result drops into a circuit-level
-simulation (<b>Ngspice</b> or <b>VACASK</b>) so an EM-extracted structure co-simulates
+simulation (<b>Ngspice</b>, <b>VACASK</b> or <b>Xyce</b>) so an EM-extracted structure co-simulates
 with the rest of your design, without re-running the field solve.</p>
 
 <h3>Top bar</h3>
@@ -123,8 +123,8 @@ and appends it to the subcircuit: one 0.25&nbsp;&Omega; resistor per port
 that inject the correlated noise waves into the ports. Nothing feeds back into the fitted
 network, so the S-parameters and the operating point stay exactly as they are. A noise
 analysis shows the block's noise as the sum of its <tt>Rnz_e*</tt> contributions. VACASK
-sees it in <tt>noise</tt>, <tt>hbnoise</tt>, <tt>pnoise</tt> and transient noise, Ngspice in
-<tt>.noise</tt> only, since it has no periodic noise analysis and adds no resistor noise to a
+sees it in <tt>noise</tt>, <tt>hbnoise</tt>, <tt>pnoise</tt> and transient noise, Ngspice and Xyce in
+<tt>.noise</tt> only, since they have no periodic noise analysis and add no resistor noise to a
 transient run. The noise is only as good as the loss in the S-parameter data.
 <p><b>It needs a strictly passive model</b>, so keep <b>Enforce passivity</b> ticked and
 the <b>Passivity ceiling</b> at <i>1.00</i>. If the model is not strictly passive at every
@@ -185,6 +185,7 @@ inductors):
   The CLI also takes other weights, up to 10 segments and a fixed substrate network
   (<tt>--peak-q-weight</tt>, <tt>--shunt-accuracy</tt>, <tt>--segments</tt>,
   <tt>--substrate</tt>).</li>
+<li><b>Export</b>: opens a menu with one entry per simulator, <b>Ngspice</b> (<tt>.spice</tt>), <b>VACASK</b> (<tt>.inc</tt>) and <b>Xyce</b> (<tt>.cir</tt>), and writes the finished conversion to a file in that dialect. The <b>Netlist</b> tabs of the Design &amp; Schematic view show the same text.</li>
 <li><b>View</b>: the two-segment switch at the right of the title bar, holding
 <i>Design&nbsp;&amp;&nbsp;Schematic</i> and <i>Plot</i> side by side. The view you are on
 is the filled one, and one click moves to the other. It follows the plots too: popping
@@ -266,23 +267,24 @@ the wrong sign. The &#9675; marker on each
 model curve in the Plot view sits at this frequency.</li>
 <li><b>Schematic</b>: the drawn topology for a physical model. The universal macromodel
 shows a note instead.</li>
-<li><b>Netlist</b>: the generated text for both dialects, in two tabs. <b>Export
-Ngspice</b> and <b>Export VACASK</b> in the top bar write it to a file, and its header
+<li><b>Netlist</b>: the generated text for each dialect, in three tabs. <b>Export</b> in
+the top bar writes it to a file, and its header
 names the snp2le version that wrote it. <b>Ngspice</b>
-(Berkeley SPICE3, <tt>.spice</tt>) and <b>VACASK</b> (Spectre syntax, <tt>.inc</tt>).
+(Berkeley SPICE3, <tt>.spice</tt>), <b>VACASK</b> (Spectre syntax, <tt>.inc</tt>) and <b>Xyce</b> (SPICE syntax, <tt>.cir</tt>).
 Transformer coupling is emitted as a builtin <tt>mutual</tt> instance. Device models and
 OSDI loads come from your testbench, not the exported subcircuit. A universal macromodel's
-resistors carry <tt>noisy=0</tt> (understood by both simulators): they exist to reproduce
+resistors carry <tt>noisy=0</tt> (understood by Ngspice and VACASK): they exist to reproduce
 the fitted response, not to model a device, and charging thermal noise against them would
 report noise that tracks the fit order instead of the structure. Without <b>Thermal
 noise</b> the model is therefore fully noiseless. With it, the generator's
 <tt>Rnz_e*</tt> resistors are the only ones without <tt>noisy=0</tt>.
+Xyce's resistor has no such switch, so the Xyce netlist carries each of these resistors as a controlled source that senses its own terminals, <tt>GR1&nbsp;s1&nbsp;0&nbsp;s1&nbsp;0&nbsp;0.02</tt> for <tt>R1&nbsp;s1&nbsp;0&nbsp;50.0&nbsp;noisy=0</tt>: the same conductance, without thermal noise. Otherwise the Xyce text is the Ngspice text.
 A structure model's resistors are real loss (an isolation resistor, a coil's conductor
 loss) and keep their noise. In VACASK the
 subcircuit's ground is node <tt>GND</tt>: Spectre has no implicit node-0 ground the way
 SPICE does, so your testbench must declare <tt>ground&nbsp;GND</tt> (Xschem's spectre
 netlist does this automatically). A subcircuit grounded to a bare <tt>0</tt> would float
-and give a flat / wrong result. Ngspice keeps node <tt>0</tt>. The subcircuit is named
+and give a flat / wrong result. Ngspice and Xyce keep node <tt>0</tt>. The subcircuit is named
 after the export file, but only letters, digits and '_' are valid in a SPICE / Spectre
 subcircuit name: a file like <tt>two-port</tt> is exported as subckt <tt>two_port</tt>
 (since '-' is the minus operator), and a note window reports the actual name. Use '_'
@@ -363,7 +365,8 @@ solver equilibrates the matrix internally and copes. VACASK's does not, and on i
 would mis-place the resonances above ~5 poles. snp2le conditions the exported macromodel
 automatically (a lossless rescale of the state resistors plus a gain-balance of the
 controlled sources), so high-order universal fits now reproduce the model in VACASK exactly
-as they do in Ngspice. No action is needed, and structure-specific models are unaffected.</p>
+as they do in Ngspice. No action is needed, and structure-specific models are unaffected.
+Xyce reproduces them as Ngspice does, within 1.4e-9 in S on the bundled examples at orders 6 and 13.</p>
 
 <p>While a run is in progress the status reads <i>running...</i> (for as long as the
 simulation takes, and for a VACASK run until its result appears) and then, for Ngspice,
