@@ -64,8 +64,8 @@ def _balance(vf, w0, layout):
     input weight b and damping |Re p| has a controllability Gramian of about b^2 / (2 |Re p|),
     so states x / t with t = b / sqrt(2 |Re p|) have one of about 1.  In the raw realisation a
     pole close to the imaginary axis puts entries of P at 1 / |Re p| next to entries of order
-    1, and the solver's small residual then leaves a narrow violation (a fit with a pole
-    damped at 2e-5 of the band edge came back at sigma_max 1.0024)."""
+    1, and the solver's residual then leaves a narrow violation or stops it on a numerical
+    error (a fit with a pole damped at 2e-5 of the band edge came back at sigma_max 1.0024)."""
     poles = np.atleast_1d(np.asarray(vf.poles)) / w0
     t = np.empty(len(layout))
     for s, _, k, part in layout:
@@ -84,10 +84,9 @@ def svec_rows(m):
 
 
 def lmi_map(A, B, gamma):
-    """(G, h) with svec(L) = h - ... : G x = svec of the variable part of L and h = svec of
-    -L's constant part, for x = [p, c, d], p the upper triangle of P column by column, c and d
-    vec(C) and vec(D) column-major.  Clarabel then reads A x + s = b, s in the PSD cone, as
-    s = svec(-L) >= 0."""
+    """(G, h) with svec(-L) = h - G x, for x = [p, c, d]: p the upper triangle of P column by
+    column, c and d vec(C) and vec(D) column-major.  Clarabel's A x + s = b with s in the PSD
+    cone then reads s = svec(-L) >= 0, that is L <= 0."""
     n, N = B.shape
     m = n + 2 * N
     n_p = n * (n + 1) // 2
