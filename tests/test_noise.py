@@ -232,8 +232,8 @@ def test_the_refusal_advice_follows_what_enforcement_already_did():
 def test_the_refusal_names_a_constant_term_above_one():
     """The balun at order 6 has a constant term D above 1, which residue perturbation cannot
     change (the convex refit can, so the enforced case runs without it).  The refusal names D.
-    Enforced, it advises another order, unenforced, it says that enforcing could only refit at
-    a lower order."""
+    Enforced, it advises another order.  Unenforced, it points at the convex refit, and with
+    the refit off it says that enforcing could only refit at a lower order."""
     res = _convert("balun_ihp-sg13cmos5l.s4p", convex=0)
     assert res.ok and not res.noise.ok and res.sigma_max > 1.0
     assert "constant term D" in res.noise.message
@@ -241,7 +241,12 @@ def test_the_refusal_names_a_constant_term_above_one():
     assert "Enforce passivity at" not in res.noise.message
     free = _convert("balun_ihp-sg13cmos5l.s4p", passive=False)
     assert not free.noise.ok and "constant term D" in free.noise.message
-    assert "would have to refit at a lower order" in free.noise.message
+    assert "residue perturbation cannot change" in free.noise.message
+    assert "can move D through the convex refit at this order" in free.noise.message
+    off = _convert("balun_ihp-sg13cmos5l.s4p", passive=False, convex=0)
+    assert "would have to refit at a lower order" in off.noise.message
+    assert "and passivity enforcement cannot change D." in off.noise.message
+    assert "convex" not in off.noise.message
 
 
 def test_structure_mode_ignores_the_option():

@@ -105,6 +105,19 @@ def test_it_reaches_a_constant_term_perturbation_cannot():
     assert not any("constant term D" in m for m in res.messages)
 
 
+def test_noise_at_a_raised_ceiling_points_at_the_convex_refit():
+    """At ceiling 1.05 the refit aims at 1.05, so the 500 pH coil at order 6 ends at 1.0499 with
+    D there and no noise generator.  The refusal says that enforcing at 1.00 moves D through
+    the convex refit, which it does, rather than that it would need a lower order."""
+    res = _convert("ind_500pH_ihp-sg13cmos5l.s2p", max_order=6, thermal_noise=True,
+                   passivity_ceiling=1.05)
+    assert res.passivity_path == "convex" and 1.0 < res.sigma_max <= 1.05
+    assert not res.noise.ok
+    assert "can move D through the convex refit at this order" in res.noise.message
+    strict = _convert("ind_500pH_ihp-sg13cmos5l.s2p", max_order=6, thermal_noise=True)
+    assert strict.passivity_path == "convex" and strict.noise.ok
+
+
 def test_the_other_candidates_still_compete():
     """The line at order 13 leans on a constant term of 5.24.  The refit at those poles is
     passive but 3e-2 off, the refit that includes the 0 Hz point (refitted convex itself) is
@@ -129,7 +142,8 @@ def test_a_model_above_the_limit_is_left_to_the_old_ladder():
 
 
 def test_the_refit_is_deterministic():
-    """One solver thread and no time limit, so the same fit refits to the same bits."""
+    """No time limit, so the same fit refits to the same bits on one machine.  Another
+    thread count of Clarabel's solver moves the last digits, as another BLAS does."""
     net = io.without_dc(_example("wpd_ihp-sg13g2.s3p"))
     vf = universal._auto_fit(net, 6)
     one, _ = passive_refit.refit(vf, net, 0.9999)
@@ -164,6 +178,19 @@ def test_a_design_file_refuses_a_bad_limit():
     for bad in ("-1", "true", "2.5", '"40"'):
         with pytest.raises(ValueError):
             ConverterState.from_json('{"convex_max_states": %s}' % bad)
+
+
+def test_a_limit_from_code_that_is_no_count_falls_back_to_the_default():
+    """The CLI and a design file check the limit, a state built in code is not checked.  The
+    engine takes only a whole number of 0 or more and names any other value in a message,
+    since True would read as 1 and 50.7 as 50."""
+    for bad in (True, 50.7, -1, "80"):
+        assert engine._convex_limit(ConverterState(convex_max_states=bad)) == 100
+    assert engine._convex_limit(ConverterState(convex_max_states=np.int64(50))) == 50
+    res = _convert("bpf_ihp-sg13g2.s2p", max_order=6, convex_max_states=True)
+    assert res.ok
+    assert ("convex refit limit True is no whole number of 0 or more, the default limit 100 "
+            "states applies") in res.messages
 
 
 def test_the_cli_takes_the_limit(tmp_path):

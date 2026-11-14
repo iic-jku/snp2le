@@ -73,11 +73,12 @@ PASSIVITY_CEILING_DEFAULT = 1.0
 PASSIVITY_CEILING_MAX = 1.2
 
 # The convex passive refit (passive_refit.py) runs while the realisation has at most this many
-# states, ports x model order.  Its cost grows steeply with them: on one core of an AMD Ryzen 9
-# 3950X 72 states took 6.4 s and 0.7 GB, 88 states 12.5 s and 1.3 GB, 104 states 26 s and 2.2 GB.
+# states, ports x model order.  Its cost grows steeply with them: on an Intel Core Ultra 7 255U
+# laptop 72 states took 14.5 s and 0.7 GB, 88 states 31 s and 1.3 GB, 104 states 74 s and 2.3 GB.
 CONVEX_MAX_STATES_DEFAULT = ConverterState.convex_max_states
-# It aims this far below the ceiling, so the solver's residual cannot leave the model above
-# it, and a model refitted at the strict ceiling stays strictly passive for the noise generator.
+# It aims this far below the ceiling, so a model refitted at the strict ceiling stays strictly
+# passive for the noise generator.  `_meets_ceiling` still decides: Clarabel's "AlmostSolved"
+# allows a feasibility residual of 1e-4, the size of this margin.
 _CONVEX_MARGIN = 1e-4
 
 # sigma_max grid: log-spaced points over the model's whole frequency range, plus this
@@ -208,13 +209,25 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
     # A constant term above the ceiling is a violation band that runs to infinity, and the
     # residue perturbation cannot move it, so say which knob is left.
     sigma_d = constant_term_sigma(vf)
-    if sigma_d > ceiling:
+    if sigma_d > ceiling and not convex_max_states:     # the refit is off: 0.1.20's text
         res.messages.append(
             f"the constant term D, the model's value at infinite frequency, has sigma "
             f"{sigma_d:.3f}, and passivity enforcement cannot change D: "
             + ("try another Max order" if enforce_passivity else
                "enforcing passivity would have to refit at a lower order, so try another "
                "Max order first"))
+    elif sigma_d > ceiling:
+        if enforce_passivity:
+            advice = "try another Max order"
+        elif convex_refit_can_run(vf, int(net.nports), convex_max_states):
+            advice = ("enforcing passivity can move it through the convex refit at this order, "
+                      "or try another Max order")
+        else:
+            advice = ("enforcing passivity would have to refit at a lower order, so try another "
+                      "Max order first")
+        res.messages.append(
+            f"the constant term D, the model's value at infinite frequency, has sigma "
+            f"{sigma_d:.3f}, which residue perturbation cannot change: {advice}")
 
     report(_END_SCORING, "synthesising the subcircuit")
     import tempfile, os
@@ -550,9 +563,11 @@ def _enforce_passivity_path(vf, net, ceiling: float = PASSIVITY_CEILING_DEFAULT,
     1. If it already sits below the ceiling, do nothing.
     2. The convex refit at the fit's own poles (passive_refit.py), while the realisation has
        at most `convex_max_states` states: the most accurate model with those poles whose
-       sigma_max stays at or below the ceiling, D included.  It is a candidate like the
-       others below, which all still run as they did without it, so the result never ranks
-       below the old ladder's: strictly passive first with `prefer_strict`, then by error.
+       sigma_max stays at or below the ceiling, D included.  It is a candidate like the others
+       below, which all still run as they did without it, and the best one wins: strictly passive first with
+       `prefer_strict`, then by error.  The perturbed and reduced-order candidates are the
+       old ladder's, the 0 Hz refit ranks its own candidates on `dc_net`, so its pick can
+       differ from the old one.
     3. Enforce from a *pristine copy* of the fit at an escalating sample count
        (this catches narrow violation bands, and replaces scraping scikit-rf's
        warning text, which is brittle).  Each attempt starts from the clean fit
@@ -693,6 +708,18 @@ def _convex_candidate(vf, net, ceiling, max_states, report):
         return None, (f"convex passive refit missed the ceiling: sigma_max "
                       f"{max_singular_value(cand)[0]:.6f}")
     return cand, None
+
+
+def convex_refit_can_run(vf, n_ports, max_states) -> bool:
+    """Would enforcement run the convex refit on `vf`?  The limit has to admit its states and
+    clarabel has to be installed.  The messages that advise on D ask this."""
+    if not max_states:
+        return False
+    from . import passive_refit
+    if passive_refit.n_states(vf, n_ports) > max_states:
+        return False
+    import importlib.util
+    return importlib.util.find_spec("clarabel") is not None
 
 
 def _is_passive(vf) -> bool:

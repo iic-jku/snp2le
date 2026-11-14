@@ -203,15 +203,16 @@ def generator_elements(A, C, K, V0, sensors, w0, ground="0"):
 
 
 def add_thermal_noise(ir, vf, sigma_max=None, sigma_max_freq=None,
-                      strictly_enforced=False) -> NoiseHealth:
+                      strictly_enforced=False, convex_refit=None) -> NoiseHealth:
     """Append the thermal-noise generator of the fit `vf` to its realisation `ir`, in place.
 
     Returns a NoiseHealth.  When `ok` is False nothing was added and `message` says why,
     which is either a model that is not strictly passive or a factor that failed its check.
     `sigma_max` and `sigma_max_freq` are the fit's own measurement (universal.FitResult),
     quoted in that message so it names the same number as the passivity result.
-    `strictly_enforced` says the fit was already enforced at ceiling 1.00.  It only picks
-    the advice in the message, the decision comes from the model alone."""
+    `strictly_enforced` says the fit was already enforced at ceiling 1.00.  `convex_refit` is
+    None with the convex refit off, else whether enforcing at 1.00, which did not happen, would
+    run it on this fit.  They only pick the wording, the decision comes from the model alone."""
     from .units import format_eng
     fail = "thermal noise NOT added: "
     sensors = _port_sensors(ir)
@@ -244,15 +245,21 @@ def add_thermal_noise(ir, vf, sigma_max=None, sigma_max_freq=None,
             where = (f"at {format_eng(f[k], 'Hz')}" if loss_min <= d_loss
                      else "at high frequency")
         if d_loss <= 0.0:
-            # The constant term D is the model at infinite frequency, and enforcement only
-            # perturbs residues, so it cannot bring D below 1.  min eig(I - D D^T) is
-            # 1 - sigma(D)^2.
+            # The constant term D is the model at infinite frequency, and residue perturbation
+            # cannot bring it below 1, only the convex refit can.  min eig(I - D D^T) is
+            # 1 - sigma(D)^2.  With the refit off the text is 0.1.20's.
             cause = (f" Its constant term D, the model's value at infinite frequency, has "
-                     f"sigma {np.sqrt(1.0 - d_loss):.4f}, and passivity enforcement cannot "
-                     f"change D.")
-            advice = ("Try another Max order" if strictly_enforced
-                      else "Enforcing passivity at ceiling 1.00 would have to refit at a "
-                           "lower order, so try another Max order first")
+                     f"sigma {np.sqrt(1.0 - d_loss):.4f}, "
+                     + ("and passivity enforcement cannot change D." if convex_refit is None
+                        else "which residue perturbation cannot change."))
+            if strictly_enforced:
+                advice = "Try another Max order"
+            elif convex_refit:
+                advice = ("Enforcing passivity at ceiling 1.00 can move D through the convex "
+                          "refit at this order, or try another Max order")
+            else:
+                advice = ("Enforcing passivity at ceiling 1.00 would have to refit at a "
+                          "lower order, so try another Max order first")
         else:
             cause = ""
             advice = ("Enforcement at ceiling 1.00 could not bring it below 1, try another "

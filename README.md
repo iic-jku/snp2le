@@ -240,7 +240,7 @@ Why those two limits, and what an out-of-range entry does:
 
 Enforcement tries up to four candidates and keeps the one closest to the data that meets the ceiling and stays within an RMS error of 0.1. With **Thermal noise** ticked a strictly passive candidate wins over one that only meets a raised ceiling, since only it can carry the noise.
 
-1. **The convex refit** keeps the fit's poles and solves for its residues and its constant term D together, under the condition that sigma_max stays at or below the ceiling at every frequency (the bounded-real lemma, after Coelho, Phillips and Silveira, IEEE Trans. CAD 23(2), 2004). The problem is convex, so the result is the most accurate model with those poles that meets the ceiling, and such a model always exists. It aims 1e-4 below the ceiling, so a model refitted at `1.00` is strictly passive and can carry thermal noise. [Clarabel](https://clarabel.org) solves it on one thread, and the same file gives the same bits every run.
+1. **The convex refit** keeps the fit's poles and solves for its residues and its constant term D together, under the condition that sigma_max stays at or below the ceiling at every frequency (the bounded-real lemma, after Coelho, Phillips and Silveira, IEEE Trans. CAD 23(2), 2004). The problem is convex, so the result is the most accurate model with those poles that meets the ceiling, and such a model always exists. It aims 1e-4 below the ceiling, so a model refitted at `1.00` is strictly passive and can carry thermal noise. Whether it meets the ceiling is still checked like every candidate's, by scikit-rf's exact test at `1.00`. [Clarabel](https://clarabel.org) solves it on all cores without a time limit, so the same file gives the same bits every run on one machine, and another core count moves the last digits, as another BLAS library does.
 2. **Residue perturbation** (scikit-rf's `passivity_enforce`), at two sample counts. It keeps D, the model's value at infinite frequency, so a violation band that runs to infinity, caused by a constant term above the ceiling, is out of its reach. When it reaches the ceiling, nothing further is tried.
 3. **A refit at a lower order**, enforced by perturbation.
 4. **A refit that includes the file's 0 Hz point**, for a file that has one and a fit range that starts at its first sample above 0 Hz. scikit-rf meets that point through the constant term, so the refit lands on other poles and residues. It is enforced the same way, convex refit first.
@@ -253,14 +253,16 @@ What the convex refit changes on the bundled examples:
 - `ind_500pH_ihp-sg13cmos5l.s2p` and `balun_ihp-sg13cmos5l.s4p` at order 6 have their constant term above 1, which perturbation cannot move. Both stayed near-passive and could not carry thermal noise, and both now come out strictly passive with the generator.
 - `tline_100um_ihp-sg13g2.s2p` at order 13 leans on a constant term of 5.24. The convex refit at those poles is passive but 3.4e-2 off the data, and the refit with the 0 Hz point, convex itself, comes out passive at model order 9 and 7.5e-4 and wins. Changing every S value of the file by a random 1e-12 made that refit lose in 2 of 8 tries, at order 9 and 13 alike, and the line then reads 3.4e-2, still passive. Order 6 gave 7.9e-4 in all 8.
 
-The convex refit has about n<sup>2</sup>/2 unknowns for a model with n states, ports x model order, and its time and memory grow steeply with n. On one core of an AMD Ryzen 9 3950X:
+The convex refit has about n<sup>2</sup>/2 unknowns for a model with n states, ports x model order, and its time and memory grow steeply with n. On a 16-core AMD Ryzen 9 3950X and on a laptop with an Intel Core Ultra 7 255U (under other load):
 
-| States | Time | Memory |
-| --- | --- | --- |
-| 36 | 0.6 s | 0.2 GB |
-| 72 | 6.4 s | 0.7 GB |
-| 88 | 12.5 s | 1.3 GB |
-| 104 | 26 s | 2.2 GB |
+| States | Time, Ryzen 9 3950X | Time, laptop | Memory |
+| --- | --- | --- | --- |
+| 32 to 36 | 0.6 s | 0.4 s | 0.2 GB |
+| 72 | 6.4 s | 14.5 s | 0.7 GB |
+| 88 | 12.5 s | 31 s | 1.3 GB |
+| 104 | 26 s | 74 s | 2.3 GB |
+
+On a file with a 0 Hz point it can run twice, on the fit and again inside the refit that includes that point.
 
 So it runs only up to 100 states by default, a 4-port at order 25 or an 8-port at order 12. A larger model goes to perturbation directly, and the message line names its state count and the limit. The window has no control for the limit: set it with `--convex-max-states N` on the CLI or `convex_max_states` in a saved design, where 0 skips the refit, and the message line names a value off the default.
 

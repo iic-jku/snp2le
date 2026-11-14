@@ -1212,7 +1212,8 @@ def test_a_constant_term_above_the_ceiling_is_named():
     infinity and that the residue perturbation cannot move.  The message names D and the
     knob that is left.  A model that violates elsewhere (the raw WPD, at 0 Hz) gets no
     such line, and the line never reads as an enforcement the GUI would call near-passive.
-    The convex refit bounds D, so the enforced case runs without it."""
+    The convex refit bounds D, so the enforced case runs without it, and without it the
+    advice for the unenforced case is the lower-order refit, with it the convex refit."""
     import re
 
     def d_lines(res):
@@ -1222,8 +1223,15 @@ def test_a_constant_term_above_the_ceiling_is_named():
                           _example("balun_ihp-sg13cmos5l.s4p"))
     (line,) = d_lines(free)
     sigma_d = float(re.search(r"has sigma ([0-9.]+)", line).group(1))
-    assert sigma_d > 1.0 and "would have to refit at a lower order" in line
+    assert sigma_d > 1.0 and "residue perturbation cannot change" in line
+    assert "can move it through the convex refit at this order" in line
     assert not any("passivity enforced" in m for m in free.messages)
+    off = engine.convert(ConverterState(mode="universal", max_order=6, enforce_passivity=False,
+                                        convex_max_states=0),
+                         _example("balun_ihp-sg13cmos5l.s4p"))
+    (line,) = d_lines(off)
+    assert "would have to refit at a lower order" in line and "convex" not in line
+    assert "and passivity enforcement cannot change D" in line     # 0.1.20's text
     tried = engine.convert(ConverterState(mode="universal", max_order=6, convex_max_states=0),
                            _example("balun_ihp-sg13cmos5l.s4p"))
     (line,) = d_lines(tried)

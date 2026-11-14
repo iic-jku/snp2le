@@ -819,8 +819,8 @@ def build_parser():
                    default=None, metavar="N",
                    help=f"largest model, in states (ports x model order), for which passivity "
                         f"enforcement first tries the convex refit, the most accurate passive "
-                        f"model with the fit's poles. Its time and memory grow steeply: on one "
-                        f"core about 6 s at 72 states and 26 s and 2.2 GB at 104. 0 turns it "
+                        f"model with the fit's poles. Its time and memory grow steeply: on a laptop "
+                        f"about 15 s at 72 states and 74 s and 2.3 GB at 104. 0 turns it "
                         f"off. Universal mode, needs --passive. Default "
                         f"{ConverterState.convex_max_states}")
     c.add_argument("--thermal-noise", dest="thermal_noise", action="store_true",

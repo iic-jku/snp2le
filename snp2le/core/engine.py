@@ -16,6 +16,7 @@ instead of counting steps.  See `progress.py` for the contract.
 A conversion runs its linear algebra on one BLAS thread (`_one_blas_thread`).
 """
 from __future__ import annotations
+import numbers
 import os
 
 import numpy as np
@@ -219,14 +220,19 @@ def _convert_universal(state, net, res, track, dc_net=None, dc_s=None):
     if state.enforce_passivity and limit != ConverterState.convex_max_states:
         res.messages.append((f"convex refit limit {limit} states" if limit else "convex refit off")
                             + f" (default limit {ConverterState.convex_max_states} states)")
+    elif state.enforce_passivity and state.convex_max_states != limit:
+        res.messages.append(f"convex refit limit {state.convex_max_states!r} is no whole number "
+                            f"of 0 or more, the default limit {limit} states applies")
     res.model_s = _uni.model_sparams(fit.vf, net.f, progress=track.sub("model"))
     if state.thermal_noise:
         from . import noise as _noise
         track.enter("noise")
         strict = (state.enforce_passivity and _uni.effective_ceiling(
             state.enforce_passivity, state.passivity_ceiling) <= 1.0)
-        res.noise = _noise.add_thermal_noise(res.ir, fit.vf, fit.sigma_max,
-                                             fit.sigma_max_freq, strictly_enforced=strict)
+        convex = _uni.convex_refit_can_run(fit.vf, int(net.nports), limit)
+        res.noise = _noise.add_thermal_noise(
+            res.ir, fit.vf, fit.sigma_max, fit.sigma_max_freq, strictly_enforced=strict,
+            convex_refit=(convex and not strict) if limit else None)
         if not res.noise.ok:                        # the netlist stays noiseless, say so
             res.messages.append(res.noise.message)
     track.enter("dc")                               # after the generator, so it is checked too
@@ -272,12 +278,13 @@ def _pin_dc(state, net, res, fit, dc_s, z0):
 
 
 def _convex_limit(state):
-    """The convex refit's state limit as a count of 0 or more.  Only the CLI and a loaded design
-    set it, the window has no control for it, so the messages name a value off the default."""
-    try:
-        return max(0, int(state.convex_max_states))
-    except (TypeError, ValueError, OverflowError):
+    """The convex refit's state limit.  Only the CLI and a loaded design set it, and both check
+    it, so a value that is no whole number of 0 or more came from code: the default stands in,
+    and the message under the result names it."""
+    value = state.convex_max_states
+    if isinstance(value, bool) or not isinstance(value, numbers.Integral) or value < 0:
         return ConverterState.convex_max_states
+    return int(value)
 
 
 def _pin_settings(state):
