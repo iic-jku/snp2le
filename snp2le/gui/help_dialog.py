@@ -280,7 +280,8 @@ noise</b> the model is therefore fully noiseless. With it, the generator's
 <tt>Rnz_e*</tt> resistors are the only ones without <tt>noisy=0</tt>.
 Xyce's resistor has no such switch, so the Xyce netlist carries each of these resistors as a controlled source that senses its own terminals, <tt>GR1&nbsp;s1&nbsp;0&nbsp;s1&nbsp;0&nbsp;0.02</tt> for <tt>R1&nbsp;s1&nbsp;0&nbsp;50.0&nbsp;noisy=0</tt>: the same conductance, without thermal noise. Otherwise the Xyce text is the Ngspice text.
 A structure model's resistors are real loss (an isolation resistor, a coil's conductor
-loss) and keep their noise. In VACASK the
+loss) and keep their noise, apart from the 1e-6&nbsp;ohm resistor that breaks the inductor
+loop of a lossless branch-line coupler, which is noiseless (and a controlled source in Xyce). In VACASK the
 subcircuit's ground is node <tt>GND</tt>: Spectre has no implicit node-0 ground the way
 SPICE does, so your testbench must declare <tt>ground&nbsp;GND</tt> (Xschem's spectre
 netlist does this automatically). A subcircuit grounded to a bare <tt>0</tt> would float
@@ -370,7 +371,7 @@ would mis-place the resonances above ~5 poles. snp2le conditions the exported ma
 automatically (a lossless rescale of the state resistors plus a gain-balance of the
 controlled sources), so high-order universal fits now reproduce the model in VACASK exactly
 as they do in Ngspice. No action is needed, and structure-specific models are unaffected.
-Xyce reproduces them as Ngspice does, within 1.4e-9 in S on the bundled examples at orders 6 and 13.</p>
+Xyce reproduces them as Ngspice does, within 1e-11 in S on the bundled examples at orders 6 and 13.</p>
 
 <p>While a run is in progress the status reads <i>running...</i> (for as long as the
 simulation takes, and for a VACASK or Xyce run until the simulator has exited, since both write their result

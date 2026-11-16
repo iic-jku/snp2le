@@ -358,7 +358,7 @@ The plot windows open when a display is available. Headless, only the PNGs are w
 
 The bundled `*_tb_acsp_xyce.sch` testbenches run it like the other two (*Run Simulation*, or `--simulate`), through Xschem's own Xyce batch entry. In a testbench of your own:
 
-- It is the Ngspice text with one change. Xyce's resistor has no `noisy=0`, so each resistor the other dialects write with it becomes a VCCS that senses its own terminals, for example `GR1 s1 0 s1 0 0.02` for `R1 s1 0 50.0 noisy=0`. That is the same conductance without thermal noise. A structure model has no such resistor, so its Xyce text is its Ngspice text.
+- It is the Ngspice text with one change. Xyce's resistor has no `noisy=0`, so each resistor the other dialects write with it becomes a VCCS that senses its own terminals, for example `GR1 s1 0 s1 0 0.02` for `R1 s1 0 50.0 noisy=0`. That is the same conductance without thermal noise. A structure model's resistors are real loss and stay resistors, so its Xyce text is its Ngspice text, apart from the 1e-6 ohm resistor that breaks the inductor loop of a lossless `branchline` (`--no-iso-r`), which is noiseless and becomes a VCCS too.
 - Xschem's ground symbol netlists node `GND`, which Xyce takes as ground only with `.PREPROCESS REPLACEGROUND TRUE`, as the bundled testbenches carry it. Without it the ports float, and the band-pass filter's S-parameters came out wrong by up to 0.96.
 - The bundled testbenches sweep `{f_min}` to `{f_max}` from `sim_range.cir` (`.param`), which snp2le writes with the fitted band before every run, as it writes `sim_range.spice` and `sim_range.inc` for the others.
 - S-parameters come from `P` ports with `.AC` and `.LIN`, which writes them as a Touchstone file:
@@ -374,10 +374,10 @@ X1 p1 p2 two_port
 .END
 ```
 
-- `.NOISE` reports `ONOISE` in V<sup>2</sup>/Hz, where Ngspice reports V/&radic;Hz. Xyce's Boltzmann constant, 1.3806226e-23 against CODATA's 1.380649e-23, puts its noise power 1.9e-5 below Ngspice's.
+- `.NOISE` reports `ONOISE` in V<sup>2</sup>/Hz, where Ngspice reports V/&radic;Hz. Xyce's Boltzmann constant, 1.3806226e-23 against 1.38064852e-23 in Ngspice 47, puts its noise power 1.9e-5 below Ngspice's.
 - `.HB` prints a two-sided spectrum, so a tone reads half its amplitude.
 
-Checked with Xyce 7.10 against Ngspice 47 on 75 models, every bundled example in universal mode at orders 6 and 13 with and without thermal noise and in every structure that matches its port count: the S-parameters agree within 1.4e-9 and the output noise within 4e-7 of that constant ratio. The exception is an `inductor-pi` forced onto the band-pass filter at 155 GHz, whose series resistance sits at the 1e-12 ohm floor, where the two simulators differ by 5e-3 in S. The bundled Xyce testbenches reproduce the exported 2-, 3- and 4-port models within 7e-10 in S at the data points of their 120 to 200 GHz sweep.
+Checked with Xyce 7.10 against Ngspice 47 at the data's own frequencies on 81 models, every bundled example in universal mode at orders 6 and 13 with and without thermal noise (and without the DC pin where the file has a 0 Hz point) and in every structure that matches its port count (`branchline` also lossless): the S-parameters agree within 1e-11 in universal mode and within 3.2e-9 in structure mode, the largest for the lossless `branchline` through its loop resistor's 1e6 S, and the output noise differs by the ratio of the two Boltzmann constants alone, within 2e-8 wherever it is above numerical zero. The exception is a structure forced onto data it does not fit, whose series resistance lands on the 1e-12 ohm floor: for `inductor-pi` and `mim-cap` on the band-pass filter at 155 GHz, Ngspice misses the model by 5.8e-3 and 1.6e-3 in S while Xyce stays within 1.5e-5. The bundled Xyce testbenches reproduce the exported 2-, 3- and 4-port models within 7e-10 in S at the data points of their 120 to 200 GHz sweep.
 
 ### Run the tests
 
