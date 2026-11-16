@@ -193,7 +193,7 @@ def balance_state_gains(ir, ground: str = "0"):
 
 def safe_subckt_name(text: str, fallback: str = "s_equivalent") -> str:
     """Turn an arbitrary string (e.g. an export file stem) into a subcircuit name that is
-    valid in BOTH Ngspice (SPICE3) and VACASK (Spectre).  Only letters, digits and '_' are
+    valid in Ngspice (SPICE3), VACASK (Spectre) and Xyce.  Only letters, digits and '_' are
     portable: '-' is the subtraction operator and ' ', '.', '/' etc. are separators, so a
     name like 'two-port' becomes 'two_port' (otherwise VACASK would not parse it).  Runs of
     such characters collapse to a single '_', leading/trailing '_' are trimmed, a leading

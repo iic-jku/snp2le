@@ -92,6 +92,45 @@ def test_a_structure_model_is_the_ngspice_text(name, key):
     assert xy[0].endswith("(Xyce)") and xy[1:] == ng[1:]
 
 
+def test_a_lossless_branchline_writes_its_loop_resistor_as_a_vccs():
+    """The 1e-6 ohm resistor that breaks the inductor loop of a lossless coupler is the one
+    noiseless resistor a structure has, so it is the one line that differs."""
+    net = io.load_touchstone(_path("blc_ihp-sg13g2.s4p"))
+    f = np.asarray(net.f)
+    res = engine.convert(ConverterState(mode="structure", structure_key="branchline",
+                                        f_extract=float(np.sqrt(f[0] * f[-1])),
+                                        iso_resistor=False), net)
+    assert res.ok, res.error
+    ng, xy = res.ngspice.splitlines()[1:], res.xyce.splitlines()[1:]
+    assert [ln for ln in ng if ln.startswith("Rloop ")] == ["Rloop n0 p2 1e-06 noisy=0"]
+    assert [ln for ln in xy if ln.startswith("GRloop ")] == ["GRloop n0 p2 n0 p2 1000000.0"]
+    assert ([ln for ln in ng if not ln.startswith("Rloop ")]
+            == [ln for ln in xy if not ln.startswith("GRloop ")])
+
+
+def test_a_name_clash_is_refused_whatever_its_case():
+    """Xyce upper-cases names, so the generated `GRp1_a1` is the element `GRP1_A1`."""
+    ir = CircuitIR(name="m", ports=["p1"], physical=False)
+    ir.add(Element("R", "Rp1_a1", ("p1", "0"), 50.0))
+    ir.add(Element("C", "GRP1_A1", ("p1", "0"), 1e-12))
+    with pytest.raises(ValueError, match="GRp1_a1"):
+        netlist.render_xyce(ir)
+
+
+def test_simulate_without_the_benchs_netlist_names_the_format_to_use(tmp_path, monkeypatch,
+                                                                     capsys):
+    """`both` writes no Xyce netlist, so a Xyce bench is pointed at `all`."""
+    from snp2le import cli
+    from snp2le.core import xschem
+    monkeypatch.setattr(xschem, "available", lambda: False)      # stop before any run
+    for fmt, bench, hint in (("ngspice", "tb_xyce.sch", "--format xyce or all"),
+                             ("ngspice", "tb_vacask.sch", "--format vacask or both")):
+        cli.main(["convert", _path("bpf_ihp-sg13g2.s2p"), "--order", "6", "--format", fmt,
+                  "-o", str(tmp_path / "m.spice"), "--quiet", "--simulate",
+                  str(tmp_path / bench)])
+        assert f"(use {hint})" in capsys.readouterr().err
+
+
 def test_a_name_clash_is_refused():
     ir = CircuitIR(name="m", ports=["p1"], physical=False)
     ir.add(Element("R", "R1", ("p1", "0"), 50.0))
