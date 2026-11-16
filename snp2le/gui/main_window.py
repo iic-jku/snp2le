@@ -399,8 +399,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def _write_sim_range(self, cwd):
         """Push the fitted frequency band into the testbench sweep.
 
-        Writes sim_range.inc (VACASK: `var f_min/f_max`) and sim_range.spice (Ngspice:
-        `.csparam f_min/f_max`) next to the testbench.  The testbench includes the matching
+        Writes sim_range.inc (VACASK: `var f_min/f_max`), sim_range.spice (Ngspice:
+        `.csparam f_min/f_max`) and sim_range.cir (Xyce: `.param`) next to the testbench.  The testbench includes the matching
         file (VACASK `include "../sim_range.inc"`, Ngspice `.include ../sim_range.spice`),
         so the f_min/f_max sweep bounds always follow the band the exported model was fitted
         over (the full file unless a Fit range is set, since the model says nothing about

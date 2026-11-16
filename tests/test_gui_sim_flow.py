@@ -164,10 +164,12 @@ def test_loading_a_bench_picks_its_simulator(win, tmp_path, monkeypatch):
         assert win.top.simulator.currentData() == want
 
 
-def test_a_xyce_run_imports_its_touchstone(xyce_bench):
+def test_a_xyce_run_imports_its_touchstone(xyce_bench, monkeypatch):
     """Xyce writes S-parameters only as Touchstone: the poll finds the .s2p the .LIN line
     names, and the overlay reads it."""
     win, data, sims = xyce_bench
+    monkeypatch.setattr(QtWidgets.QMessageBox, "warning",       # a refusal fails, not hangs
+                        staticmethod(lambda *a, **k: pytest.fail(f"import refused: {a[2:]}")))
     shutil.copyfile(_XYCE_RESULT, data / "tb_xyce.s2p")         # written now, by this run
     (sims / "tb_xyce.spice").write_text(
         ".LIN sparcalc=1 file=../plot_simulations/data/tb_xyce.s2p\n", encoding="utf-8")

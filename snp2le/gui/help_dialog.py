@@ -331,8 +331,9 @@ set). The design point <tt>f0</tt> stays in the testbench, and the testbench sti
 standalone in Xschem with the last-written range.</li>
 <li><b>Show output</b>: tick to show the simulator's console and plot windows during the
 run. For Ngspice these are its own console and plot windows. VACASK and Xyce are launched detached,
-so instead a live <b>VACASK output</b> or <b>Xyce output</b> window tails the captured log (banner, analysis
-progress, <i>Completed</i> / <i>Failed</i> / <i>aborted</i> messages, postprocess lines).
+so instead a <b>VACASK output</b> or <b>Xyce output</b> window shows the captured log. Xyce's log grows while it runs.
+VACASK writes its log (banner, analysis progress, <i>Completed</i> / <i>Failed</i> / <i>aborted</i> messages,
+postprocess lines) only when it finishes, so its window fills at the end.
 Leave it unticked to run quietly. The result is imported either way, and the captured
 log still appears in the dialog if a run fails or aborts.</li>
 </ul>

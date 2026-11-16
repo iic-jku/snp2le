@@ -99,7 +99,7 @@ def sim_data_dir(sch_path: str, simulator: str = "ngspice") -> str:
     the simulator runs in.  Xyce: the `FILE=` of the `.LIN` line, read the same way.
     VACASK: the `postprocess: wrote <file>` line of the
     captured console log - it appears once the run's postprocess has finished, so
-    callers re-evaluate while polling; the folder is stable across runs.  Falls back
+    callers re-evaluate while polling.  Falls back
     to `plot_simulations/data/` next to the testbench (the bundled layout).
     """
     sch_path = os.path.abspath(sch_path)
@@ -276,9 +276,9 @@ def simulate_command(sch_path: str, show_output: bool = True, simulator: str = "
 
     Runs in the testbench's own directory, using its `xschemrc` (if present) and a
     `simulations/` directory for the netlist, then quits (-q).  Paths are wrapped in
-    Tcl braces so spaces survive.  Either simulator's testbench writes its result to
-    `plot_simulations/data/<tb>.txt` (Ngspice via `wrdata`, VACASK via its
-    `postprocess` script), so the GUI imports both the same way.
+    Tcl braces so spaces survive.  The bundled testbenches write their result to
+    `plot_simulations/data/` (Ngspice via `wrdata`, VACASK via its `postprocess` script,
+    Xyce via `.LIN`), where `sim_data_dir` finds it.
 
     Ngspice: after `xschem netlist` (re)generates the SPICE netlist (a build artifact,
     not the `.sch`), its control block is patched *deterministically* for the mode, so
