@@ -209,7 +209,7 @@ def fit_universal(net, max_order: int = 12, enforce_passivity: bool = True,
     # A constant term above the ceiling is a violation band that runs to infinity, and the
     # residue perturbation cannot move it, so say which knob is left.
     sigma_d = constant_term_sigma(vf)
-    if sigma_d > ceiling and not convex_max_states:     # the refit is off: 0.1.20's text
+    if sigma_d > ceiling and not convex_max_states:     # refit off: the text from before it
         res.messages.append(
             f"the constant term D, the model's value at infinite frequency, has sigma "
             f"{sigma_d:.3f}, and passivity enforcement cannot change D: "

@@ -248,7 +248,7 @@ def add_thermal_noise(ir, vf, sigma_max=None, sigma_max_freq=None,
         if d_loss <= 0.0:
             # The constant term D is the model at infinite frequency, and residue perturbation
             # cannot bring it below 1, only the convex refit can.  min eig(I - D D^T) is
-            # 1 - sigma(D)^2.  With the refit off the text is 0.1.20's.
+            # 1 - sigma(D)^2.  With the refit off the text is the one from before it.
             cause = (f" Its constant term D, the model's value at infinite frequency, has "
                      f"sigma {np.sqrt(1.0 - d_loss):.4f}, "
                      + ("and passivity enforcement cannot change D." if convex_refit is None

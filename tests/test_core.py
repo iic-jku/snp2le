@@ -1283,7 +1283,7 @@ def test_a_constant_term_above_the_ceiling_is_named():
                          _example("balun_ihp-sg13cmos5l.s4p"))
     (line,) = d_lines(off)
     assert "would have to refit at a lower order" in line and "convex" not in line
-    assert "and passivity enforcement cannot change D" in line     # 0.1.20's text
+    assert "and passivity enforcement cannot change D" in line     # the text from before the refit
     tried = engine.convert(ConverterState(mode="universal", max_order=6, convex_max_states=0),
                            _example("balun_ihp-sg13cmos5l.s4p"))
     (line,) = d_lines(tried)
