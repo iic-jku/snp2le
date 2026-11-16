@@ -358,7 +358,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if renamed:
             QtWidgets.QMessageBox.information(
                 self, "Export note",
-                f"'{raw_stem}' is not a valid Ngspice / VACASK subcircuit name (for example "
+                f"'{raw_stem}' is not a valid Ngspice, VACASK and Xyce subcircuit name (for example "
                 f"'-' is the subtraction operator), so it was saved as "
                 f"'{os.path.basename(path)}' with subcircuit '{res.ir.name}'.\n\n"
                 "Instantiate it in your testbench by that name. Tip: use '_' instead of "
