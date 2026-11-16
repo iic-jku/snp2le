@@ -244,20 +244,86 @@ def test_the_cli_run_keeps_to_its_own_tree(tmp_path, monkeypatch):
     assert theirs.exists() and not own.exists()
 
 
+def test_the_cli_poll_follows_only_its_own_testbench(tmp_path, monkeypatch):
+    """Polled by name alone, another folder's run of the same simulator kept a failed run
+    waiting until --timeout."""
+    sch, _, _ = _copied_vacask_tree(tmp_path)
+    asked = []
+    monkeypatch.setattr(xschem, "available", lambda: True)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(xschem, "simulator_running",
+                        lambda sim, sch=None: asked.append(sch) or False)
+    cli._run_testbench(str(sch), "vacask", False, None, 0.3)
+    assert asked and set(asked) == {str(sch)}
+
+
+def test_a_result_waits_for_its_simulator_to_exit(tmp_path, monkeypatch):
+    """Xyce writes its Touchstone file row by row, and a long sweep's file that stopped
+    growing for one poll tick was imported with 1 of its 401 frequencies."""
+    sch = tmp_path / "testbenches" / "xschem" / "tb_xyce.sch"
+    sch.parent.mkdir(parents=True)
+    sch.write_text("no analysis here\n", encoding="utf-8")
+    result = sch.parent / "plot_simulations" / "data" / "tb_xyce.s2p"
+    exits = time.time() + 1.5
+
+    def xschem_run(*a, **k):                         # Xyce has written its first rows
+        result.write_text("# Hz S RI R 50\n", encoding="utf-8")
+
+    monkeypatch.setattr(xschem, "available", lambda: True)
+    monkeypatch.setattr(subprocess, "run", xschem_run)
+    monkeypatch.setattr(xschem, "simulator_running", lambda sim, sch=None: time.time() < exits)
+    assert cli._run_testbench(str(sch), "xyce", False, None, 10) == str(result)
+    assert time.time() >= exits
+
+
+def test_a_timeout_during_the_run_says_the_simulator_is_still_running(tmp_path, monkeypatch,
+                                                                       capsys):
+    sch = tmp_path / "testbenches" / "xschem" / "tb_xyce.sch"
+    sch.parent.mkdir(parents=True)
+    sch.write_text("no analysis here\n", encoding="utf-8")
+    monkeypatch.setattr(xschem, "available", lambda: True)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(xschem, "simulator_running", lambda sim, sch=None: True)
+    assert cli._run_testbench(str(sch), "xyce", False, None, 0.3) is None
+    assert "xyce is still running after 0 s, nothing was imported" in capsys.readouterr().err
+
+
+def test_vacask_with_show_output_is_imported_while_its_plot_is_open(monkeypatch):
+    """The postprocess has written the table before it opens the plot, and VACASK runs
+    until the plot is closed."""
+    monkeypatch.setattr(xschem, "simulator_running", lambda sim, sch=None: True)
+    assert xschem.still_writing("xyce", "tb.sch") and xschem.still_writing("vacask", "tb.sch")
+    assert not xschem.still_writing("vacask", "tb.sch", show_output=True)
+    assert not xschem.still_writing("ngspice", "tb.sch")
+
+
+def test_a_testbench_takes_only_its_own_name(tmp_path):
+    """`amp_tb` and `amp_tb_ac` in one folder: the prefix match took the other's table."""
+    since = time.time()
+    _touch(tmp_path / "amp_tb_ac.txt", since - 0.5)
+    assert xschem.find_result(str(tmp_path), "amp_tb", since) is None
+    _touch(tmp_path / "amp_tb.txt", since - 0.5)
+    assert xschem.find_result(str(tmp_path), "amp_tb", since) == str(tmp_path / "amp_tb.txt")
+
+
 @pytest.mark.skipif(not os.path.isdir("/proc/self"), reason="needs /proc")
 def test_only_the_benchs_own_simulator_counts(tmp_path, monkeypatch):
-    """xschem runs the simulator in the testbench's simulations/ folder, which tells two runs
-    of one simulator apart.  By name alone, Stop killed every run of it."""
-    monkeypatch.setitem(xschem._SIM_PROC, "xyce", "sleep")
-    benches = [tmp_path / b / "tb_xyce.sch" for b in ("a", "b", "c")]
+    """xschem runs the simulator in the testbench's simulations/ folder and hands it the
+    netlist, `Xyce <folder>/simulations/<stem>.spice`.  By name alone, Stop killed every run
+    of it, and by folder alone a run's import waited for a neighbour testbench's run."""
+    monkeypatch.setitem(xschem._SIM_PROC, "xyce", os.path.basename(sys.executable)[:15])
+    benches = [tmp_path / "a" / "tb_xyce.sch", tmp_path / "b" / "tb_xyce.sch",
+               tmp_path / "b" / "other_xyce.sch", tmp_path / "c" / "tb_xyce.sch"]
     procs = []
     try:
-        for sch in benches[:2]:
-            (sch.parent / "simulations").mkdir(parents=True)
-            procs.append(subprocess.Popen(["sleep", "30"], cwd=sch.parent / "simulations"))
-        assert xschem.simulator_pids("xyce", str(benches[0])) == [procs[0].pid]
-        assert xschem.simulator_pids("xyce", str(benches[1])) == [procs[1].pid]
-        assert not xschem.simulator_running("xyce", str(benches[2]))
+        for sch in benches[:3]:
+            sims = sch.parent / "simulations"
+            sims.mkdir(parents=True, exist_ok=True)
+            procs.append(subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)",
+                                           str(sims / (sch.stem + ".spice"))], cwd=sims))
+        for sch, p in zip(benches, procs):
+            assert xschem.simulator_pids("xyce", str(sch)) == [p.pid]
+        assert not xschem.simulator_running("xyce", str(benches[3]))
         assert {p.pid for p in procs} <= set(xschem.simulator_pids("xyce"))
     finally:
         for p in procs:
