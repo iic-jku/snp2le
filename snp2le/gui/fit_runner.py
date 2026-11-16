@@ -118,7 +118,7 @@ class FitRunner(QtCore.QObject):
 
         A QThread destroyed while running aborts the process, so a worker that
         outlasts the wait is parked in `_ORPHANS` instead of being collected.
-        Collection stays paused for an orphan, which still runs.
+        Collection stays paused for an orphan, which still runs, while this runner lives.
         """
         self._pending = None
         thread = self._thread
