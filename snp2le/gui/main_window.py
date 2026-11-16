@@ -438,23 +438,8 @@ class MainWindow(QtWidgets.QMainWindow):
         prog, args, cwd = xschem.simulate_command(
             self._sch_path, show_output=show, simulator=sim)
         self._write_sim_range(cwd)                        # sync testbench sweep to the data
-        os.makedirs(os.path.join(cwd, "simulations"), exist_ok=True)
-        if sim != "vacask":                     # wrdata and .LIN cannot create the folder
-            os.makedirs(xschem.sim_data_dir(self._sch_path, sim), exist_ok=True)
-        stem = os.path.splitext(os.path.basename(self._sch_path))[0]
-        for stale in xschem.previous_results(              # a clean run this time, so a
-                xschem.sim_data_dir(self._sch_path, sim), stem):   # previous result can
-            try:                                           # never be mistaken for this run's
-                os.remove(stale)
-            except OSError:
-                pass
-        self._sim_log_path = None
-        if sim in xschem.DETACHED:                        # its console is redirected to a log
-            self._sim_log_path = xschem.sim_log_path(self._sch_path, sim)
-            try:
-                os.remove(self._sim_log_path)             # drop the previous run's log
-            except OSError:
-                pass
+        # the previous run's log and result go, the same rule as the CLI's
+        self._sim_log_path = xschem.prepare_run(self._sch_path, sim)
         self._sim_proc = QtCore.QProcess(self)
         self._sim_proc.setWorkingDirectory(cwd)
         self._sim_proc.setProcessChannelMode(QtCore.QProcess.ProcessChannelMode.MergedChannels)
@@ -775,12 +760,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def _detached_running(self):
         # without /proc (e.g. Windows) we can't tell, so assume yes and let the deadline win
         return (True if not os.path.isdir("/proc")
-                else xschem.simulator_running(self._sim_simulator))
+                else xschem.simulator_running(self._sim_simulator, self._sch_path))
 
     def _kill_detached(self):
-        """Terminate the detached simulator process (xschem already exited, so it won't)."""
+        """Terminate this testbench's detached simulator (xschem already exited, so it won't),
+        and no other run of the same simulator."""
         import signal
-        for pid in xschem.simulator_pids(self._sim_simulator):
+        for pid in xschem.simulator_pids(self._sim_simulator, self._sch_path):
             try:
                 os.kill(pid, signal.SIGTERM)
             except OSError:
