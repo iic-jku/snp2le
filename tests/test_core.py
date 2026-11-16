@@ -6,6 +6,7 @@ Covers the unit helpers, both conversion modes, all structures, netlist renderin
 and the awkward edge cases (DC sample, wrong port count).
 """
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -610,7 +611,8 @@ def test_mixed_references_are_renormalised_before_a_structure_extraction():
     truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
     mixed = _referred(truth, np.array([50.0, 75.0]))
     # the pi model is read off in closed form, the wideband one is a least-squares fit whose
-    # R_skin2 moves by 0.2 % when the data move by the renormalisation's 1e-12
+    # undetermined elements (its spread note names R_skin2) move with the BLAS kernel alone,
+    # by 1.6 % on one CI runner, so only the elements the data determine are compared
     for key, rtol in (("inductor-pi", 1e-6), ("inductor-wideband", 1e-2)):
         st = ConverterState(mode="structure", structure_key=key)
         a, b = engine.convert(st, truth), engine.convert(st, mixed)
@@ -620,15 +622,30 @@ def test_mixed_references_are_renormalised_before_a_structure_extraction():
             assert b.messages[1:] == a.messages
         assert np.allclose(b.data_s, a.data_s, rtol=0, atol=1e-10)
         assert np.isclose(b.rms_error, a.rms_error, rtol=rtol), key
+        weak = _undetermined(a) | _undetermined(b)
         for (la, va, ua), (lb, vb, ub) in zip(a.value_rows, b.value_rows):
-            assert (la, ua) == (lb, ub) and np.isclose(va, vb, rtol=rtol), (key, la)
+            assert (la, ua) == (lb, ub), (key, la)
+            assert la in weak or np.isclose(va, vb, rtol=rtol), (key, la)
         for lab, tol in a.value_drift.items():
-            assert np.isclose(b.value_drift[lab], tol, rtol=rtol, atol=1e-9), (key, lab)
+            assert lab in weak or np.isclose(b.value_drift[lab], tol, rtol=rtol, atol=1e-9), (key, lab)
         for name, panels in a.aux_traces.items():
             for side in ("top", "bottom"):
                 assert np.allclose(b.aux_traces[name][side]["data"], panels[side]["data"],
                                    rtol=1e-5, equal_nan=True), (key, name, side)
     assert np.allclose(mixed.z0[0], [50, 75])           # the caller's network is untouched
+
+
+def _undetermined(res):
+    """Value-row labels of the elements a wideband fit's spread note names, for example
+    'Rskin2 (x3) is not determined by the data, ...' gives {'R_skin2'}."""
+    from snp2le.core.structures.inductor_wideband import _row
+    labels = set()
+    for msg in res.messages:
+        head, found, _ = msg.partition(" not determined by the data")
+        if found:
+            names = re.sub(r"\(x[^)]*\)", "", head.rsplit(" ", 1)[0])    # drop factors, "is"/"are"
+            labels |= {_row(n, 0)[0] for n in re.findall(r"[A-Za-z]\w*", names) if n != "and"}
+    return labels
 
 
 def test_mixed_references_reach_a_universal_fit_at_50_ohm():
