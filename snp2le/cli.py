@@ -346,7 +346,6 @@ def _run_testbench(sch, simulator, show_output, sweep, timeout):
         return None
 
     prog, args, cwd = xschem.simulate_command(sch, show_output=show_output, simulator=simulator)
-    os.makedirs(os.path.join(cwd, "simulations"), exist_ok=True)
     if sweep is not None:                                    # the sweep follows the fit
         try:
             xschem.write_sim_range(cwd, float(sweep[0]), float(sweep[1]))
@@ -362,14 +361,7 @@ def _run_testbench(sch, simulator, show_output, sweep, timeout):
 
     stem = os.path.splitext(os.path.basename(sch))[0]
     name = xschem.NAMES.get(simulator, simulator)
-    log = xschem.sim_log_path(sch, simulator) if simulator in xschem.DETACHED else None
-    for stale in xschem.previous_results(sim_data_dir(), stem):      # a clean run this time
-        try:
-            os.remove(stale)
-        except OSError:
-            pass
-    if simulator != "vacask":                   # wrdata and .LIN cannot create the folder
-        os.makedirs(sim_data_dir(), exist_ok=True)
+    log = xschem.prepare_run(sch, simulator)        # the previous run's log and result go
 
     env = os.environ.copy()
     if simulator == "vacask" and show_output:               # let the postprocess pop its plot
@@ -422,7 +414,7 @@ def _run_testbench(sch, simulator, show_output, sweep, timeout):
             return r
         if simulator == "vacask" and aborted():
             return fail("the analysis aborted (e.g. a singular matrix), no result written")
-        if xschem.simulator_running(simulator):
+        if xschem.simulator_running(simulator, sch):
             seen, gone_at = True, 0.0
         elif seen:                                          # ran, then exited with no result
             gone_at = gone_at or time.time()

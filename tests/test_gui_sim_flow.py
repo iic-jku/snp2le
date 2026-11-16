@@ -202,9 +202,39 @@ def test_show_output_names_the_simulator(win):
     win._log_win.close()
 
 
-def test_stop_kills_the_detached_xyce(win, monkeypatch):
+def test_stop_and_the_poll_follow_only_this_benchs_xyce(win, monkeypatch, tmp_path):
     asked = []
-    monkeypatch.setattr(xschem, "simulator_pids", lambda sim: asked.append(sim) or [])
+    monkeypatch.setattr(xschem, "simulator_pids",
+                        lambda sim, sch=None: asked.append((sim, sch)) or [])
     win._sim_simulator = "xyce"
+    win._sch_path = str(tmp_path / "tb_xyce.sch")
     win._kill_detached()
-    assert asked == ["xyce"]
+    win._detached_running()                          # asks only where /proc exists
+    assert asked == [("xyce", win._sch_path)] * (2 if os.path.isdir("/proc") else 1)
+
+
+def test_a_run_clears_the_last_one_by_the_clis_rule(win, monkeypatch, tmp_path):
+    """`xschem.prepare_run` drops the previous log before it reads it, which keeps a run in a
+    copied folder off the original's results."""
+    class Stop(Exception):
+        pass
+
+    def prepare(sch, sim):
+        asked.append((sch, sim))
+        raise Stop
+
+    asked = []
+    sch = tmp_path / "testbenches" / "xschem" / "tb_vacask.sch"
+    sch.parent.mkdir(parents=True)
+    sch.write_text("dummy\n", encoding="utf-8")
+    monkeypatch.setattr(xschem, "available", lambda: True)
+    monkeypatch.setattr(xschem, "prepare_run", prepare)
+    combo, index = win.top.simulator, win.top.simulator.currentIndex()
+    win._sch_path, win._sim_proc, win._sim_timer = str(sch), None, None
+    combo.setCurrentIndex(combo.findData("vacask"))
+    try:
+        with pytest.raises(Stop):
+            win.on_run_sim()
+    finally:
+        combo.setCurrentIndex(index)
+    assert asked == [(str(sch), "vacask")] and win._sim_proc is None

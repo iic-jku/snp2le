@@ -62,10 +62,14 @@ def simulator_for(sch_path: str) -> str:
     return next((s for s in ("vacask", "xyce") if s in name), "ngspice")
 
 
+def _netlist_dir(sch_path: str) -> str:
+    """The folder xschem netlists `sch_path` into and runs its simulator in."""
+    return os.path.join(os.path.dirname(os.path.abspath(sch_path)), "simulations")
+
+
 def sim_log_path(sch_path: str, simulator: str) -> str:
     """Absolute path of the console log captured for `simulator` running `sch_path`."""
-    cwd = os.path.dirname(os.path.abspath(sch_path))
-    return os.path.join(cwd, "simulations", _SIM_LOG.get(simulator, VACASK_LOG))
+    return os.path.join(_netlist_dir(sch_path), _SIM_LOG.get(simulator, VACASK_LOG))
 
 
 def vacask_log_path(sch_path: str) -> str:
@@ -171,6 +175,33 @@ def previous_results(data_dir: str, stem: str) -> list:
                  or _TOUCHSTONE.fullmatch(os.path.splitext(f)[1]))]
 
 
+def prepare_run(sch_path: str, simulator: str):
+    """Make the folders a run of `sch_path` writes into and delete what its previous run
+    left there, so nothing old passes for this run's result.  Returns the console log path
+    of a detached simulator, else None.
+
+    The log goes before the results: a VACASK log names its result folder by absolute path,
+    so a log copied along with a testbench folder pointed the cleanup at the original's."""
+    log = None
+    os.makedirs(_netlist_dir(sch_path), exist_ok=True)
+    if simulator in DETACHED:
+        log = sim_log_path(sch_path, simulator)
+        try:
+            os.remove(log)
+        except OSError:
+            pass
+    data_dir = sim_data_dir(sch_path, simulator)
+    stem = os.path.splitext(os.path.basename(sch_path))[0]
+    for stale in previous_results(data_dir, stem):
+        try:
+            os.remove(stale)
+        except OSError:
+            pass
+    if simulator != "vacask":                       # wrdata and .LIN cannot create the folder
+        os.makedirs(data_dir, exist_ok=True)
+    return log
+
+
 def write_sim_range(cwd: str, f_min: float, f_max: float) -> None:
     """Write sim_range.inc (VACASK `var`), sim_range.spice (Ngspice `.csparam`) and
     sim_range.cir (Xyce `.param`) into
@@ -190,13 +221,16 @@ _SIM_PROC = {"vacask": "vacask", "ngspice": "ngspice", "xyce": "Xyce"}
 _PROC = "/proc"
 
 
-def simulator_pids(simulator: str) -> list:
-    """PIDs of running processes of `simulator`.  xschem launches the simulator out of its
-    own process tree and quits, so scan /proc by command name.  A zombie does not count: in
-    a container whose PID 1 reaps no orphans, every finished run stays one, and the poll
-    took that for a run still going until its deadline.  Empty where /proc is unavailable
-    (e.g. Windows)."""
+def simulator_pids(simulator: str, sch_path: str = None) -> list:
+    """PIDs of running processes of `simulator`, with `sch_path` only those running that
+    testbench.  xschem launches the simulator out of its own process tree and quits, so scan
+    /proc by command name and by working directory, which xschem sets to the testbench's
+    netlist dir: by name alone, Stop killed another testbench's or another session's run.
+    A zombie does not count: in a container whose PID 1 reaps no orphans, every finished run
+    stays one, and the poll took that for a run still going until its deadline.  Empty where
+    /proc is unavailable (e.g. Windows)."""
     name = _SIM_PROC.get(simulator, simulator)
+    want = os.path.realpath(_netlist_dir(sch_path)) if sch_path else None
     pids = []
     if not os.path.isdir(_PROC):
         return pids
@@ -204,11 +238,13 @@ def simulator_pids(simulator: str) -> list:
         if not d.isdigit():
             continue
         try:
-            with open(os.path.join(_PROC, d, "comm")) as fh:
+            with open(os.path.join(_PROC, d, "comm"), encoding="utf-8") as fh:
                 if name not in fh.read():
                     continue
-            with open(os.path.join(_PROC, d, "stat")) as fh:
+            with open(os.path.join(_PROC, d, "stat"), encoding="utf-8") as fh:
                 stat = fh.read()
+            if want and os.path.realpath(os.readlink(os.path.join(_PROC, d, "cwd"))) != want:
+                continue                              # another testbench's run, or not ours
         except OSError:
             continue
         if stat[stat.rfind(")") + 2:][:1] not in ("Z", "X"):    # the state after "(comm) "
@@ -216,10 +252,11 @@ def simulator_pids(simulator: str) -> list:
     return pids
 
 
-def simulator_running(simulator: str) -> bool:
-    """True if a detached process for `simulator` is alive.  Returns False where /proc is
-    unavailable (e.g. Windows), where the caller falls back to a wall-clock deadline."""
-    return bool(simulator_pids(simulator))
+def simulator_running(simulator: str, sch_path: str = None) -> bool:
+    """True if a detached process for `simulator` is alive, with `sch_path` one running that
+    testbench.  Returns False where /proc is unavailable (e.g. Windows), where the caller
+    falls back to a wall-clock deadline."""
+    return bool(simulator_pids(simulator, sch_path))
 
 
 def simulate_command(sch_path: str, show_output: bool = True, simulator: str = "ngspice"):

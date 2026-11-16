@@ -200,3 +200,66 @@ def test_a_zombie_simulator_is_not_running(tmp_path, monkeypatch):
     assert xschem.simulator_pids("xyce") == [101]
     assert xschem.simulator_pids("vacask") == [103]
     assert xschem.simulator_running("xyce") and not xschem.simulator_running("ngspice")
+
+
+# --------------------------------------------------------------------------- #
+#  A run keeps to its own testbench
+# --------------------------------------------------------------------------- #
+import subprocess                                          # noqa: E402
+
+import pytest                                              # noqa: E402
+
+from snp2le import cli                                     # noqa: E402
+
+
+def _copied_vacask_tree(tmp_path):
+    """A testbench tree with a VACASK result, and a copy of it with a result of its own and
+    the original's console log, as copying the folder with its simulations/ leaves it."""
+    trees = [tmp_path / t / "testbenches" / "xschem" for t in ("orig", "copy")]
+    for d in trees:
+        (d / "plot_simulations" / "data").mkdir(parents=True)
+        (d / "simulations").mkdir()
+        (d / "tb_vacask.sch").write_text("dummy\n", encoding="utf-8")
+        (d / "plot_simulations" / "data" / "tb_vacask.txt").write_text("x\n", encoding="utf-8")
+    theirs, own = (d / "plot_simulations" / "data" / "tb_vacask.txt" for d in trees)
+    (trees[1] / "simulations" / "vacask.log").write_text(
+        f"postprocess: wrote {theirs.as_posix()}\n", encoding="utf-8")
+    return trees[1] / "tb_vacask.sch", theirs, own
+
+
+def test_a_run_never_deletes_what_a_copied_log_names(tmp_path):
+    """A VACASK log names its result folder by absolute path, so the run in a copied folder
+    followed the original's log and deleted the original's result."""
+    sch, theirs, own = _copied_vacask_tree(tmp_path)
+    log = xschem.prepare_run(str(sch), "vacask")
+    assert log == xschem.sim_log_path(str(sch), "vacask") and not os.path.exists(log)
+    assert theirs.exists() and not own.exists()
+
+
+def test_the_cli_run_keeps_to_its_own_tree(tmp_path, monkeypatch):
+    sch, theirs, own = _copied_vacask_tree(tmp_path)
+    monkeypatch.setattr(xschem, "available", lambda: True)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: None)      # no xschem starts
+    assert cli._run_testbench(str(sch), "vacask", False, None, 0.3) is None
+    assert theirs.exists() and not own.exists()
+
+
+@pytest.mark.skipif(not os.path.isdir("/proc/self"), reason="needs /proc")
+def test_only_the_benchs_own_simulator_counts(tmp_path, monkeypatch):
+    """xschem runs the simulator in the testbench's simulations/ folder, which tells two runs
+    of one simulator apart.  By name alone, Stop killed every run of it."""
+    monkeypatch.setitem(xschem._SIM_PROC, "xyce", "sleep")
+    benches = [tmp_path / b / "tb_xyce.sch" for b in ("a", "b", "c")]
+    procs = []
+    try:
+        for sch in benches[:2]:
+            (sch.parent / "simulations").mkdir(parents=True)
+            procs.append(subprocess.Popen(["sleep", "30"], cwd=sch.parent / "simulations"))
+        assert xschem.simulator_pids("xyce", str(benches[0])) == [procs[0].pid]
+        assert xschem.simulator_pids("xyce", str(benches[1])) == [procs[1].pid]
+        assert not xschem.simulator_running("xyce", str(benches[2]))
+        assert {p.pid for p in procs} <= set(xschem.simulator_pids("xyce"))
+    finally:
+        for p in procs:
+            p.kill()
+            p.wait()
