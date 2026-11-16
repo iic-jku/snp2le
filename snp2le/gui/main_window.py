@@ -401,7 +401,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         Writes sim_range.inc (VACASK: `var f_min/f_max`), sim_range.spice (Ngspice:
         `.csparam f_min/f_max`) and sim_range.cir (Xyce: `.param`) next to the testbench.  The testbench includes the matching
-        file (VACASK `include "../sim_range.inc"`, Ngspice `.include ../sim_range.spice`),
+        file (VACASK `include "../sim_range.inc"`, Ngspice `.include ../sim_range.spice`, Xyce
+        `.include ../sim_range.cir`),
         so the f_min/f_max sweep bounds always follow the band the exported model was fitted
         over (the full file unless a Fit range is set, since the model says nothing about
         frequencies it never saw), yet the testbench still runs standalone in Xschem with the
