@@ -102,3 +102,34 @@ def test_overlapping_conversions_give_the_count_back(two_threads, monkeypatch):
     assert len(results) == 2 and all(r.ok for r in results)
     assert seen == [(1,), (1,), (1,)]
     assert _blas_threads() == [2]
+
+
+def test_each_conversion_on_a_new_thread_runs_on_one_blas_thread(two_threads, monkeypatch):
+    """The GUI converts on a new QThread each time, and a finished QThread still counts as alive.
+    threadpoolctl 3.8 lets only the thread that set OpenBLAS first set it again while that thread
+    lives, so the second fit ran on every BLAS thread."""
+    for name in engine._BLAS_THREAD_VARS:
+        monkeypatch.delenv(name, raising=False)
+    release = threading.Event()
+    seen = []
+
+    def fit_and_stay_alive(done):
+        try:
+            seen.append(_threads_seen_while_converting())
+        finally:
+            done.set()
+        release.wait(timeout=120)
+
+    threads = []
+    try:
+        for _ in range(2):
+            done = threading.Event()
+            threads.append(threading.Thread(target=fit_and_stay_alive, args=(done,)))
+            threads[-1].start()
+            assert done.wait(timeout=300)
+    finally:
+        release.set()
+        for t in threads:
+            t.join()
+    assert seen == [{(1,)}, {(1,)}]
+    assert _blas_threads() == [2]
