@@ -67,3 +67,16 @@ def test_dependency_declares_essentials():
     assert qt, "no PySide6 dependency found in pyproject.toml"
     assert all("PySide6-Essentials" in ln for ln in qt), (
         f"pyproject.toml must depend on PySide6-Essentials, got: {qt}")
+
+
+def test_requirements_txt_repeats_the_runtime_dependencies():
+    """A source install from requirements.txt gets the same pins and markers as pip, the
+    Linux cap below PySide6 6.12 included."""
+    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    deps = text.split("dependencies = [", 1)[1].split("]", 1)[0]
+    want = sorted(ln.strip().rstrip(",").strip('"') for ln in deps.splitlines()
+                  if ln.strip() and not ln.strip().startswith("#"))
+    runtime = (ROOT / "requirements.txt").read_text(encoding="utf-8").split("\n\n", 1)[0]
+    got = sorted(ln.split(" #", 1)[0].strip() for ln in runtime.splitlines()
+                 if ln.strip() and not ln.strip().startswith("#"))
+    assert got == want
