@@ -108,6 +108,29 @@ def test_a_lossless_branchline_writes_its_loop_resistor_as_a_vccs():
             == [ln for ln in xy if not ln.startswith("GRloop ")])
 
 
+def test_a_name_clash_is_refused_whatever_its_case():
+    """Xyce upper-cases names, so the generated `GRp1_a1` is the element `GRP1_A1`."""
+    ir = CircuitIR(name="m", ports=["p1"], physical=False)
+    ir.add(Element("R", "Rp1_a1", ("p1", "0"), 50.0))
+    ir.add(Element("C", "GRP1_A1", ("p1", "0"), 1e-12))
+    with pytest.raises(ValueError, match="GRp1_a1"):
+        netlist.render_xyce(ir)
+
+
+def test_simulate_without_the_benchs_netlist_names_the_format_to_use(tmp_path, monkeypatch,
+                                                                     capsys):
+    """`both` writes no Xyce netlist, so a Xyce bench is pointed at `all`."""
+    from snp2le import cli
+    from snp2le.core import xschem
+    monkeypatch.setattr(xschem, "available", lambda: False)      # stop before any run
+    for fmt, bench, hint in (("ngspice", "tb_xyce.sch", "--format xyce or all"),
+                             ("ngspice", "tb_vacask.sch", "--format vacask or both")):
+        cli.main(["convert", _path("bpf_ihp-sg13g2.s2p"), "--order", "6", "--format", fmt,
+                  "-o", str(tmp_path / "m.spice"), "--quiet", "--simulate",
+                  str(tmp_path / bench)])
+        assert f"(use {hint})" in capsys.readouterr().err
+
+
 def test_a_name_clash_is_refused():
     ir = CircuitIR(name="m", ports=["p1"], physical=False)
     ir.add(Element("R", "R1", ("p1", "0"), 50.0))

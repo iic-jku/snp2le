@@ -73,6 +73,12 @@ def test_each_entry_writes_its_dialect(win, dialect, tmp_path, monkeypatch):
     assert win._res.ir.name == "my_model"
 
 
+def test_each_dialect_opens_its_own_netlist_folder(win):
+    for dialect, sub in (("ngspice", "spice"), ("vacask", "spectre"), ("xyce", "xyce")):
+        win._last_export_dir.pop(dialect, None)
+        assert os.path.normpath(win._export_dir(dialect)).endswith(os.path.join("netlist", sub))
+
+
 def test_the_xyce_tab_shows_the_xyce_netlist(win):
     tabs = win.design.tabs
     assert [tabs.tabText(i) for i in range(tabs.count())] == [
