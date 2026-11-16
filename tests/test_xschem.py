@@ -244,6 +244,19 @@ def test_the_cli_run_keeps_to_its_own_tree(tmp_path, monkeypatch):
     assert theirs.exists() and not own.exists()
 
 
+def test_the_cli_poll_follows_only_its_own_testbench(tmp_path, monkeypatch):
+    """Polled by name alone, another folder's run of the same simulator kept a failed run
+    waiting until --timeout."""
+    sch, _, _ = _copied_vacask_tree(tmp_path)
+    asked = []
+    monkeypatch.setattr(xschem, "available", lambda: True)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(xschem, "simulator_running",
+                        lambda sim, sch=None: asked.append(sch) or False)
+    cli._run_testbench(str(sch), "vacask", False, None, 0.3)
+    assert asked and set(asked) == {str(sch)}
+
+
 def test_a_result_waits_for_its_simulator_to_exit(tmp_path, monkeypatch):
     """Xyce writes its Touchstone file row by row, and a long sweep's file that stopped
     growing for one poll tick was imported with 1 of its 401 frequencies."""
