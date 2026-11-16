@@ -280,7 +280,8 @@ noise</b> the model is therefore fully noiseless. With it, the generator's
 <tt>Rnz_e*</tt> resistors are the only ones without <tt>noisy=0</tt>.
 Xyce's resistor has no such switch, so the Xyce netlist carries each of these resistors as a controlled source that senses its own terminals, <tt>GR1&nbsp;s1&nbsp;0&nbsp;s1&nbsp;0&nbsp;0.02</tt> for <tt>R1&nbsp;s1&nbsp;0&nbsp;50.0&nbsp;noisy=0</tt>: the same conductance, without thermal noise. Otherwise the Xyce text is the Ngspice text.
 A structure model's resistors are real loss (an isolation resistor, a coil's conductor
-loss) and keep their noise. In VACASK the
+loss) and keep their noise, apart from the 1e-6&nbsp;ohm resistor that breaks the inductor
+loop of a lossless branch-line coupler, which is noiseless (and a controlled source in Xyce). In VACASK the
 subcircuit's ground is node <tt>GND</tt>: Spectre has no implicit node-0 ground the way
 SPICE does, so your testbench must declare <tt>ground&nbsp;GND</tt> (Xschem's spectre
 netlist does this automatically). A subcircuit grounded to a bare <tt>0</tt> would float
@@ -331,8 +332,9 @@ set). The design point <tt>f0</tt> stays in the testbench, and the testbench sti
 standalone in Xschem with the last-written range.</li>
 <li><b>Show output</b>: tick to show the simulator's console and plot windows during the
 run. For Ngspice these are its own console and plot windows. VACASK and Xyce are launched detached,
-so instead a live <b>VACASK output</b> or <b>Xyce output</b> window tails the captured log (banner, analysis
-progress, <i>Completed</i> / <i>Failed</i> / <i>aborted</i> messages, postprocess lines).
+so instead a <b>VACASK output</b> or <b>Xyce output</b> window shows the captured log. Xyce's log grows while it runs.
+VACASK writes its log (banner, analysis progress, <i>Completed</i> / <i>Failed</i> / <i>aborted</i> messages,
+postprocess lines) only when it finishes, so its window fills at the end.
 Leave it unticked to run quietly. The result is imported either way, and the captured
 log still appears in the dialog if a run fails or aborts.</li>
 </ul>
@@ -369,10 +371,12 @@ would mis-place the resonances above ~5 poles. snp2le conditions the exported ma
 automatically (a lossless rescale of the state resistors plus a gain-balance of the
 controlled sources), so high-order universal fits now reproduce the model in VACASK exactly
 as they do in Ngspice. No action is needed, and structure-specific models are unaffected.
-Xyce reproduces them as Ngspice does, within 1.4e-9 in S on the bundled examples at orders 6 and 13.</p>
+Xyce reproduces them as Ngspice does, within 1e-11 in S on the bundled examples at orders 6 and 13.</p>
 
 <p>While a run is in progress the status reads <i>running...</i> (for as long as the
-simulation takes, and for a VACASK or Xyce run until its result appears) and then, for Ngspice,
+simulation takes, and for a VACASK or Xyce run until the simulator has exited, since both write their result
+row by row, except VACASK with <b>Show output</b>, whose plot window keeps it running, and a system
+without <tt>/proc</tt> such as Windows, where the result is imported once it stops growing) and then, for Ngspice,
 <i>importing...</i>. The <b>Run Simulation</b> button becomes a <b>Stop</b> button you can
 press to cancel. It ends this testbench's simulator and leaves any other run alone. A run is not stopped for being slow. An Ngspice run without <b>Show
 output</b> is stopped when it has used no CPU for 60&nbsp;s and looks hung, or after

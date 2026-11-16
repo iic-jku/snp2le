@@ -164,10 +164,12 @@ def test_loading_a_bench_picks_its_simulator(win, tmp_path, monkeypatch):
         assert win.top.simulator.currentData() == want
 
 
-def test_a_xyce_run_imports_its_touchstone(xyce_bench):
+def test_a_xyce_run_imports_its_touchstone(xyce_bench, monkeypatch):
     """Xyce writes S-parameters only as Touchstone: the poll finds the .s2p the .LIN line
     names, and the overlay reads it."""
     win, data, sims = xyce_bench
+    monkeypatch.setattr(QtWidgets.QMessageBox, "warning",       # a refusal fails, not hangs
+                        staticmethod(lambda *a, **k: pytest.fail(f"import refused: {a[2:]}")))
     shutil.copyfile(_XYCE_RESULT, data / "tb_xyce.s2p")         # written now, by this run
     (sims / "tb_xyce.spice").write_text(
         ".LIN sparcalc=1 file=../plot_simulations/data/tb_xyce.s2p\n", encoding="utf-8")
@@ -176,6 +178,23 @@ def test_a_xyce_run_imports_its_touchstone(xyce_bench):
     assert win.plots.import_sim_file(result)
     assert sorted(k for k in win.plots._sim if k != "f") == ["S11", "S12", "S21", "S22"]
     win.plots.clear_sim()
+
+
+def test_a_xyce_result_waits_for_xyce_to_exit(xyce_bench, monkeypatch):
+    win, data, sims = xyce_bench
+    shutil.copyfile(_XYCE_RESULT, data / "tb_xyce.s2p")
+    running, imported = [True], []
+    monkeypatch.setattr(xschem, "simulator_running", lambda sim, sch=None: running[0])
+    monkeypatch.setattr(win, "_finish_sim_import", imported.append)
+    win._sim_interactive = False
+    win._sim_poll_deadline = time.time() + 100.0
+    for _ in range(3):
+        win._poll_sim_result()
+    assert imported == []                            # Xyce is still writing it
+    running[0] = False
+    for _ in range(2):
+        win._poll_sim_result()
+    assert [os.path.normpath(p) for p in imported] == [os.path.normpath(str(data / "tb_xyce.s2p"))]
 
 
 def test_a_xyce_run_without_a_result_fails_once(xyce_bench, monkeypatch):

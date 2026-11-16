@@ -99,7 +99,7 @@ def sim_data_dir(sch_path: str, simulator: str = "ngspice") -> str:
     the simulator runs in.  Xyce: the `FILE=` of the `.LIN` line, read the same way.
     VACASK: the `postprocess: wrote <file>` line of the
     captured console log - it appears once the run's postprocess has finished, so
-    callers re-evaluate while polling; the folder is stable across runs.  Falls back
+    callers re-evaluate while polling.  Falls back
     to `plot_simulations/data/` next to the testbench (the bundled layout).
     """
     sch_path = os.path.abspath(sch_path)
@@ -135,11 +135,11 @@ _TOUCHSTONE = re.compile(r"\.s\d+p", re.I)
 
 def find_result(data_dir: str, stem: str, since: float):
     """Newest result written in `data_dir` since `since` (epoch seconds), or None.  A file
-    named after the testbench counts with any extension that is not a netlist, log or
-    figure, since Ngspice `wrdata` targets vary and Xyce writes `.sNp`, and with 1 s of
-    grace for a coarse file clock.  Without one, a table or Touchstone file counts only if
-    it is strictly newer than `since`: with the grace, a run started right after another
-    took the previous testbench's result for its own."""
+    named after the testbench (its full stem, so `amp_tb` never takes `amp_tb_ac.txt`) counts
+    with any extension that is not a netlist, log or figure, since Ngspice `wrdata` targets
+    vary and Xyce writes `.sNp`, and with 1 s of grace for a coarse file clock.  Without
+    one, a table or Touchstone file counts only if it is strictly newer than `since`: with
+    the grace, a run started right after another took the previous testbench's result."""
     if not os.path.isdir(data_dir):
         return None
     named, data = [], []
@@ -152,7 +152,7 @@ def find_result(data_dir: str, stem: str, since: float):
             mt = os.path.getmtime(p)
         except OSError:
             continue
-        if f.startswith(stem):
+        if os.path.splitext(f)[0] == stem:
             if mt >= since - 1:                             # (re)written by this run
                 named.append((mt, p))
         elif (ext in _DATA_EXTS or _TOUCHSTONE.fullmatch(ext)) and mt > since:
@@ -226,11 +226,15 @@ def simulator_pids(simulator: str, sch_path: str = None) -> list:
     testbench.  xschem launches the simulator out of its own process tree and quits, so scan
     /proc by command name and by working directory, which xschem sets to the testbench's
     netlist dir: by name alone, Stop killed another testbench's or another session's run.
-    A zombie does not count: in a container whose PID 1 reaps no orphans, every finished run
-    stays one, and the poll took that for a run still going until its deadline.  Empty where
-    /proc is unavailable (e.g. Windows)."""
+    Testbenches in one folder share that dir, so VACASK and Xyce, whose command we set to
+    `<simulator> "$N"`, are also told apart by the netlist in their arguments: otherwise a
+    run's import waited for a neighbour's run to end.  A zombie does not count: in a
+    container whose PID 1 reaps no orphans, every finished run stays one, and the poll took
+    that for a run still going until its deadline.  Empty where /proc is unavailable (e.g.
+    Windows)."""
     name = _SIM_PROC.get(simulator, simulator)
     want = os.path.realpath(_netlist_dir(sch_path)) if sch_path else None
+    stem = os.path.splitext(os.path.basename(sch_path))[0] if sch_path else None
     pids = []
     if not os.path.isdir(_PROC):
         return pids
@@ -245,6 +249,11 @@ def simulator_pids(simulator: str, sch_path: str = None) -> list:
                 stat = fh.read()
             if want and os.path.realpath(os.readlink(os.path.join(_PROC, d, "cwd"))) != want:
                 continue                              # another testbench's run, or not ours
+            if want and simulator in DETACHED:
+                with open(os.path.join(_PROC, d, "cmdline"), "rb") as fh:
+                    args = fh.read().decode("utf-8", "replace").split("\0")[1:]
+                if not any(os.path.splitext(os.path.basename(a))[0] == stem for a in args):
+                    continue                          # a neighbour testbench in the same folder
         except OSError:
             continue
         if stat[stat.rfind(")") + 2:][:1] not in ("Z", "X"):    # the state after "(comm) "
@@ -259,15 +268,26 @@ def simulator_running(simulator: str, sch_path: str = None) -> bool:
     return bool(simulator_pids(simulator, sch_path))
 
 
+def still_writing(simulator: str, sch_path: str, show_output: bool = False) -> bool:
+    """True while this testbench's detached simulator runs and may still be writing its
+    result: Xyce's `.LIN` and VACASK's postprocess write it row by row, and a long sweep's
+    file that paused for one poll tick was imported with a fraction of its points.  False
+    for VACASK with Show output, whose postprocess holds its plot window open after writing
+    the table, and where /proc is unavailable (e.g. Windows)."""
+    if simulator not in DETACHED or (simulator == "vacask" and show_output):
+        return False
+    return simulator_running(simulator, sch_path)
+
+
 def simulate_command(sch_path: str, show_output: bool = True, simulator: str = "ngspice"):
     """Return (program, args, cwd) that netlists + simulates `sch_path` headlessly with
     the chosen `simulator` ("ngspice", "vacask" or "xyce").
 
     Runs in the testbench's own directory, using its `xschemrc` (if present) and a
     `simulations/` directory for the netlist, then quits (-q).  Paths are wrapped in
-    Tcl braces so spaces survive.  Either simulator's testbench writes its result to
-    `plot_simulations/data/<tb>.txt` (Ngspice via `wrdata`, VACASK via its
-    `postprocess` script), so the GUI imports both the same way.
+    Tcl braces so spaces survive.  The bundled testbenches write their result to
+    `plot_simulations/data/` (Ngspice via `wrdata`, VACASK via its `postprocess` script,
+    Xyce via `.LIN`), where `sim_data_dir` finds it.
 
     Ngspice: after `xschem netlist` (re)generates the SPICE netlist (a build artifact,
     not the `.sch`), its control block is patched *deterministically* for the mode, so
