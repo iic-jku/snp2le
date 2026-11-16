@@ -17,7 +17,7 @@ Institute for Integrated Circuits and Quantum Computing (IICQC), Johannes Kepler
 
 > [!IMPORTANT]
 > The converter (GUI and CLI) runs anywhere with **Python ≥ 3.10**, see [Install](https://github.com/iic-jku/snp2le#install) below.
-> *Running* the exported netlists additionally needs **Ngspice**, **VACASK** or **Xyce**, and the bundled testbenches need **Xschem** plus Ngspice or VACASK. The easiest way to get all of them is the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container. Since tag `2026.07`, `snp2le` has been installed directly in the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container.
+> *Running* the exported netlists additionally needs **Ngspice**, **VACASK** or **Xyce**, and the bundled testbenches need **Xschem** plus Ngspice, VACASK or Xyce. The easiest way to get all of them is the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container. Since tag `2026.07`, `snp2le` has been installed directly in the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container.
 
 
 
@@ -104,15 +104,16 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │  ├─ app.py                  the GUI launcher (__main__ starts it)
 │  └─ cli.py                  the batch CLI behind -b
 ├─ 📁 testbenches/
-│  └─ 📁 xschem/              N-port testbenches (Ngspice and VACASK)
+│  └─ 📁 xschem/              N-port testbenches (Ngspice, VACASK and Xyce)
 │     ├─ 📁 plot_simulations/ plot scripts (plot_*.py, sparam_plot.py, ngspice2python.py)
-│     │  ├─ 📁 data/          simulation result tables, overlaid on the plots
+│     │  ├─ 📁 data/          simulation results (tables, Xyce's Touchstone), overlaid on the plots
 │     │  └─ 📁 figures/       PNG figures written by the plot scripts
 │     └─ 📁 simulations/      generated netlists and raw output (not tracked)
 ├─ 📁 tests/                  pytest suite
 │  ├─ test_blas_threads.py    a conversion runs on one BLAS thread
 │  ├─ test_core.py
 │  ├─ test_dc_point.py        the 0 Hz point of a universal fit (no Qt)
+│  ├─ test_gui_export_menu.py  headless Export menu and Xyce netlist tab
 │  ├─ test_gui_fit_progress.py  headless non-blocking-conversion regressions
 │  ├─ test_gui_fit_range.py   headless fit-range control
 │  ├─ test_gui_launch_file.py  headless GUI opened on a command-line file
@@ -131,7 +132,8 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 │  ├─ test_progress.py        progress reporting and the fit watcher
 │  ├─ test_qt_essentials.py   guards the Essentials-only dependency
 │  ├─ test_reproducibility.py same input, same model, across processes
-│  └─ test_xschem.py
+│  ├─ test_xschem.py          testbench result folders, sweep files, run commands (no Qt)
+│  └─ test_xyce.py            the Xyce dialect, and in Xyce where it runs
 ├─ 📁 LICENSES/               license texts the REUSE check resolves against
 │  └─ Apache-2.0.txt
 ├─ 📁 .github/workflows/      CI
@@ -326,12 +328,12 @@ A conversion runs its linear algebra on one thread of the BLAS library (through 
 
 Drop the exported subcircuit into an Xschem testbench, then run it from the GUI:
 
-1. **Load .sch.** Pick the testbench. The **Simulator** auto-selects from the file name (a name containing `vacask` selects VACASK, any other name selects Ngspice) and can be overridden.
-2. **Run Simulation.** Both simulators netlist and simulate through Xschem and write their result table to `plot_simulations/data/`, which is imported and overlaid on the plots automatically. The overlay reads the frequency column and the columns named `sIJ_db` and `sIJ_deg` (any case), and skips every other column, such as a testbench's own pair columns (`s41_31_db`). The button turns green on success or red on failure. On failure the dialog shows the simulator log.
-3. **Show output.** Tick it to show the simulator's console and plot windows. Leave it unticked to run quietly. The result is imported either way.
+1. **Load .sch.** Pick the testbench. The **Simulator** auto-selects from the file name (a name containing `vacask` selects VACASK, one containing `xyce` selects Xyce, any other name selects Ngspice) and can be overridden.
+2. **Run Simulation.** Every simulator netlists and simulates through Xschem and writes its result to `plot_simulations/data/`, which is imported and overlaid on the plots automatically. From a table the overlay reads the frequency column and the columns named `sIJ_db` and `sIJ_deg` (any case), and skips every other column, such as a testbench's own pair columns (`s41_31_db`). A `.sNp` result, the only way Xyce writes S-parameters, it reads as Touchstone. *Import simulation* takes either, a measured Touchstone file too. The button turns green on success or red on failure. On failure the dialog shows the simulator log.
+3. **Show output.** Tick it to show the simulator's console and plot windows. VACASK and Xyce run detached, so their console shows in a log window. Leave it unticked to run quietly. The result is imported either way.
 
 > [!NOTE]
-> A simulator (Xschem plus Ngspice and/or VACASK) is only needed for this step. The conversion and export themselves are pure Python.
+> A simulator (Xschem plus Ngspice, VACASK or Xyce) is only needed for this step. The conversion and export themselves are pure Python.
 
 ### View testbench results
 
@@ -339,10 +341,11 @@ The testbenches follow the `plot_simulations` structure of the [ihp-sg13g2-ams-c
 
 - `plot_n_port_tb_acsp_vacask.py` runs automatically as the VACASK postprocess step of every `*_tb_acsp_vacask.sch` run: it writes both the result table (`data/<testbench>.txt`, the same column naming the Ngspice testbenches use) and the figure (`figures/<testbench>.png`).
 - `plot_n_port_tb_acsp_ngspice.py` reproduces the `.control` blocks' plots from the exported Ngspice `wrdata` tables with matplotlib, magnitude and phase over frequency, one figure per testbench. Run it after a quiet Ngspice run (where the `plot` commands are suppressed).
+- `plot_n_port_tb_acsp_xyce.py` draws the same figure from the Touchstone file a Xyce testbench writes (`data/<testbench>.sNp`). Run it after a Xyce run.
 - `ngspice2python.py` is the helper module that loads the `wrdata` columns (the same helper the [ihp-sg13g2-ams-chip-template](https://github.com/iic-jku/ihp-sg13g2-ams-chip-template) plotting scripts use).
-- `sparam_plot.py` holds the figure layout both plot scripts draw through, so the Ngspice and VACASK results are directly comparable. An N-port testbench has N x N S-parameters, which is unreadable in a single pair of axes, so the figure is split by excitation port: one column of axes per driven port j, magnitude on top and phase below, leaving only N traces per panel. The color encodes the receiving port i and is the same in every panel, so one legend serves the whole figure.
+- `sparam_plot.py` holds the figure layout all three plot scripts draw through, so the Ngspice, VACASK and Xyce results are directly comparable. An N-port testbench has N x N S-parameters, which is unreadable in a single pair of axes, so the figure is split by excitation port: one column of axes per driven port j, magnitude on top and phase below, leaving only N traces per panel. The color encodes the receiving port i and is the same in every panel, so one legend serves the whole figure.
 
-One script serves every port count: it discovers the exported vectors from the table header (Ngspice) or the `s(i,j)` vector names (VACASK). Without an argument every `*_tb_acsp_ngspice` table in `data/` is plotted. With a testbench name, only that one is:
+One script serves every port count: it discovers the exported vectors from the table header (Ngspice), the `s(i,j)` vector names (VACASK) or the Touchstone file (Xyce). Without an argument every `*_tb_acsp_ngspice` table in `data/` is plotted (every `*_tb_acsp_xyce` file by the Xyce script). With a testbench name, only that one is:
 
 ```bash
 python3 testbenches/xschem/plot_simulations/plot_n_port_tb_acsp_ngspice.py
@@ -353,9 +356,11 @@ The plot windows open when a display is available. Headless, only the PNGs are w
 
 ### Simulate the Xyce netlist
 
-**Run Simulation** drives Ngspice and VACASK. A Xyce netlist (*Export* > *Xyce*, or `--format xyce`) goes into a testbench of your own:
+The bundled `*_tb_acsp_xyce.sch` testbenches run it like the other two (*Run Simulation*, or `--simulate`), through Xschem's own Xyce batch entry. In a testbench of your own:
 
 - It is the Ngspice text with one change. Xyce's resistor has no `noisy=0`, so each resistor the other dialects write with it becomes a VCCS that senses its own terminals, for example `GR1 s1 0 s1 0 0.02` for `R1 s1 0 50.0 noisy=0`. That is the same conductance without thermal noise. A structure model has no such resistor, so its Xyce text is its Ngspice text.
+- Xschem's ground symbol netlists node `GND`, which Xyce takes as ground only with `.PREPROCESS REPLACEGROUND TRUE`, as the bundled testbenches carry it. Without it the ports float, and the band-pass filter's S-parameters came out wrong by up to 0.96.
+- The bundled testbenches sweep `{f_min}` to `{f_max}` from `sim_range.cir` (`.param`), which snp2le writes with the fitted band before every run, as it writes `sim_range.spice` and `sim_range.inc` for the others.
 - S-parameters come from `P` ports with `.AC` and `.LIN`, which writes them as a Touchstone file:
 
 ```spice
@@ -372,7 +377,7 @@ X1 p1 p2 two_port
 - `.NOISE` reports `ONOISE` in V<sup>2</sup>/Hz, where Ngspice reports V/&radic;Hz. Xyce's Boltzmann constant, 1.3806226e-23 against CODATA's 1.380649e-23, puts its noise power 1.9e-5 below Ngspice's.
 - `.HB` prints a two-sided spectrum, so a tone reads half its amplitude.
 
-Checked with Xyce 7.10 against Ngspice 47 on 75 models, every bundled example in universal mode at orders 6 and 13 with and without thermal noise and in every structure that matches its port count: the S-parameters agree within 1.4e-9 and the output noise within 4e-7 of that constant ratio. The exception is an `inductor-pi` forced onto the band-pass filter at 155 GHz, whose series resistance sits at the 1e-12 ohm floor, where the two simulators differ by 5e-3 in S.
+Checked with Xyce 7.10 against Ngspice 47 on 75 models, every bundled example in universal mode at orders 6 and 13 with and without thermal noise and in every structure that matches its port count: the S-parameters agree within 1.4e-9 and the output noise within 4e-7 of that constant ratio. The exception is an `inductor-pi` forced onto the band-pass filter at 155 GHz, whose series resistance sits at the 1e-12 ohm floor, where the two simulators differ by 5e-3 in S. The bundled Xyce testbenches reproduce the exported 2-, 3- and 4-port models within 7e-10 in S at the data points of their 120 to 200 GHz sweep.
 
 ### Run the tests
 
@@ -422,7 +427,7 @@ From a source checkout without installing, use `python -m snp2le -b ...` in plac
 | `--values` | both | print the element values (extracted, or the synthesised network's) |
 | `--tolerances` | structure | print per-element tolerances at `f_ext` (the inductor, MIM capacitor, line and balun models) |
 | `--simulate SCH` | sim | run an Xschem testbench after converting |
-| `--simulator ngspice\|vacask` | sim | simulator for `--simulate` (default: auto from `.sch` name) |
+| `--simulator ngspice\|vacask\|xyce` | sim | simulator for `--simulate` (default: from the `.sch` name, Ngspice unless it names `vacask` or `xyce`) |
 | `--show-output` | sim | show the simulator's console and plot windows |
 | `--timeout S` | sim | seconds to wait for a `--simulate` result (default 180) |
 | `--plot [SPARAMS]` | both | display data-vs-model plots, plus the sim overlay after `--simulate` (e.g. `S11,S21`) |
@@ -471,6 +476,11 @@ snp2le -b convert coil.s2p --mode universal --order 13 --dc-island-leak 1e-6
 snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \
     --mode universal --order 13 -o netlist/spice/two_port.spice \
     --simulate testbenches/xschem/two_port_tb_acsp_ngspice.sch --plot
+
+# the same with the Xyce testbench, which reads netlist/xyce/two_port.cir
+snp2le -b convert snp2le/examples/bpf_ihp-sg13g2.s2p \
+    --mode universal --order 13 --format xyce -o netlist/xyce/two_port.cir \
+    --simulate testbenches/xschem/two_port_tb_acsp_xyce.sch --plot
 ```
 
 > [!NOTE]

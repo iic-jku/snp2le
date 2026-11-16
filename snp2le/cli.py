@@ -38,6 +38,11 @@
         -o netlist/spice/two_port.spice \\
         --simulate testbenches/xschem/two_port_tb_acsp_ngspice.sch --plot
 
+    # the same with the Xyce testbench, which reads netlist/xyce/two_port.cir
+    snp2le -b convert bpf.s2p --mode universal --order 13 --format xyce \\
+        -o netlist/xyce/two_port.cir \\
+        --simulate testbenches/xschem/two_port_tb_acsp_xyce.sch
+
 Globs are expanded.  With --format both, two files are written per input (Ngspice and
 VACASK), with --format all three (plus Xyce).  The exit code is
 non-zero if any conversion or a requested simulation fails.  A failed conversion writes
@@ -52,17 +57,11 @@ import shutil
 import sys
 import time
 
-from snp2le.core import io, engine, units, netlist, universal
+from snp2le.core import io, engine, units, netlist, universal, xschem
 from snp2le.core.progress import format_duration
 from snp2le.core.state import ConverterState
 from snp2le.core.structures import (STRUCTURES, get_structure, inductor_fit,
                                     structure_items)
-
-# extensions in the testbench's data folder that are never a result table
-_NON_DATA = {".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out", ".svg", ".png",
-             ".ps", ".pdf", ".sch", ".aborted"}
-_DATA_EXTS = {".txt", ".data", ".dat", ".csv"}
-
 
 class _ProgressLine:
     """A one-line progress bar redrawn in place on stderr.
@@ -207,12 +206,6 @@ def _seconds(text):
     return v
 
 
-def _simulator_for(sch):
-    """The simulator a testbench is for, from its file name alone as the GUI does, so a folder
-    named vacask_runs/ cannot pick VACASK for an Ngspice testbench."""
-    return "vacask" if "vacask" in os.path.basename(sch).lower() else "ngspice"
-
-
 def _corner(text):
     """argparse type for the DC pin's corner frequency (above 0 Hz)."""
     v = _freq(text)
@@ -319,7 +312,8 @@ def _default_sparams(n):
 
 
 def _tail_log(path, header):
-    """Print the tail of a simulator log file (VACASK's captured console) to stderr."""
+    """Print the tail of a simulator log file (VACASK's or Xyce's captured console) to
+    stderr."""
     if not path or not os.path.exists(path):
         return
     try:
@@ -332,40 +326,17 @@ def _tail_log(path, header):
         print("  " + txt[-1500:].replace("\n", "\n  "), file=sys.stderr)
 
 
-def _find_result(sim_data, stem, start):
-    """Newest result file freshly written by this run: prefer one named after the testbench,
-    else any data-style file (Ngspice wrdata targets vary)."""
-    if not os.path.isdir(sim_data):
-        return None
-    named, data = [], []
-    for f in os.listdir(sim_data):
-        ext = os.path.splitext(f)[1].lower()
-        if ext in _NON_DATA:
-            continue
-        p = os.path.join(sim_data, f)
-        try:
-            mt = os.path.getmtime(p)
-        except OSError:
-            continue
-        if mt < start - 1:                                   # not (re)written this run
-            continue
-        (named if f.startswith(stem) else data).append((mt, p))
-    pool = named or [x for x in data if os.path.splitext(x[1])[1].lower() in _DATA_EXTS]
-    return max(pool)[1] if pool else None
-
-
 def _run_testbench(sch, simulator, show_output, sweep, timeout):
     """Run an Xschem testbench with `simulator` and return the imported result path, or None.
 
     `sweep` is the (f_min, f_max) the exported model was fitted over, which is what the
-    testbench sweeps.  Both Ngspice and VACASK are launched detached by xschem (which
-    returns at once with an empty console), so the outcome is read the same way for both:
-    sync the sweep to the fitted band, then poll for the result while the simulator process
-    is alive.  When the process has exited with no result the run failed, and VACASK's
-    captured log and .aborted marker give the specific cause."""
+    testbench sweeps.  Every simulator is launched detached by xschem (which returns at
+    once with an empty console), so the outcome is read the same way for all three: sync
+    the sweep to the fitted band, then poll for the result while the simulator process is
+    alive.  When the process has exited with no result the run failed, and the captured
+    log of VACASK or Xyce, and VACASK's .aborted marker, give the specific cause."""
     import subprocess
     import time
-    from snp2le.core import xschem
     if not xschem.available():
         print("xschem not found on PATH, cannot run a testbench", file=sys.stderr)
         return None
@@ -384,20 +355,20 @@ def _run_testbench(sch, simulator, show_output, sweep, timeout):
                   f"(the last-written sim_range is used instead): {exc}", file=sys.stderr)
 
     # Where the testbench writes its result: read from the testbench itself (Ngspice
-    # wrdata / VACASK log), falling back to the bundled layout.  Re-evaluated while
+    # wrdata, Xyce .LIN, VACASK log), falling back to the bundled layout.  Re-evaluated while
     # polling below, since the VACASK log only reveals the folder once a run finishes.
     def sim_data_dir():
         return xschem.sim_data_dir(sch, simulator)
 
     stem = os.path.splitext(os.path.basename(sch))[0]
-    log = xschem.sim_log_path(sch, simulator) if simulator == "vacask" else None
-    for stale in (os.path.join(sim_data_dir(), stem + ".txt"),      # a clean run this time
-                  os.path.join(sim_data_dir(), stem + ".aborted")):
+    name = xschem.NAMES.get(simulator, simulator)
+    log = xschem.sim_log_path(sch, simulator) if simulator in xschem.DETACHED else None
+    for stale in xschem.previous_results(sim_data_dir(), stem):      # a clean run this time
         try:
             os.remove(stale)
         except OSError:
             pass
-    if simulator == "ngspice":                  # wrdata cannot create its target folder
+    if simulator != "vacask":                   # wrdata and .LIN cannot create the folder
         os.makedirs(sim_data_dir(), exist_ok=True)
 
     env = os.environ.copy()
@@ -415,7 +386,7 @@ def _run_testbench(sch, simulator, show_output, sweep, timeout):
     settle = [None]
 
     def settled():                                          # appeared and stopped growing
-        r = _find_result(sim_data_dir(), stem, start)
+        r = xschem.find_result(sim_data_dir(), stem, start)
         if r is None:
             return None
         try:
@@ -436,8 +407,8 @@ def _run_testbench(sch, simulator, show_output, sweep, timeout):
 
     def fail(msg):
         print("  " + msg, file=sys.stderr)
-        _tail_log(log, "VACASK console")
-        if simulator != "vacask":
+        _tail_log(log, f"{name} console")
+        if not log:
             print("  Ngspice keeps no log here. Run the testbench directly or open it in "
                   "xschem to see the error", file=sys.stderr)
         return None
@@ -447,7 +418,7 @@ def _run_testbench(sch, simulator, show_output, sweep, timeout):
         r = settled()
         if r is not None:
             if show_output and log:
-                _tail_log(log, "VACASK console")
+                _tail_log(log, f"{name} console")
             return r
         if simulator == "vacask" and aborted():
             return fail("the analysis aborted (e.g. a singular matrix), no result written")
@@ -740,18 +711,19 @@ def cmd_convert(args):
         if len(paths) > 1:
             print("[WARN] --simulate uses the last converted file, and the testbench's DUT "
                   "must match it", file=sys.stderr)
-        simr = args.simulator or _simulator_for(args.simulate)
+        simr = args.simulator or xschem.simulator_for(args.simulate)
         if simr not in formats:
+            alt = "all" if simr == "xyce" else "both"           # both has no Xyce netlist
             print(f"[WARN] simulating with {simr} but only {'/'.join(formats)} was exported, "
-                  f"so the testbench may not find its DUT netlist (use --format {simr} or both)",
-                  file=sys.stderr)
+                  f"so the testbench may not find its DUT netlist (use --format {simr} or "
+                  f"{alt})", file=sys.stderr)
         sweep = None                    # the model is only valid where it was fitted
         if last_res.freq is not None and len(last_res.freq):
             sweep = (float(last_res.freq[0]), float(last_res.freq[-1]))
         result = _run_testbench(args.simulate, simr, args.show_output, sweep, args.timeout)
         if result:
             try:
-                sim = io.load_ngspice_sim(result)
+                sim = io.load_sim(result)
                 print(f"[ OK ] imported simulation {os.path.basename(result)}")
             except Exception as exc:                      # noqa: BLE001
                 print(f"[WARN] could not parse {result}: {exc}", file=sys.stderr)
@@ -879,8 +851,9 @@ def build_parser():
                    help="never show the progress bar")
     # simulate a testbench and plot
     c.add_argument("--simulate", metavar="SCH", help="run an Xschem testbench after converting")
-    c.add_argument("--simulator", choices=["ngspice", "vacask"], default=None,
-                   help="simulator for --simulate (default: auto from the .sch name)")
+    c.add_argument("--simulator", choices=list(xschem.SIMULATORS), default=None,
+                   help="simulator for --simulate (default: from the .sch name, Ngspice "
+                        "unless it names vacask or xyce)")
     c.add_argument("--show-output", action="store_true",
                    help="show the simulator console and plot windows during the run")
     c.add_argument("--timeout", type=_seconds, default=180.0, metavar="S",

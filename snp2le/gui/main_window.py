@@ -69,15 +69,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim_timer = None            # polls the data folder for the result after a run
         self._sim_last_output = ""        # captured xschem/Ngspice output (for diagnostics)
         self._sim_watchdog = None         # hard cap so a stuck run can't pin the Run button
-        self._sim_simulator = ""          # 'ngspice' | 'vacask' of the current run
+        self._sim_simulator = ""          # the run's simulator, one of xschem.SIMULATORS
         self._sim_output_buf = ""         # xschem output accumulated live during the run
         self._sim_interactive = False     # 'Show output' run: user-driven, no idle kill
         self._sim_idle_since = 0.0        # last time the run's process tree used CPU
         self._sim_last_cpu = 0.0          # cumulative CPU seconds at the previous check
-        self._sim_vacask_seen = False     # a detached vacask process was observed running
-        self._sim_vacask_gone_at = 0.0    # when that vacask process disappeared (0 = no)
-        self._sim_log_path = None         # VACASK console log (its output is redirected here)
-        self._log_win = None              # 'Show output' window that tails the VACASK log
+        self._sim_detached_seen = False   # the detached simulator (VACASK, Xyce) was seen
+        self._sim_detached_gone_at = 0.0  # when that process disappeared (0 = no)
+        self._sim_log_path = None         # VACASK or Xyce console log (redirected there)
+        self._log_win = None              # 'Show output' window that tails that log
         self._log_timer = None            # refreshes that window while the run is in progress
         # The file the session opens on, and that Reset returns to.  Absolute, so the
         # Load dialog's start folder and a saved design survive a working-directory
@@ -199,8 +199,8 @@ class MainWindow(QtWidgets.QMainWindow):
             except (RuntimeError, TypeError):
                 pass
             self._sim_proc.kill()
-        if active and self._sim_simulator == "vacask":   # xschem already exited. The real
-            self._kill_vacask()                          # vacask runs detached, so kill it
+        if active and self._sim_simulator in xschem.DETACHED:   # xschem already exited,
+            self._kill_detached()                        # the simulator runs on, so kill it
         self._reset_run_button()                  # 'Run Simulation', enabled, proc None
 
     def on_reset(self):
@@ -384,7 +384,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sch_path = path
         self._last_sch_dir = os.path.dirname(path)
         tb = os.path.basename(path)
-        self.top.set_simulator("vacask" if "vacask" in tb.lower() else "ngspice")
+        self.top.set_simulator(xschem.simulator_for(path))
         self.top.load_sch.setToolTip(f"Testbench: {tb}")
         self.top.run_sim.setToolTip(f"Run testbench: {tb}")
 
@@ -431,7 +431,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._stop_sim_timer()                            # cancel any pending poll
         self.top.clear_sim_status()                       # reset the outcome label
-        sim = self.top.simulator.currentData()            # 'ngspice' | 'vacask'
+        sim = self.top.simulator.currentData()            # one of xschem.SIMULATORS
         self._sim_simulator = sim
         show = self.top.sim_output.isChecked()
         self._sim_interactive = show                      # Show output: user-driven run
@@ -439,18 +439,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sch_path, show_output=show, simulator=sim)
         self._write_sim_range(cwd)                        # sync testbench sweep to the data
         os.makedirs(os.path.join(cwd, "simulations"), exist_ok=True)
-        if sim == "ngspice":                    # wrdata cannot create its target folder
+        if sim != "vacask":                     # wrdata and .LIN cannot create the folder
             os.makedirs(xschem.sim_data_dir(self._sch_path, sim), exist_ok=True)
         stem = os.path.splitext(os.path.basename(self._sch_path))[0]
-        for stale in (stem + ".txt", stem + ".aborted"):    # a clean run this time, so a
-            try:                                            # previous result can never be
-                os.remove(os.path.join(                     # mistaken for this run's
-                    xschem.sim_data_dir(self._sch_path, sim), stale))
+        for stale in xschem.previous_results(              # a clean run this time, so a
+                xschem.sim_data_dir(self._sch_path, sim), stem):   # previous result can
+            try:                                           # never be mistaken for this run's
+                os.remove(stale)
             except OSError:
                 pass
         self._sim_log_path = None
-        if sim == "vacask":                               # its console is redirected to a log
-            self._sim_log_path = xschem.vacask_log_path(self._sch_path)
+        if sim in xschem.DETACHED:                        # its console is redirected to a log
+            self._sim_log_path = xschem.sim_log_path(self._sch_path, sim)
             try:
                 os.remove(self._sim_log_path)             # drop the previous run's log
             except OSError:
@@ -458,10 +458,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sim_proc = QtCore.QProcess(self)
         self._sim_proc.setWorkingDirectory(cwd)
         self._sim_proc.setProcessChannelMode(QtCore.QProcess.ProcessChannelMode.MergedChannels)
-        if sim == "vacask" and show:                      # Show output: tail the console log
-            env = QtCore.QProcessEnvironment.systemEnvironment()
-            env.insert("SHOW_PLOTS", "1")                 # and let the postprocess pop its plot
-            self._sim_proc.setProcessEnvironment(env)
+        if sim in xschem.DETACHED and show:               # Show output: tail the console log
+            if sim == "vacask":                           # and let the postprocess pop its plot
+                env = QtCore.QProcessEnvironment.systemEnvironment()
+                env.insert("SHOW_PLOTS", "1")
+                self._sim_proc.setProcessEnvironment(env)
             self._start_log_tail()
         self._sim_proc.finished.connect(self._on_sim_finished)
         self._sim_proc.errorOccurred.connect(self._on_sim_error)
@@ -494,8 +495,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sim_proc.deleteLater()                  # QProcess objects over a session
         self._sim_proc = None
 
-    def _read_vacask_log(self) -> str:
-        """The captured VACASK console for this run, or '' if none was written."""
+    def _read_sim_log(self) -> str:
+        """The captured VACASK or Xyce console for this run, or '' if none was written."""
         p = self._sim_log_path
         if p and os.path.exists(p):
             try:
@@ -506,10 +507,12 @@ class MainWindow(QtWidgets.QMainWindow):
         return ""
 
     def _start_log_tail(self):
-        """Open the 'Show output' window and refresh it from the VACASK log as it runs."""
+        """Open the 'Show output' window and refresh it from the console log as it runs."""
+        name = xschem.NAMES.get(self._sim_simulator, self._sim_simulator)
         if self._log_win is None:
-            self._log_win = LogWindow(self, "VACASK output")
-        self._log_win.set_text("(waiting for VACASK to start...)")
+            self._log_win = LogWindow(self)
+        self._log_win.setWindowTitle(f"{name} output")      # the window outlives one run
+        self._log_win.set_text(f"(waiting for {name} to start...)")
         self._log_win.show()
         self._log_win.raise_()
         if self._log_timer is None:
@@ -521,7 +524,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _update_log_window(self):
         if self._log_win is None:
             return
-        txt = self._read_vacask_log()
+        txt = self._read_sim_log()
         if txt:
             self._log_win.set_text(txt)
 
@@ -612,47 +615,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _sim_output_dir(self):
         # Where this run's testbench writes its result: read from the testbench itself
-        # (Ngspice wrdata / VACASK log), falling back to the bundled layout.  Evaluated
+        # (Ngspice wrdata, Xyce .LIN, VACASK log), falling back to the bundled layout.  Evaluated
         # fresh on every poll tick, so the VACASK log can reveal the folder mid-poll.
         if not self._sch_path:
             return os.path.join(os.getcwd(), "plot_simulations", "data")
         return xschem.sim_data_dir(self._sch_path, self._sim_simulator or "ngspice")
 
-    # extensions that are never an Ngspice data table (binary raw, netlists, logs,
-    # and the VACASK postprocess's <stem>.aborted marker, which lands in the same folder)
-    _NON_DATA_EXTS = (".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out",
-                      ".svg", ".png", ".ps", ".pdf", ".sch", ".aborted")
-    _DATA_EXTS = (".txt", ".data", ".dat", ".csv")
-
     def _find_sim_result(self, tb_stem):
-        """Locate the simulation result for testbench `tb_stem` in its data folder.
-
-        The testbench writes its result there named after itself.  Prefer a file
-        written during this run (newer than the run start) whose name starts with the
-        testbench stem, accepting any data-style extension, since `wrdata` targets
-        vary (.txt / .data / no extension).  Falls back to the newest fresh data file
-        if the naming differs."""
-        d = self._sim_output_dir()
-        if not os.path.isdir(d):
-            return None
-        named, data = [], []
-        for f in os.listdir(d):
-            ext = os.path.splitext(f)[1].lower()
-            if ext in self._NON_DATA_EXTS:
-                continue
-            p = os.path.join(d, f)
-            try:
-                mt = os.path.getmtime(p)
-            except OSError:
-                continue
-            if mt < self._sim_start - 1:             # not written during this run
-                continue
-            if f.startswith(tb_stem):                # named after the testbench
-                named.append((mt, p))
-            elif ext in self._DATA_EXTS:             # fallback: any obvious data file
-                data.append((mt, p))
-        pool = named or data
-        return max(pool)[1] if pool else None        # newest of the matching files
+        """The result this run wrote for testbench `tb_stem` in its data folder, or None,
+        by the rule the CLI uses too (`xschem.find_result`)."""
+        return xschem.find_result(self._sim_output_dir(), tb_stem, self._sim_start)
 
     def _fresh_abort_marker(self, stem):
         """True if this run left a fresh <stem>.aborted marker (the VACASK postprocess
@@ -693,19 +665,19 @@ class MainWindow(QtWidgets.QMainWindow):
         tb = os.path.basename(self._sch_path)
         stem = os.path.splitext(tb)[0]
 
-        if self._sim_simulator == "vacask":
-            # xschem launches VACASK *detached* and returns in a fraction of a second, so
-            # the result lands a moment later.  Poll for it, using the detached vacask
+        if self._sim_simulator in xschem.DETACHED:
+            # xschem launches VACASK and Xyce *detached* and returns in a fraction of a
+            # second, so the result lands a moment later.  Poll for it, using the detached
             # process (found in /proc) as the 'still running' signal: a long run is never
-            # killed, and a failed run is caught as soon as vacask exits with no result.
+            # killed, and a failed run is caught as soon as it exits with no result.
             # xschem's own activity watchdog is moot now (it has already exited).
             if self._sim_watchdog is not None:
                 self._sim_watchdog.stop()
                 self._sim_watchdog = None
             self._sim_poll_stem = stem
             self._sim_poll_last = None
-            self._sim_vacask_seen = False
-            self._sim_vacask_gone_at = 0.0
+            self._sim_detached_seen = False
+            self._sim_detached_gone_at = 0.0
             self._sim_poll_deadline = time.time() + 3600.0    # absolute backstop only
             self.top.run_sim.setText("Stop")
             self.top.set_sim_progress("running...")
@@ -751,24 +723,24 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sim_poll_last = (result, size)     # let it settle for one more tick
             return
         now = time.time()
-        if self._sim_simulator == "vacask":
-            if self._fresh_abort_marker(stem):       # postprocess flagged an abort
-                self._end_vacask_poll("aborted!", aborted=True)
+        if self._sim_simulator in xschem.DETACHED:
+            if self._fresh_abort_marker(stem):       # VACASK's postprocess flagged an abort
+                self._end_detached_poll("aborted!", aborted=True)
                 return
-            if self._vacask_running():               # still simulating -> keep waiting
-                self._sim_vacask_seen = True
-                self._sim_vacask_gone_at = 0.0
-            elif self._sim_vacask_seen:              # vacask finished, no result written
-                if not self._sim_vacask_gone_at:
-                    self._sim_vacask_gone_at = now   # brief grace for the file to land
-                elif now - self._sim_vacask_gone_at > 1.5:
-                    self._end_vacask_poll("failed!", aborted=False)
+            if self._detached_running():             # still simulating -> keep waiting
+                self._sim_detached_seen = True
+                self._sim_detached_gone_at = 0.0
+            elif self._sim_detached_seen:            # it finished, no result written
+                if not self._sim_detached_gone_at:
+                    self._sim_detached_gone_at = now  # brief grace for the file to land
+                elif now - self._sim_detached_gone_at > 1.5:
+                    self._end_detached_poll("failed!", aborted=False)
                     return
-            elif now - self._sim_start > 12.0:       # vacask never even started
-                self._end_vacask_poll("failed!", aborted=False)
+            elif now - self._sim_start > 12.0:       # it never even started
+                self._end_detached_poll("failed!", aborted=False)
                 return
             if now >= self._sim_poll_deadline:       # 1 h absolute backstop
-                self._end_vacask_poll("failed!", aborted=False)
+                self._end_detached_poll("failed!", aborted=False)
             return
         # Ngspice: deadline-based (it may run detached and write a little later)
         if now >= self._sim_poll_deadline:
@@ -786,45 +758,29 @@ class MainWindow(QtWidgets.QMainWindow):
                 "the result file manually."
                 + (f"\n\n--- simulator output ---\n{log[-1500:]}" if log else ""))
 
-    def _end_vacask_poll(self, status, aborted):
+    def _end_detached_poll(self, status, aborted):
         self._stop_sim_timer()
         self._reset_run_button()
         self.top.set_sim_status(status, False)
-        log = self._read_vacask_log() or (self._sim_last_output or "").strip()
+        name = xschem.NAMES.get(self._sim_simulator, self._sim_simulator)
+        log = self._read_sim_log() or (self._sim_last_output or "").strip()
         what = ("aborted: the analysis ran but produced no result (e.g. a singular matrix)"
                 if aborted else "failed: it produced no result")
         QtWidgets.QMessageBox.warning(
             self, "Run simulation",
-            f"The VACASK simulation of {os.path.basename(self._sch_path)} {what}.\n"
-            "See VACASK's console / log for the cause."
+            f"The {name} simulation of {os.path.basename(self._sch_path)} {what}.\n"
+            f"See {name}'s console / log for the cause."
             + (f"\n\n--- simulator output ---\n{log[-1500:]}" if log else ""))
 
-    @staticmethod
-    def _vacask_pids():
-        """PIDs of running VACASK processes.  xschem launches vacask detached (not in its
-        process tree), so we scan /proc by command name."""
-        pids = []
-        if not os.path.isdir("/proc"):
-            return pids
-        for dd in os.listdir("/proc"):
-            if not dd.isdigit():
-                continue
-            try:
-                with open("/proc/" + dd + "/comm") as fh:
-                    if "vacask" in fh.read():
-                        pids.append(int(dd))
-            except OSError:
-                continue
-        return pids
-
-    def _vacask_running(self):
+    def _detached_running(self):
         # without /proc (e.g. Windows) we can't tell, so assume yes and let the deadline win
-        return True if not os.path.isdir("/proc") else bool(self._vacask_pids())
+        return (True if not os.path.isdir("/proc")
+                else xschem.simulator_running(self._sim_simulator))
 
-    def _kill_vacask(self):
-        """Terminate any detached VACASK process (xschem already exited, so it won't)."""
+    def _kill_detached(self):
+        """Terminate the detached simulator process (xschem already exited, so it won't)."""
         import signal
-        for pid in self._vacask_pids():
+        for pid in xschem.simulator_pids(self._sim_simulator):
             try:
                 os.kill(pid, signal.SIGTERM)
             except OSError:
@@ -896,12 +852,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event):
         """Stop any running simulation and its timers before the window closes, so a
-        detached VACASK process or a polling timer cannot outlive the UI."""
+        detached simulator process or a polling timer cannot outlive the UI."""
         try:
             self._timer.stop()                            # the recompute debounce
             self._fit_clock.stop()                        # the progress sampler
             self._fit.shutdown()                          # and the conversion worker
-            self._cancel_sim()                            # run/import timers + detached VACASK
+            self._cancel_sim()                            # run/import timers + detached sim
         except Exception:                                 # noqa: BLE001
             pass
         super().closeEvent(event)

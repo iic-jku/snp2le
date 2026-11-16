@@ -290,6 +290,28 @@ def load_ngspice_sim(path: str) -> dict:
     return out
 
 
+_TOUCHSTONE_EXT = re.compile(r"\.s\d+p", re.IGNORECASE)
+
+
+def load_sim(path: str) -> dict:
+    """Load a simulation result for the plot overlay, the dict of `load_ngspice_sim`.
+
+    A `.sNp` file is read as Touchstone, which is how Xyce writes S-parameters and how a
+    measurement comes, at one real reference as the conversion reads its input
+    (`uniform_reference`).  Anything else is an Ngspice-style table."""
+    if not _TOUCHSTONE_EXT.fullmatch(os.path.splitext(path)[1]):
+        return load_ngspice_sim(path)
+    net, _ = uniform_reference(load_touchstone(path))
+    with np.errstate(divide="ignore"):                    # an exact zero reads -inf dB
+        db = 20.0 * np.log10(np.abs(net.s))
+    deg = np.angle(net.s, deg=True)
+    out: dict = {"f": np.asarray(net.f, dtype=float)}
+    for i in range(net.nports):
+        for j in range(net.nports):
+            out[f"S{i + 1}{j + 1}"] = {"db": db[:, i, j], "deg": deg[:, i, j]}
+    return out
+
+
 def demo_network() -> skrf.Network:
     """A synthetic 2-port pi-network (series R-L, shunt C) for first-run/demo."""
     f = skrf.Frequency(0.1, 20, 201, "ghz")
