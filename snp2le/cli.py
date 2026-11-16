@@ -379,7 +379,8 @@ def _run_testbench(sch, simulator, show_output, sweep, timeout):
 
     def settled():                                          # appeared and stopped growing
         r = xschem.find_result(sim_data_dir(), stem, start)
-        if r is None:
+        if r is None or xschem.still_writing(simulator, sch, show_output):
+            settle[0] = None
             return None
         try:
             size = os.path.getsize(r)

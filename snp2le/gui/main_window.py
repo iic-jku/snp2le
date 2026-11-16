@@ -697,6 +697,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def _poll_sim_result(self):
         stem = self._sim_poll_stem
         result = self._find_sim_result(stem)
+        if result is not None and xschem.still_writing(
+                self._sim_simulator, self._sch_path, self._sim_interactive):
+            result, self._sim_poll_last = None, None  # the simulator may still be writing it
         if result is not None:
             try:
                 size = os.path.getsize(result)

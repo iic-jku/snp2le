@@ -178,6 +178,23 @@ def test_a_xyce_run_imports_its_touchstone(xyce_bench):
     win.plots.clear_sim()
 
 
+def test_a_xyce_result_waits_for_xyce_to_exit(xyce_bench, monkeypatch):
+    win, data, sims = xyce_bench
+    shutil.copyfile(_XYCE_RESULT, data / "tb_xyce.s2p")
+    running, imported = [True], []
+    monkeypatch.setattr(xschem, "simulator_running", lambda sim, sch=None: running[0])
+    monkeypatch.setattr(win, "_finish_sim_import", imported.append)
+    win._sim_interactive = False
+    win._sim_poll_deadline = time.time() + 100.0
+    for _ in range(3):
+        win._poll_sim_result()
+    assert imported == []                            # Xyce is still writing it
+    running[0] = False
+    for _ in range(2):
+        win._poll_sim_result()
+    assert [os.path.normpath(p) for p in imported] == [os.path.normpath(str(data / "tb_xyce.s2p"))]
+
+
 def test_a_xyce_run_without_a_result_fails_once(xyce_bench, monkeypatch):
     win, data, sims = xyce_bench
     calls = []

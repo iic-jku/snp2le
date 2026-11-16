@@ -259,6 +259,17 @@ def simulator_running(simulator: str, sch_path: str = None) -> bool:
     return bool(simulator_pids(simulator, sch_path))
 
 
+def still_writing(simulator: str, sch_path: str, show_output: bool = False) -> bool:
+    """True while this testbench's detached simulator runs and may still be writing its
+    result: Xyce's `.LIN` and VACASK's postprocess write it row by row, and a long sweep's
+    file that paused for one poll tick was imported with a fraction of its points.  False
+    for VACASK with Show output, whose postprocess holds its plot window open after writing
+    the table, and where /proc is unavailable (e.g. Windows)."""
+    if simulator not in DETACHED or (simulator == "vacask" and show_output):
+        return False
+    return simulator_running(simulator, sch_path)
+
+
 def simulate_command(sch_path: str, show_output: bool = True, simulator: str = "ngspice"):
     """Return (program, args, cwd) that netlists + simulates `sch_path` headlessly with
     the chosen `simulator` ("ngspice", "vacask" or "xyce").

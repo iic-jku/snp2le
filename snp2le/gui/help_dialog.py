@@ -372,7 +372,8 @@ as they do in Ngspice. No action is needed, and structure-specific models are un
 Xyce reproduces them as Ngspice does, within 1.4e-9 in S on the bundled examples at orders 6 and 13.</p>
 
 <p>While a run is in progress the status reads <i>running...</i> (for as long as the
-simulation takes, and for a VACASK or Xyce run until its result appears) and then, for Ngspice,
+simulation takes, and for a VACASK or Xyce run until the simulator has exited, since both write their result
+row by row) and then, for Ngspice,
 <i>importing...</i>. The <b>Run Simulation</b> button becomes a <b>Stop</b> button you can
 press to cancel. It ends this testbench's simulator and leaves any other run alone. A run is not stopped for being slow. An Ngspice run without <b>Show
 output</b> is stopped when it has used no CPU for 60&nbsp;s and looks hung, or after

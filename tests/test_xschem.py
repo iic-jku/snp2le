@@ -244,6 +244,34 @@ def test_the_cli_run_keeps_to_its_own_tree(tmp_path, monkeypatch):
     assert theirs.exists() and not own.exists()
 
 
+def test_a_result_waits_for_its_simulator_to_exit(tmp_path, monkeypatch):
+    """Xyce writes its Touchstone file row by row, and a long sweep's file that stopped
+    growing for one poll tick was imported with 1 of its 401 frequencies."""
+    sch = tmp_path / "testbenches" / "xschem" / "tb_xyce.sch"
+    sch.parent.mkdir(parents=True)
+    sch.write_text("no analysis here\n", encoding="utf-8")
+    result = sch.parent / "plot_simulations" / "data" / "tb_xyce.s2p"
+    exits = time.time() + 1.5
+
+    def xschem_run(*a, **k):                         # Xyce has written its first rows
+        result.write_text("# Hz S RI R 50\n", encoding="utf-8")
+
+    monkeypatch.setattr(xschem, "available", lambda: True)
+    monkeypatch.setattr(subprocess, "run", xschem_run)
+    monkeypatch.setattr(xschem, "simulator_running", lambda sim, sch=None: time.time() < exits)
+    assert cli._run_testbench(str(sch), "xyce", False, None, 10) == str(result)
+    assert time.time() >= exits
+
+
+def test_vacask_with_show_output_is_imported_while_its_plot_is_open(monkeypatch):
+    """The postprocess has written the table before it opens the plot, and VACASK runs
+    until the plot is closed."""
+    monkeypatch.setattr(xschem, "simulator_running", lambda sim, sch=None: True)
+    assert xschem.still_writing("xyce", "tb.sch") and xschem.still_writing("vacask", "tb.sch")
+    assert not xschem.still_writing("vacask", "tb.sch", show_output=True)
+    assert not xschem.still_writing("ngspice", "tb.sch")
+
+
 def test_a_testbench_takes_only_its_own_name(tmp_path):
     """`amp_tb` and `amp_tb_ac` in one folder: the prefix match took the other's table."""
     since = time.time()
