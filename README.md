@@ -6,6 +6,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/iic-jku/snp2le/blob/main/LICENSE)
 [![License Check](https://github.com/iic-jku/snp2le/actions/workflows/license-check.yml/badge.svg)](https://github.com/iic-jku/snp2le/actions/workflows/license-check.yml)
+[![Tests](https://github.com/iic-jku/snp2le/actions/workflows/tests.yml/badge.svg)](https://github.com/iic-jku/snp2le/actions/workflows/tests.yml)
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)
 ![GUI: PySide6-Essentials](https://img.shields.io/badge/GUI-PySide6--Essentials-41CD52.svg?logo=qt&logoColor=white)
 [![PyPI](https://img.shields.io/pypi/v/snp2le.svg)](https://pypi.org/project/snp2le/)
@@ -137,7 +138,8 @@ A fit of a large N-port runs for seconds to minutes, so it runs on a worker thre
 ├─ 📁 LICENSES/               license texts the REUSE check resolves against
 │  └─ Apache-2.0.txt
 ├─ 📁 .github/workflows/      CI
-│  └─ license-check.yml       reuse lint: every file carries copyright + license
+│  ├─ license-check.yml       reuse lint: every file carries copyright + license
+│  └─ tests.yml               the pytest suite on Linux, Windows and macOS, Python 3.10 and 3.15
 ├─ CITATION.cff
 ├─ LICENSE                    Apache-2.0
 ├─ MANIFEST.in                sdist manifest (bundles examples and assets)
@@ -384,6 +386,8 @@ Checked with Xyce 7.10 against Ngspice 47 at the data's own frequencies on 81 mo
 ```bash
 pytest               # from the repo root
 ```
+
+The GUI tests run offscreen. The [Tests](https://github.com/iic-jku/snp2le/actions/workflows/tests.yml) workflow runs the suite on every push and pull request to `main`, on Linux, Windows and macOS with Python 3.10 and 3.15. The tests that run `Xyce` or `xschem` skip where those are not on `PATH`, which includes the CI runners.
 
 
 ## CLI Overview

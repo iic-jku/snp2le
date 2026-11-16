@@ -48,7 +48,7 @@ pytest tests/test_core.py                  # core only, no Qt
 reuse lint                                 # the license check CI runs
 ```
 
-- CI (`.github/workflows/license-check.yml`) runs only `reuse lint`, on pushes and pull requests to `main`. No workflow runs pytest, so run it before opening a pull request.
+- CI runs two workflows on pushes and pull requests to `main`: `.github/workflows/license-check.yml` runs `reuse lint`, and `.github/workflows/tests.yml` runs pytest on Linux, Windows and macOS with Python 3.10 and 3.15. The runners have no `xschem` and no `Xyce`, so the tests that run them skip there: run those where the tools are installed, for example the IIC-OSIC-TOOLS container, before opening a pull request that touches them.
 - The GUI tests set `QT_QPA_PLATFORM=offscreen` themselves and need no display.
 - A behaviour change comes with a test in the same commit, as the recent fixes do.
 
