@@ -101,8 +101,9 @@ def spectral_factor(A, B, C, D, w0):
     n_ports = D.shape[0]
     R = np.eye(n_ports) - D @ D.T
     An, Bn, Cn = A / w0, B / np.sqrt(w0), C / np.sqrt(w0)
-    # scipy solves a^T X + X a - (X b + s) r^-1 (b^T X + s^T) + q = 0
-    Q = la.solve_continuous_are(An.T, Cn.T, Bn @ Bn.T, -R, s=Bn @ D.T)
+    # scipy solves a^T X + X a - (X b + s) r^-1 (b^T X + s^T) + q = 0.  e=None is spelled out
+    # because SciPy 1.16.0 to 1.16.2 otherwise pass s in the place of e (scipy gh-23336).
+    Q = la.solve_continuous_are(An.T, Cn.T, Bn @ Bn.T, -R, e=None, s=Bn @ D.T)
     V0 = la.cholesky(R, lower=True)
     X = Q @ Cn.T + Bn @ D.T
     Kn = -la.solve_triangular(V0, X.T, lower=True).T             # -X V0^-T
