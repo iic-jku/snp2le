@@ -226,11 +226,15 @@ def simulator_pids(simulator: str, sch_path: str = None) -> list:
     testbench.  xschem launches the simulator out of its own process tree and quits, so scan
     /proc by command name and by working directory, which xschem sets to the testbench's
     netlist dir: by name alone, Stop killed another testbench's or another session's run.
-    A zombie does not count: in a container whose PID 1 reaps no orphans, every finished run
-    stays one, and the poll took that for a run still going until its deadline.  Empty where
-    /proc is unavailable (e.g. Windows)."""
+    Testbenches in one folder share that dir, so VACASK and Xyce, whose command we set to
+    `<simulator> "$N"`, are also told apart by the netlist in their arguments: otherwise a
+    run's import waited for a neighbour's run to end.  A zombie does not count: in a
+    container whose PID 1 reaps no orphans, every finished run stays one, and the poll took
+    that for a run still going until its deadline.  Empty where /proc is unavailable (e.g.
+    Windows)."""
     name = _SIM_PROC.get(simulator, simulator)
     want = os.path.realpath(_netlist_dir(sch_path)) if sch_path else None
+    stem = os.path.splitext(os.path.basename(sch_path))[0] if sch_path else None
     pids = []
     if not os.path.isdir(_PROC):
         return pids
@@ -245,6 +249,11 @@ def simulator_pids(simulator: str, sch_path: str = None) -> list:
                 stat = fh.read()
             if want and os.path.realpath(os.readlink(os.path.join(_PROC, d, "cwd"))) != want:
                 continue                              # another testbench's run, or not ours
+            if want and simulator in DETACHED:
+                with open(os.path.join(_PROC, d, "cmdline"), "rb") as fh:
+                    args = fh.read().decode("utf-8", "replace").split("\0")[1:]
+                if not any(os.path.splitext(os.path.basename(a))[0] == stem for a in args):
+                    continue                          # a neighbour testbench in the same folder
         except OSError:
             continue
         if stat[stat.rfind(")") + 2:][:1] not in ("Z", "X"):    # the state after "(comm) "

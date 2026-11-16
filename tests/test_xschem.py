@@ -296,18 +296,22 @@ def test_a_testbench_takes_only_its_own_name(tmp_path):
 
 @pytest.mark.skipif(not os.path.isdir("/proc/self"), reason="needs /proc")
 def test_only_the_benchs_own_simulator_counts(tmp_path, monkeypatch):
-    """xschem runs the simulator in the testbench's simulations/ folder, which tells two runs
-    of one simulator apart.  By name alone, Stop killed every run of it."""
-    monkeypatch.setitem(xschem._SIM_PROC, "xyce", "sleep")
-    benches = [tmp_path / b / "tb_xyce.sch" for b in ("a", "b", "c")]
+    """xschem runs the simulator in the testbench's simulations/ folder and hands it the
+    netlist, `Xyce <folder>/simulations/<stem>.spice`.  By name alone, Stop killed every run
+    of it, and by folder alone a run's import waited for a neighbour testbench's run."""
+    monkeypatch.setitem(xschem._SIM_PROC, "xyce", os.path.basename(sys.executable)[:15])
+    benches = [tmp_path / "a" / "tb_xyce.sch", tmp_path / "b" / "tb_xyce.sch",
+               tmp_path / "b" / "other_xyce.sch", tmp_path / "c" / "tb_xyce.sch"]
     procs = []
     try:
-        for sch in benches[:2]:
-            (sch.parent / "simulations").mkdir(parents=True)
-            procs.append(subprocess.Popen(["sleep", "30"], cwd=sch.parent / "simulations"))
-        assert xschem.simulator_pids("xyce", str(benches[0])) == [procs[0].pid]
-        assert xschem.simulator_pids("xyce", str(benches[1])) == [procs[1].pid]
-        assert not xschem.simulator_running("xyce", str(benches[2]))
+        for sch in benches[:3]:
+            sims = sch.parent / "simulations"
+            sims.mkdir(parents=True, exist_ok=True)
+            procs.append(subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)",
+                                           str(sims / (sch.stem + ".spice"))], cwd=sims))
+        for sch, p in zip(benches, procs):
+            assert xschem.simulator_pids("xyce", str(sch)) == [p.pid]
+        assert not xschem.simulator_running("xyce", str(benches[3]))
         assert {p.pid for p in procs} <= set(xschem.simulator_pids("xyce"))
     finally:
         for p in procs:
