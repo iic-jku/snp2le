@@ -10,8 +10,10 @@ extra fit rather than one per change, and Export writes the finished model
 instead of quietly re-running the fit on the GUI thread.
 Run with:  pytest -q
 """
+import gc
 import os
 import sys
+import threading
 import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -302,3 +304,53 @@ def test_a_crashing_worker_does_not_take_the_window_down(win, monkeypatch):
     for indicator in win._fit_indicators():
         assert "conversion failed" in indicator.message.toolTip()
     assert not win.top.export.isEnabled(), "a crashed fit must not leave Export live"
+
+
+def test_no_garbage_collection_runs_on_a_fit_thread(win, monkeypatch):
+    """Python collects on whichever thread crosses its allocation threshold, so a fit could free
+    widgets the views dropped, which Qt must delete on the GUI thread.  PySide6 6.12.0 segfaulted
+    in shiboken's main-thread deletion handler while a fit ran, on macOS in CI."""
+    real = engine.convert
+    off_gui_thread = []
+
+    def watch(phase, info):
+        if phase == "start" and threading.current_thread() is not threading.main_thread():
+            off_gui_thread.append(threading.current_thread().name)
+
+    def allocating(state, net, progress=None):
+        held = [[] for _ in range(100_000)]     # live objects, far past the collection threshold
+        del held
+        return real(state, net, progress=progress)
+
+    monkeypatch.setattr(fit_runner.engine, "convert", allocating)
+    _settle(win)
+    gc.callbacks.append(watch)
+    try:
+        win.recompute()
+        _settle(win)
+    finally:
+        gc.callbacks.remove(watch)
+    assert off_gui_thread == []
+    assert gc.isenabled()
+
+
+def test_collection_resumes_after_the_last_fit_and_after_shutdown(win, monkeypatch):
+    real = engine.convert
+
+    def slow(state, net, progress=None):
+        time.sleep(0.3)
+        return real(state, net, progress=progress)
+
+    monkeypatch.setattr(fit_runner.engine, "convert", slow)
+    _settle(win)
+    win.recompute()
+    win.recompute()                         # a pending fit keeps collection paused
+    _app().processEvents()
+    assert win._fit.busy() and win._fit.has_pending() and not gc.isenabled()
+    _settle(win)
+    assert gc.isenabled()
+    win.recompute()
+    _app().processEvents()
+    assert not gc.isenabled()
+    win._fit.shutdown(msec=5000)
+    assert gc.isenabled()
