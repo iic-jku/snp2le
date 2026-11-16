@@ -276,6 +276,18 @@ def test_a_result_waits_for_its_simulator_to_exit(tmp_path, monkeypatch):
     assert time.time() >= exits
 
 
+def test_a_timeout_during_the_run_says_the_simulator_is_still_running(tmp_path, monkeypatch,
+                                                                       capsys):
+    sch = tmp_path / "testbenches" / "xschem" / "tb_xyce.sch"
+    sch.parent.mkdir(parents=True)
+    sch.write_text("no analysis here\n", encoding="utf-8")
+    monkeypatch.setattr(xschem, "available", lambda: True)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(xschem, "simulator_running", lambda sim, sch=None: True)
+    assert cli._run_testbench(str(sch), "xyce", False, None, 0.3) is None
+    assert "xyce is still running after 0 s, nothing was imported" in capsys.readouterr().err
+
+
 def test_vacask_with_show_output_is_imported_while_its_plot_is_open(monkeypatch):
     """The postprocess has written the table before it opens the plot, and VACASK runs
     until the plot is closed."""

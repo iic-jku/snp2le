@@ -426,6 +426,9 @@ def _run_testbench(sch, simulator, show_output, sweep, timeout):
             # without it (e.g. Windows) the --timeout deadline above rules
             return fail(f"{simulator} produced no result (check the testbench and models)")
         time.sleep(0.3)
+    if xschem.still_writing(simulator, sch, show_output):
+        return fail(f"{simulator} is still running after {timeout:.0f} s, nothing was imported "
+                    f"(raise --timeout to wait for it)")
     return fail(f"no result for '{stem}' after {timeout:.0f} s")
 
 
