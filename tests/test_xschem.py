@@ -244,6 +244,15 @@ def test_the_cli_run_keeps_to_its_own_tree(tmp_path, monkeypatch):
     assert theirs.exists() and not own.exists()
 
 
+def test_a_testbench_takes_only_its_own_name(tmp_path):
+    """`amp_tb` and `amp_tb_ac` in one folder: the prefix match took the other's table."""
+    since = time.time()
+    _touch(tmp_path / "amp_tb_ac.txt", since - 0.5)
+    assert xschem.find_result(str(tmp_path), "amp_tb", since) is None
+    _touch(tmp_path / "amp_tb.txt", since - 0.5)
+    assert xschem.find_result(str(tmp_path), "amp_tb", since) == str(tmp_path / "amp_tb.txt")
+
+
 @pytest.mark.skipif(not os.path.isdir("/proc/self"), reason="needs /proc")
 def test_only_the_benchs_own_simulator_counts(tmp_path, monkeypatch):
     """xschem runs the simulator in the testbench's simulations/ folder, which tells two runs

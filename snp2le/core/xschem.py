@@ -135,11 +135,11 @@ _TOUCHSTONE = re.compile(r"\.s\d+p", re.I)
 
 def find_result(data_dir: str, stem: str, since: float):
     """Newest result written in `data_dir` since `since` (epoch seconds), or None.  A file
-    named after the testbench counts with any extension that is not a netlist, log or
-    figure, since Ngspice `wrdata` targets vary and Xyce writes `.sNp`, and with 1 s of
-    grace for a coarse file clock.  Without one, a table or Touchstone file counts only if
-    it is strictly newer than `since`: with the grace, a run started right after another
-    took the previous testbench's result for its own."""
+    named after the testbench (its full stem, so `amp_tb` never takes `amp_tb_ac.txt`) counts
+    with any extension that is not a netlist, log or figure, since Ngspice `wrdata` targets
+    vary and Xyce writes `.sNp`, and with 1 s of grace for a coarse file clock.  Without
+    one, a table or Touchstone file counts only if it is strictly newer than `since`: with
+    the grace, a run started right after another took the previous testbench's result."""
     if not os.path.isdir(data_dir):
         return None
     named, data = [], []
@@ -152,7 +152,7 @@ def find_result(data_dir: str, stem: str, since: float):
             mt = os.path.getmtime(p)
         except OSError:
             continue
-        if f.startswith(stem):
+        if os.path.splitext(f)[0] == stem:
             if mt >= since - 1:                             # (re)written by this run
                 named.append((mt, p))
         elif (ext in _DATA_EXTS or _TOUCHSTONE.fullmatch(ext)) and mt > since:
