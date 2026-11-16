@@ -110,6 +110,7 @@ def test_each_conversion_on_a_new_thread_runs_on_one_blas_thread(two_threads, mo
     lives, so the second fit ran on every BLAS thread."""
     for name in engine._BLAS_THREAD_VARS:
         monkeypatch.delenv(name, raising=False)
+    _no_thread_controls_openblas()          # so only the first fit's living thread can block
     release = threading.Event()
     seen = []
 
@@ -133,3 +134,81 @@ def test_each_conversion_on_a_new_thread_runs_on_one_blas_thread(two_threads, mo
             t.join()
     assert seen == [{(1,)}, {(1,)}]
     assert _blas_threads() == [2]
+
+
+def test_the_last_conversion_out_gives_the_count_back_while_the_first_ones_thread_lives(
+        two_threads, monkeypatch):
+    """The first conversion in sets the limit and the last one out restores it, here on another
+    thread while the first one's thread lives on, as a pool thread does.  threadpoolctl 3.8
+    ignored that restore, so the process stayed on one thread."""
+    for name in engine._BLAS_THREAD_VARS:
+        monkeypatch.delenv(name, raising=False)
+    net = io.load_touchstone(_BPF)
+    first_inside, both_inside = threading.Event(), threading.Barrier(2, timeout=120)
+    first_left, release = threading.Event(), threading.Event()
+    real = engine._convert
+
+    def held(*args, **kwargs):
+        first_inside.set()
+        res = real(*args, **kwargs)
+        both_inside.wait()
+        if threading.current_thread().name == "second":
+            first_left.wait(timeout=120)
+        return res
+
+    def first():
+        try:
+            engine.convert(ConverterState(mode="universal", max_order=6), net)
+        finally:
+            first_left.set()
+        release.wait(timeout=120)
+
+    monkeypatch.setattr(engine, "_convert", held)
+    second = threading.Thread(name="second", target=lambda: engine.convert(
+        ConverterState(mode="universal", max_order=6), net))
+    first_thread = threading.Thread(name="first", target=first)
+    try:
+        first_thread.start()
+        assert first_inside.wait(timeout=120)   # the first one in sets the limit
+        second.start()
+        second.join()
+        assert _blas_threads() == [2]
+    finally:
+        release.set()
+        first_thread.join()
+
+
+def test_the_caller_can_set_the_count_after_a_conversion_on_a_thread_that_lives(
+        two_threads, monkeypatch):
+    """A conversion leaves no thread in control of OpenBLAS.  Since threadpoolctl 3.8 the
+    caller's own later limit was ignored for as long as the converting thread lived."""
+    for name in engine._BLAS_THREAD_VARS:
+        monkeypatch.delenv(name, raising=False)
+    done, release = threading.Event(), threading.Event()
+
+    def convert_and_stay_alive():
+        try:
+            engine.convert(ConverterState(mode="universal", max_order=6), io.load_touchstone(_BPF))
+        finally:
+            done.set()
+        release.wait(timeout=120)
+
+    thread = threading.Thread(target=convert_and_stay_alive)
+    thread.start()
+    try:
+        assert done.wait(timeout=300)
+        with threadpool_limits(limits=3, user_api="blas"):
+            assert _blas_threads() == [3]
+    finally:
+        release.set()
+        thread.join()
+    assert _blas_threads() == [2]
+
+
+def _no_thread_controls_openblas():
+    """Forget which thread set OpenBLAS (here the fixture's), on threadpoolctl 3.8 and newer."""
+    import threadpoolctl
+    controller = getattr(threadpoolctl, "OpenBLASController", None)
+    clear = getattr(controller, "clear_controlling_thread", None)
+    if clear is not None:
+        clear(force=True)
