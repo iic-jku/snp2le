@@ -6,6 +6,7 @@ Covers the unit helpers, both conversion modes, all structures, netlist renderin
 and the awkward edge cases (DC sample, wrong port count).
 """
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -610,7 +611,8 @@ def test_mixed_references_are_renormalised_before_a_structure_extraction():
     truth = _example("ind_500pH_ihp-sg13cmos5l.s2p")
     mixed = _referred(truth, np.array([50.0, 75.0]))
     # the pi model is read off in closed form, the wideband one is a least-squares fit whose
-    # R_skin2 moves by 0.2 % when the data move by the renormalisation's 1e-12
+    # undetermined elements (its spread note names R_skin2) move with the BLAS kernel alone,
+    # by 1.6 % on one CI runner, so only the elements the data determine are compared
     for key, rtol in (("inductor-pi", 1e-6), ("inductor-wideband", 1e-2)):
         st = ConverterState(mode="structure", structure_key=key)
         a, b = engine.convert(st, truth), engine.convert(st, mixed)
@@ -620,15 +622,30 @@ def test_mixed_references_are_renormalised_before_a_structure_extraction():
             assert b.messages[1:] == a.messages
         assert np.allclose(b.data_s, a.data_s, rtol=0, atol=1e-10)
         assert np.isclose(b.rms_error, a.rms_error, rtol=rtol), key
+        weak = _undetermined(a) | _undetermined(b)
         for (la, va, ua), (lb, vb, ub) in zip(a.value_rows, b.value_rows):
-            assert (la, ua) == (lb, ub) and np.isclose(va, vb, rtol=rtol), (key, la)
+            assert (la, ua) == (lb, ub), (key, la)
+            assert la in weak or np.isclose(va, vb, rtol=rtol), (key, la)
         for lab, tol in a.value_drift.items():
-            assert np.isclose(b.value_drift[lab], tol, rtol=rtol, atol=1e-9), (key, lab)
+            assert lab in weak or np.isclose(b.value_drift[lab], tol, rtol=rtol, atol=1e-9), (key, lab)
         for name, panels in a.aux_traces.items():
             for side in ("top", "bottom"):
                 assert np.allclose(b.aux_traces[name][side]["data"], panels[side]["data"],
                                    rtol=1e-5, equal_nan=True), (key, name, side)
     assert np.allclose(mixed.z0[0], [50, 75])           # the caller's network is untouched
+
+
+def _undetermined(res):
+    """Value-row labels of the elements a wideband fit's spread note names, for example
+    'Rskin2 (x3) is not determined by the data, ...' gives {'R_skin2'}."""
+    from snp2le.core.structures.inductor_wideband import _row
+    labels = set()
+    for msg in res.messages:
+        head, found, _ = msg.partition(" not determined by the data")
+        if found:
+            names = re.sub(r"\(x[^)]*\)", "", head.rsplit(" ", 1)[0])    # drop factors, "is"/"are"
+            labels |= {_row(n, 0)[0] for n in re.findall(r"[A-Za-z]\w*", names) if n != "and"}
+    return labels
 
 
 def test_mixed_references_reach_a_universal_fit_at_50_ohm():
@@ -829,6 +846,41 @@ def test_load_ngspice_sim_skips_a_benchs_own_columns():
     assert sorted(k for k in sim if k != "f") == ["S31", "S41"]
     assert list(sim["S41"]["db"]) == [-3.2, -3.3]
     assert list(sim["S41"]["deg"]) == [-180.0, -181.0]
+
+
+def test_load_sim_reads_a_touchstone_file():
+    """Xyce writes S-parameters only as Touchstone, so the overlay reads .sNp too, with every
+    S_ij in dB and degrees (wrapped, the overlay unwraps it)."""
+    path = _example_path("wpd_ihp-sg13g2.s3p")
+    net = io.load_touchstone(path)
+    sim = io.load_sim(path)
+    assert sorted(k for k in sim if k != "f") == [f"S{i}{j}" for i in (1, 2, 3) for j in (1, 2, 3)]
+    assert np.array_equal(sim["f"], net.f)
+    assert np.allclose(sim["S21"]["db"], 20 * np.log10(np.abs(net.s[:, 1, 0])), rtol=0, atol=1e-12)
+    assert np.allclose(sim["S32"]["deg"], np.angle(net.s[:, 2, 1], deg=True), rtol=0, atol=1e-12)
+
+
+def test_load_sim_reads_a_mixed_reference_at_one_reference(monkeypatch):
+    """As the conversion reads its input: ports at 50 and 75 ohm come back renormalised to one
+    real reference, so the overlay compares like with like.  scikit-rf writes no file with
+    unequal references, so the network is handed in where the file would be read."""
+    net = _example("bpf_ihp-sg13g2.s2p")
+    mixed = net.copy()
+    mixed.renormalize(np.array([50.0, 75.0]))
+    monkeypatch.setattr(io, "load_touchstone", lambda path: mixed)
+    sim = io.load_sim("mixed.s2p")
+    assert not np.allclose(np.abs(mixed.s[:, 1, 0]), np.abs(net.s[:, 1, 0]), atol=1e-3)
+    assert np.allclose(sim["S21"]["db"], 20 * np.log10(np.abs(net.s[:, 1, 0])), atol=1e-9)
+
+
+def test_load_sim_reads_a_table_as_before():
+    """Anything that is not .sNp is an Ngspice-style table, read exactly as before."""
+    table = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "testbenches", "xschem", "plot_simulations", "data",
+                         "two_port_tb_acsp_ngspice.txt")
+    a, b = io.load_sim(table), io.load_ngspice_sim(table)
+    assert a.keys() == b.keys() and np.array_equal(a["f"], b["f"])
+    assert all(np.array_equal(a[k][u], b[k][u]) for k in a if k != "f" for u in a[k])
 
 
 # ------------------------------------------------------------- passivity bound
@@ -1241,12 +1293,15 @@ def test_a_constant_term_above_the_ceiling_is_named():
     assert wpd.sigma_max > 1.0 and not d_lines(wpd)
 
 
-def test_cli_picks_the_simulator_from_the_file_name():
-    """As the GUI does: a folder named vacask_runs/ must not pick VACASK for an Ngspice
-    testbench."""
-    from snp2le import cli
-    assert cli._simulator_for("tb/two_port_tb_acsp_vacask.sch") == "vacask"
-    assert cli._simulator_for("vacask_runs/two_port_tb_acsp_ngspice.sch") == "ngspice"
+def test_the_simulator_comes_from_the_file_name():
+    """One rule for the CLI and the GUI: a folder named vacask_runs/ must not pick VACASK
+    for an Ngspice testbench, and a name that names no simulator runs Ngspice."""
+    from snp2le.core import xschem
+    assert xschem.simulator_for("tb/two_port_tb_acsp_vacask.sch") == "vacask"
+    assert xschem.simulator_for("tb/two_port_tb_acsp_xyce.sch") == "xyce"
+    assert xschem.simulator_for("tb/Four_Port_TB_XYCE.sch") == "xyce"
+    assert xschem.simulator_for("vacask_runs/two_port_tb_acsp_ngspice.sch") == "ngspice"
+    assert xschem.simulator_for("xyce_runs/my_bench.sch") == "ngspice"
 
 
 def test_every_structure_has_a_solvable_dc_operating_point():

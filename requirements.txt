@@ -1,5 +1,6 @@
 # runtime
-PySide6-Essentials>=6.6
+PySide6-Essentials>=6.6,<6.12; sys_platform == 'linux' and python_version < '3.12'   # 6.12.0 aborts Python 3.10 and 3.11 on Linux (PYSIDE-3474)
+PySide6-Essentials>=6.6; sys_platform != 'linux' or python_version >= '3.12'
 scikit-rf>=1.12   # 1.12 is the first release that applies auto_fit's model_order_max to the initial pole set
 numpy>=1.24
 scipy>=1.10

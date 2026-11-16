@@ -92,6 +92,45 @@ def test_a_structure_model_is_the_ngspice_text(name, key):
     assert xy[0].endswith("(Xyce)") and xy[1:] == ng[1:]
 
 
+def test_a_lossless_branchline_writes_its_loop_resistor_as_a_vccs():
+    """The 1e-6 ohm resistor that breaks the inductor loop of a lossless coupler is the one
+    noiseless resistor a structure has, so it is the one line that differs."""
+    net = io.load_touchstone(_path("blc_ihp-sg13g2.s4p"))
+    f = np.asarray(net.f)
+    res = engine.convert(ConverterState(mode="structure", structure_key="branchline",
+                                        f_extract=float(np.sqrt(f[0] * f[-1])),
+                                        iso_resistor=False), net)
+    assert res.ok, res.error
+    ng, xy = res.ngspice.splitlines()[1:], res.xyce.splitlines()[1:]
+    assert [ln for ln in ng if ln.startswith("Rloop ")] == ["Rloop n0 p2 1e-06 noisy=0"]
+    assert [ln for ln in xy if ln.startswith("GRloop ")] == ["GRloop n0 p2 n0 p2 1000000.0"]
+    assert ([ln for ln in ng if not ln.startswith("Rloop ")]
+            == [ln for ln in xy if not ln.startswith("GRloop ")])
+
+
+def test_a_name_clash_is_refused_whatever_its_case():
+    """Xyce upper-cases names, so the generated `GRp1_a1` is the element `GRP1_A1`."""
+    ir = CircuitIR(name="m", ports=["p1"], physical=False)
+    ir.add(Element("R", "Rp1_a1", ("p1", "0"), 50.0))
+    ir.add(Element("C", "GRP1_A1", ("p1", "0"), 1e-12))
+    with pytest.raises(ValueError, match="GRp1_a1"):
+        netlist.render_xyce(ir)
+
+
+def test_simulate_without_the_benchs_netlist_names_the_format_to_use(tmp_path, monkeypatch,
+                                                                     capsys):
+    """`both` writes no Xyce netlist, so a Xyce bench is pointed at `all`."""
+    from snp2le import cli
+    from snp2le.core import xschem
+    monkeypatch.setattr(xschem, "available", lambda: False)      # stop before any run
+    for fmt, bench, hint in (("ngspice", "tb_xyce.sch", "--format xyce or all"),
+                             ("ngspice", "tb_vacask.sch", "--format vacask or both")):
+        cli.main(["convert", _path("bpf_ihp-sg13g2.s2p"), "--order", "6", "--format", fmt,
+                  "-o", str(tmp_path / "m.spice"), "--quiet", "--simulate",
+                  str(tmp_path / bench)])
+        assert f"(use {hint})" in capsys.readouterr().err
+
+
 def test_a_name_clash_is_refused():
     ir = CircuitIR(name="m", ports=["p1"], physical=False)
     ir.add(Element("R", "R1", ("p1", "0"), 50.0))
@@ -192,3 +231,41 @@ def test_xyce_noise_is_the_models(tmp_path, thermal):
             want = _K_T * _port_noise(res.ir, fi)[0][k, k].real
             assert (want > 0) == thermal
             assert got == pytest.approx(want, rel=1e-6, abs=1e-30), (k, fi)
+
+
+# --------------------------------------------------------------------------- #
+#  The bundled Xyce testbench, through xschem
+# --------------------------------------------------------------------------- #
+needs_xschem_and_xyce = pytest.mark.skipif(
+    shutil.which("xschem") is None or shutil.which("Xyce") is None,
+    reason="xschem and Xyce are not both on PATH")
+
+
+@needs_xschem_and_xyce
+def test_the_bundled_xyce_bench_runs_from_the_cli(tmp_path):
+    """The whole path in a copy of the tree: export, the synced band, xschem's Xyce entry,
+    Xschem's GND as ground, the .LIN Touchstone and its import, against the model."""
+    import time
+    import skrf
+    from snp2le import cli
+    repo = os.path.dirname(os.path.dirname(_EXAMPLES))
+    for sub in ("testbenches/xschem", "schematic/xschem"):
+        shutil.copytree(os.path.join(repo, *sub.split("/")), tmp_path / sub)
+    out = tmp_path / "netlist" / "xyce" / "two_port.cir"
+    out.parent.mkdir(parents=True)
+    bench = tmp_path / "testbenches" / "xschem" / "two_port_tb_acsp_xyce.sch"
+    start = time.time()
+    assert cli.main(["convert", _path("bpf_ihp-sg13g2.s2p"), "--order", "13", "--format",
+                     "xyce", "-o", str(out), "--simulate", str(bench), "--timeout", "120",
+                     "--quiet"]) == 0
+    result = bench.parent / "plot_simulations" / "data" / "two_port_tb_acsp_xyce.s2p"
+    assert os.path.getmtime(result) >= start - 1             # this run's, not the copied one
+    assert (bench.parent / "sim_range.cir").read_text(encoding="utf-8").splitlines()[1:] == [
+        ".param f_min=1.200000e+11", ".param f_max=2.000000e+11"]
+    res = _universal("bpf_ihp-sg13g2.s2p", 13)
+    x = skrf.Network(str(result))
+    f = np.asarray(res.freq)
+    idx = np.array([int(np.argmin(np.abs(x.f - fi))) for fi in f])
+    on = np.abs(x.f[idx] - f) < 1.0                         # the data points on the sweep
+    assert on.sum() == 41
+    assert np.max(np.abs(x.s[idx][on] - np.asarray(res.model_s)[on])) < 1e-6

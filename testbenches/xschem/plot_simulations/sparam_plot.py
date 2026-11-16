@@ -4,9 +4,9 @@
 #
 # Shared S-parameter figure layout for the acsp plotting scripts.
 #
-# Both plot_n_port_tb_acsp_ngspice.py and plot_n_port_tb_acsp_vacask.py draw their
-# figures through this module, so the ngspice and VACASK results are directly
-# comparable side by side.
+# plot_n_port_tb_acsp_ngspice.py, plot_n_port_tb_acsp_vacask.py and
+# plot_n_port_tb_acsp_xyce.py draw their figures through this module, so the ngspice,
+# VACASK and Xyce results are directly comparable side by side.
 #
 # An N-port testbench has N x N S-parameters, which is unreadable in a single pair of
 # axes (a four-port already has 16).  The figure is therefore split by excitation port:

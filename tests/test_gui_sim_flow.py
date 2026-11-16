@@ -107,10 +107,10 @@ def test_poll_ends_exactly_once(bench, monkeypatch):
     win, data, figs, sims = bench
     (data / "tb_vacask.aborted").write_text("no sweep data\n", encoding="utf-8")
     calls = []
-    monkeypatch.setattr(win, "_end_vacask_poll",
+    monkeypatch.setattr(win, "_end_detached_poll",
                         lambda status, aborted: calls.append(status))
     win._sim_poll_deadline = time.time() - 10.0   # backstop already expired
-    win._sim_vacask_seen = True
+    win._sim_detached_seen = True
     win._poll_sim_result()
     assert calls == ["aborted!"]
 
@@ -121,3 +121,139 @@ def test_finished_after_stop_or_crash_is_a_noop(bench):
     win, data, figs, sims = bench
     win._on_sim_finished(0, None)
     assert win._sim_timer is None
+
+
+# --------------------------------------------------------------------------- #
+#  Xyce, the second simulator xschem runs detached
+# --------------------------------------------------------------------------- #
+import shutil                                               # noqa: E402
+
+from snp2le.core import xschem                              # noqa: E402
+
+_XYCE_RESULT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "testbenches", "xschem", "plot_simulations", "data",
+                            "two_port_tb_acsp_xyce.s2p")
+
+
+@pytest.fixture()
+def xyce_bench(bench):
+    win, data, figs, sims = bench
+    sch = os.path.join(os.path.dirname(win._sch_path), "tb_xyce.sch")
+    with open(sch, "w", encoding="utf-8") as fh:
+        fh.write("dummy\n")
+    win._sch_path = sch
+    win._sim_simulator = "xyce"
+    win._sim_poll_stem = "tb_xyce"
+    return win, data, sims
+
+
+def test_the_simulator_list_offers_xyce(win):
+    combo = win.top.simulator
+    assert [combo.itemData(i) for i in range(combo.count())] == list(xschem.SIMULATORS)
+    assert [combo.itemText(i) for i in range(combo.count())] == ["Ngspice", "VACASK", "Xyce"]
+
+
+def test_loading_a_bench_picks_its_simulator(win, tmp_path, monkeypatch):
+    for name, want in (("two_port_tb_acsp_xyce.sch", "xyce"),
+                       ("two_port_tb_acsp_vacask.sch", "vacask"),
+                       ("two_port_tb_acsp_ngspice.sch", "ngspice")):
+        path = str(tmp_path / name)
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getOpenFileName",
+                            staticmethod(lambda *a, **k: (path, "")))
+        win.on_load_sch()
+        assert win.top.simulator.currentData() == want
+
+
+def test_a_xyce_run_imports_its_touchstone(xyce_bench, monkeypatch):
+    """Xyce writes S-parameters only as Touchstone: the poll finds the .s2p the .LIN line
+    names, and the overlay reads it."""
+    win, data, sims = xyce_bench
+    monkeypatch.setattr(QtWidgets.QMessageBox, "warning",       # a refusal fails, not hangs
+                        staticmethod(lambda *a, **k: pytest.fail(f"import refused: {a[2:]}")))
+    shutil.copyfile(_XYCE_RESULT, data / "tb_xyce.s2p")         # written now, by this run
+    (sims / "tb_xyce.spice").write_text(
+        ".LIN sparcalc=1 file=../plot_simulations/data/tb_xyce.s2p\n", encoding="utf-8")
+    result = win._find_sim_result("tb_xyce")
+    assert os.path.normpath(result) == os.path.normpath(str(data / "tb_xyce.s2p"))
+    assert win.plots.import_sim_file(result)
+    assert sorted(k for k in win.plots._sim if k != "f") == ["S11", "S12", "S21", "S22"]
+    win.plots.clear_sim()
+
+
+def test_a_xyce_result_waits_for_xyce_to_exit(xyce_bench, monkeypatch):
+    win, data, sims = xyce_bench
+    shutil.copyfile(_XYCE_RESULT, data / "tb_xyce.s2p")
+    running, imported = [True], []
+    monkeypatch.setattr(xschem, "simulator_running", lambda sim, sch=None: running[0])
+    monkeypatch.setattr(win, "_finish_sim_import", imported.append)
+    win._sim_interactive = False
+    win._sim_poll_deadline = time.time() + 100.0
+    for _ in range(3):
+        win._poll_sim_result()
+    assert imported == []                            # Xyce is still writing it
+    running[0] = False
+    for _ in range(2):
+        win._poll_sim_result()
+    assert [os.path.normpath(p) for p in imported] == [os.path.normpath(str(data / "tb_xyce.s2p"))]
+
+
+def test_a_xyce_run_without_a_result_fails_once(xyce_bench, monkeypatch):
+    win, data, sims = xyce_bench
+    calls = []
+    monkeypatch.setattr(win, "_end_detached_poll",
+                        lambda status, aborted: calls.append((status, aborted)))
+    monkeypatch.setattr(win, "_detached_running", lambda: False)
+    win._sim_detached_seen = True                    # it ran, and left 5 s ago
+    win._sim_detached_gone_at = time.time() - 5.0
+    win._sim_poll_deadline = time.time() + 100.0
+    win._poll_sim_result()
+    assert calls == [("failed!", False)]
+
+
+def test_show_output_names_the_simulator(win):
+    """One log window serves VACASK and Xyce, so its title follows the run."""
+    for sim, title in (("xyce", "Xyce output"), ("vacask", "VACASK output")):
+        win._sim_simulator = sim
+        win._sim_log_path = None
+        win._start_log_tail()
+        assert win._log_win.windowTitle() == title
+        win._stop_log_tail()
+    win._log_win.close()
+
+
+def test_stop_and_the_poll_follow_only_this_benchs_xyce(win, monkeypatch, tmp_path):
+    asked = []
+    monkeypatch.setattr(xschem, "simulator_pids",
+                        lambda sim, sch=None: asked.append((sim, sch)) or [])
+    win._sim_simulator = "xyce"
+    win._sch_path = str(tmp_path / "tb_xyce.sch")
+    win._kill_detached()
+    win._detached_running()                          # asks only where /proc exists
+    assert asked == [("xyce", win._sch_path)] * (2 if os.path.isdir("/proc") else 1)
+
+
+def test_a_run_clears_the_last_one_by_the_clis_rule(win, monkeypatch, tmp_path):
+    """`xschem.prepare_run` drops the previous log before it reads it, which keeps a run in a
+    copied folder off the original's results."""
+    class Stop(Exception):
+        pass
+
+    def prepare(sch, sim):
+        asked.append((sch, sim))
+        raise Stop
+
+    asked = []
+    sch = tmp_path / "testbenches" / "xschem" / "tb_vacask.sch"
+    sch.parent.mkdir(parents=True)
+    sch.write_text("dummy\n", encoding="utf-8")
+    monkeypatch.setattr(xschem, "available", lambda: True)
+    monkeypatch.setattr(xschem, "prepare_run", prepare)
+    combo, index = win.top.simulator, win.top.simulator.currentIndex()
+    win._sch_path, win._sim_proc, win._sim_timer = str(sch), None, None
+    combo.setCurrentIndex(combo.findData("vacask"))
+    try:
+        with pytest.raises(Stop):
+            win.on_run_sim()
+    finally:
+        combo.setCurrentIndex(index)
+    assert asked == [(str(sch), "vacask")] and win._sim_proc is None

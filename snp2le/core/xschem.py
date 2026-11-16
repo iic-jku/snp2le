@@ -43,17 +43,37 @@ def available() -> bool:
 # GUI and CLI read back for "Show output" and for the failure or abort diagnostics.
 VACASK_LOG = "vacask.log"
 NGSPICE_LOG = "ngspice.log"
-_SIM_LOG = {"vacask": VACASK_LOG, "ngspice": NGSPICE_LOG}
+XYCE_LOG = "xyce.log"
+_SIM_LOG = {"vacask": VACASK_LOG, "ngspice": NGSPICE_LOG, "xyce": XYCE_LOG}
+
+# the simulators the bundled testbenches are written for, in the GUI's dropdown order
+SIMULATORS = ("ngspice", "vacask", "xyce")
+NAMES = {"ngspice": "Ngspice", "vacask": "VACASK", "xyce": "Xyce"}
+# xschem launches these two detached with their console redirected to a log, so a run is
+# followed through the process and the log rather than through xschem
+DETACHED = ("vacask", "xyce")
+
+
+def simulator_for(sch_path: str) -> str:
+    """The simulator a testbench is for, from its file name alone, so a folder named
+    vacask_runs/ cannot pick VACASK for an Ngspice testbench.  Ngspice unless the name says
+    otherwise."""
+    name = os.path.basename(sch_path).lower()
+    return next((s for s in ("vacask", "xyce") if s in name), "ngspice")
+
+
+def _netlist_dir(sch_path: str) -> str:
+    """The folder xschem netlists `sch_path` into and runs its simulator in."""
+    return os.path.join(os.path.dirname(os.path.abspath(sch_path)), "simulations")
 
 
 def sim_log_path(sch_path: str, simulator: str) -> str:
     """Absolute path of the console log captured for `simulator` running `sch_path`."""
-    cwd = os.path.dirname(os.path.abspath(sch_path))
-    return os.path.join(cwd, "simulations", _SIM_LOG.get(simulator, VACASK_LOG))
+    return os.path.join(_netlist_dir(sch_path), _SIM_LOG.get(simulator, VACASK_LOG))
 
 
 def vacask_log_path(sch_path: str) -> str:
-    """Absolute path of the VACASK console log (kept as the GUI's entry point)."""
+    """Absolute path of the VACASK console log."""
     return sim_log_path(sch_path, "vacask")
 
 
@@ -65,15 +85,21 @@ def _read_text(path: str) -> str:
         return ""
 
 
+# the line that names a testbench's result file, in the .sch or the generated netlist
+_RESULT_TARGET = {"ngspice": re.compile(r"^\s*wrdata\s+(\S+)", re.M),
+                  "xyce": re.compile(r"^\s*\.lin\b.*?\bfile\s*=\s*(\S+)", re.M | re.I)}
+
+
 def sim_data_dir(sch_path: str, simulator: str = "ngspice") -> str:
     """Directory where `sch_path`'s testbench writes its simulation result.
 
     The location is the testbench's choice, not ours, so read it from the testbench
     itself instead of assuming a layout.  Ngspice: the `wrdata <target>` line in the
     .sch (or the generated netlist), resolved against the `simulations/` netlist dir
-    the simulator runs in.  VACASK: the `postprocess: wrote <file>` line of the
+    the simulator runs in.  Xyce: the `FILE=` of the `.LIN` line, read the same way.
+    VACASK: the `postprocess: wrote <file>` line of the
     captured console log - it appears once the run's postprocess has finished, so
-    callers re-evaluate while polling; the folder is stable across runs.  Falls back
+    callers re-evaluate while polling.  Falls back
     to `plot_simulations/data/` next to the testbench (the bundled layout).
     """
     sch_path = os.path.abspath(sch_path)
@@ -89,9 +115,10 @@ def sim_data_dir(sch_path: str, simulator: str = "ngspice") -> str:
         if tables:
             return os.path.dirname(tables[-1])
     else:
+        target = _RESULT_TARGET.get(simulator, _RESULT_TARGET["ngspice"])
         stem = os.path.splitext(os.path.basename(sch_path))[0]
         for src in (sch_path, os.path.join(netlist_dir, stem + ".spice")):
-            m = re.search(r"^\s*wrdata\s+(\S+)", _read_text(src), re.M)
+            m = target.search(_read_text(src))
             if m:
                 # a SPICE path: '/' separated on any platform, '\' is an escape there
                 return os.path.normpath(
@@ -99,8 +126,85 @@ def sim_data_dir(sch_path: str, simulator: str = "ngspice") -> str:
     return os.path.join(cwd, "plot_simulations", "data")
 
 
+# extensions in a testbench's data folder that are never a result, and the ones of a table
+_NON_DATA = (".raw", ".spice", ".inc", ".cir", ".net", ".log", ".out", ".svg", ".png",
+             ".ps", ".pdf", ".sch", ".aborted")
+_DATA_EXTS = (".txt", ".data", ".dat", ".csv")
+_TOUCHSTONE = re.compile(r"\.s\d+p", re.I)
+
+
+def find_result(data_dir: str, stem: str, since: float):
+    """Newest result written in `data_dir` since `since` (epoch seconds), or None.  A file
+    named after the testbench (its full stem, so `amp_tb` never takes `amp_tb_ac.txt`) counts
+    with any extension that is not a netlist, log or figure, since Ngspice `wrdata` targets
+    vary and Xyce writes `.sNp`, and with 1 s of grace for a coarse file clock.  Without
+    one, a table or Touchstone file counts only if it is strictly newer than `since`: with
+    the grace, a run started right after another took the previous testbench's result."""
+    if not os.path.isdir(data_dir):
+        return None
+    named, data = [], []
+    for f in os.listdir(data_dir):
+        ext = os.path.splitext(f)[1].lower()
+        if ext in _NON_DATA:
+            continue
+        p = os.path.join(data_dir, f)
+        try:
+            mt = os.path.getmtime(p)
+        except OSError:
+            continue
+        if os.path.splitext(f)[0] == stem:
+            if mt >= since - 1:                             # (re)written by this run
+                named.append((mt, p))
+        elif (ext in _DATA_EXTS or _TOUCHSTONE.fullmatch(ext)) and mt > since:
+            data.append((mt, p))
+    pool = named or data
+    return max(pool)[1] if pool else None
+
+
+def previous_results(data_dir: str, stem: str) -> list:
+    """What an earlier run of testbench `stem` left in `data_dir`: its result table, its
+    Touchstone file and the VACASK postprocess's abort marker.  A run deletes them first,
+    so none can pass for its own result."""
+    try:
+        names = os.listdir(data_dir)
+    except OSError:
+        return []
+    return [os.path.join(data_dir, f) for f in names
+            if os.path.splitext(f)[0] == stem
+            and (os.path.splitext(f)[1].lower() in (".txt", ".aborted")
+                 or _TOUCHSTONE.fullmatch(os.path.splitext(f)[1]))]
+
+
+def prepare_run(sch_path: str, simulator: str):
+    """Make the folders a run of `sch_path` writes into and delete what its previous run
+    left there, so nothing old passes for this run's result.  Returns the console log path
+    of a detached simulator, else None.
+
+    The log goes before the results: a VACASK log names its result folder by absolute path,
+    so a log copied along with a testbench folder pointed the cleanup at the original's."""
+    log = None
+    os.makedirs(_netlist_dir(sch_path), exist_ok=True)
+    if simulator in DETACHED:
+        log = sim_log_path(sch_path, simulator)
+        try:
+            os.remove(log)
+        except OSError:
+            pass
+    data_dir = sim_data_dir(sch_path, simulator)
+    stem = os.path.splitext(os.path.basename(sch_path))[0]
+    for stale in previous_results(data_dir, stem):
+        try:
+            os.remove(stale)
+        except OSError:
+            pass
+    if simulator != "vacask":                       # wrdata and .LIN cannot create the folder
+        os.makedirs(data_dir, exist_ok=True)
+    return log
+
+
 def write_sim_range(cwd: str, f_min: float, f_max: float) -> None:
-    """Write sim_range.inc (VACASK `var`) and sim_range.spice (Ngspice `.csparam`) into
+    """Write sim_range.inc (VACASK `var`), sim_range.spice (Ngspice `.csparam`) and
+    sim_range.cir (Xyce `.param`) into
     `cwd`, so a testbench that includes them sweeps the band the model was fitted over (the
     loaded file's full span unless a fit range is set).  Both the GUI and the CLI call this
     before a run, so a run always matches the model it is simulating."""
@@ -109,40 +213,81 @@ def write_sim_range(cwd: str, f_min: float, f_max: float) -> None:
         fh.write(f"// {note}\nvar f_min = {f_min:.6e}\nvar f_max = {f_max:.6e}\n")
     with open(os.path.join(cwd, "sim_range.spice"), "w", newline="\n") as fh:  # Ngspice (SPICE3)
         fh.write(f"* {note}\n.csparam f_min={f_min:.6e}\n.csparam f_max={f_max:.6e}\n")
+    with open(os.path.join(cwd, "sim_range.cir"), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(f"* {note}\n.param f_min={f_min:.6e}\n.param f_max={f_max:.6e}\n")  # Xyce
 
 
-_SIM_PROC = {"vacask": "vacask", "ngspice": "ngspice"}
+_SIM_PROC = {"vacask": "vacask", "ngspice": "ngspice", "xyce": "Xyce"}
+_PROC = "/proc"
 
 
-def simulator_running(simulator: str) -> bool:
-    """True if a detached process for `simulator` is alive.  xschem launches the simulator
-    (Ngspice or VACASK) out of its own process tree and quits, so scan /proc by command name.
-    Returns False where /proc is unavailable (e.g. Windows), where the caller falls back to a
-    wall-clock deadline."""
+def simulator_pids(simulator: str, sch_path: str = None) -> list:
+    """PIDs of running processes of `simulator`, with `sch_path` only those running that
+    testbench.  xschem launches the simulator out of its own process tree and quits, so scan
+    /proc by command name and by working directory, which xschem sets to the testbench's
+    netlist dir: by name alone, Stop killed another testbench's or another session's run.
+    Testbenches in one folder share that dir, so VACASK and Xyce, whose command we set to
+    `<simulator> "$N"`, are also told apart by the netlist in their arguments: otherwise a
+    run's import waited for a neighbour's run to end.  A zombie does not count: in a
+    container whose PID 1 reaps no orphans, every finished run stays one, and the poll took
+    that for a run still going until its deadline.  Empty where /proc is unavailable (e.g.
+    Windows)."""
     name = _SIM_PROC.get(simulator, simulator)
-    if not os.path.isdir("/proc"):
-        return False
-    for d in os.listdir("/proc"):
+    want = os.path.realpath(_netlist_dir(sch_path)) if sch_path else None
+    stem = os.path.splitext(os.path.basename(sch_path))[0] if sch_path else None
+    pids = []
+    if not os.path.isdir(_PROC):
+        return pids
+    for d in os.listdir(_PROC):
         if not d.isdigit():
             continue
         try:
-            with open(os.path.join("/proc", d, "comm")) as fh:
-                if name in fh.read():
-                    return True
+            with open(os.path.join(_PROC, d, "comm"), encoding="utf-8") as fh:
+                if name not in fh.read():
+                    continue
+            with open(os.path.join(_PROC, d, "stat"), encoding="utf-8") as fh:
+                stat = fh.read()
+            if want and os.path.realpath(os.readlink(os.path.join(_PROC, d, "cwd"))) != want:
+                continue                              # another testbench's run, or not ours
+            if want and simulator in DETACHED:
+                with open(os.path.join(_PROC, d, "cmdline"), "rb") as fh:
+                    args = fh.read().decode("utf-8", "replace").split("\0")[1:]
+                if not any(os.path.splitext(os.path.basename(a))[0] == stem for a in args):
+                    continue                          # a neighbour testbench in the same folder
         except OSError:
             continue
-    return False
+        if stat[stat.rfind(")") + 2:][:1] not in ("Z", "X"):    # the state after "(comm) "
+            pids.append(int(d))
+    return pids
+
+
+def simulator_running(simulator: str, sch_path: str = None) -> bool:
+    """True if a detached process for `simulator` is alive, with `sch_path` one running that
+    testbench.  Returns False where /proc is unavailable (e.g. Windows), where the caller
+    falls back to a wall-clock deadline."""
+    return bool(simulator_pids(simulator, sch_path))
+
+
+def still_writing(simulator: str, sch_path: str, show_output: bool = False) -> bool:
+    """True while this testbench's detached simulator runs and may still be writing its
+    result: Xyce's `.LIN` and VACASK's postprocess write it row by row, and a long sweep's
+    file that paused for one poll tick was imported with a fraction of its points.  False
+    for VACASK with Show output, whose postprocess holds its plot window open after writing
+    the table, and where /proc is unavailable (e.g. Windows)."""
+    if simulator not in DETACHED or (simulator == "vacask" and show_output):
+        return False
+    return simulator_running(simulator, sch_path)
 
 
 def simulate_command(sch_path: str, show_output: bool = True, simulator: str = "ngspice"):
     """Return (program, args, cwd) that netlists + simulates `sch_path` headlessly with
-    the chosen `simulator` ("ngspice" or "vacask").
+    the chosen `simulator` ("ngspice", "vacask" or "xyce").
 
     Runs in the testbench's own directory, using its `xschemrc` (if present) and a
     `simulations/` directory for the netlist, then quits (-q).  Paths are wrapped in
-    Tcl braces so spaces survive.  Either simulator's testbench writes its result to
-    `plot_simulations/data/<tb>.txt` (Ngspice via `wrdata`, VACASK via its
-    `postprocess` script), so the GUI imports both the same way.
+    Tcl braces so spaces survive.  The bundled testbenches write their result to
+    `plot_simulations/data/` (Ngspice via `wrdata`, VACASK via its `postprocess` script,
+    Xyce via `.LIN`), where `sim_data_dir` finds it.
 
     Ngspice: after `xschem netlist` (re)generates the SPICE netlist (a build artifact,
     not the `.sch`), its control block is patched *deterministically* for the mode, so
@@ -155,6 +300,10 @@ def simulate_command(sch_path: str, show_output: bool = True, simulator: str = "
     vacask: mirrors the testbench's VACASK launcher - select VACASK in the spectre
     category, set the Spectre netlist format, netlist and simulate.  (`show_output` is
     handled by the GUI via a SHOW_PLOTS env var the postprocess script honours.)
+
+    xyce: Xschem's own "Xyce batch" entry, #3 in the spice category, on the SPICE netlist
+    as it is, with the console captured to a log as for VACASK.  Xyce opens no window, so
+    `show_output` changes nothing here, the GUI shows the log instead.
     """
     sch_path = os.path.abspath(sch_path)
     cwd = os.path.dirname(sch_path)
@@ -184,6 +333,20 @@ def simulate_command(sch_path: str, show_output: bool = True, simulator: str = "
             "foreach d [list $netlist_dir [file dirname $netlist_dir]] {"
             "foreach f [glob -nocomplain [file join $d *.raw]] {file delete -- $f}}; "
             "simulate")
+        args += ["--command", tcl, tb]
+        return "xschem", args, cwd
+
+    if simulator == "xyce":
+        tcl = (
+            f"set netlist_dir {{{netlist_dir}}}; "
+            "set_sim_defaults; "
+            # set in full, so a simrc that numbers the spice simulators differently does
+            # not hand the run to another one
+            f'set sim(spice,3,cmd) {{Xyce "$N" >& {XYCE_LOG}}}; '
+            "set sim(spice,3,fg) 0; set sim(spice,3,st) 1; "
+            "set sim(spice,default) 3; "
+            "xschem set netlist_type spice; "
+            "xschem save; xschem netlist; simulate")
         args += ["--command", tcl, tb]
         return "xschem", args, cwd
 

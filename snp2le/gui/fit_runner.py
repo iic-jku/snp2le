@@ -7,7 +7,7 @@ the event loop froze the whole window for that time: no repaint, no progress, no
 way to tell a working fit from a hung one.  FitRunner moves the conversion to a
 worker thread and leaves the UI live.
 
-Two behaviours are worth knowing about:
+Three behaviours are worth knowing about:
 
 - **One fit at a time, newest wins.**  A change made while a fit runs is
   remembered, not queued, so dragging a spin box across five values starts one
@@ -18,19 +18,40 @@ Two behaviours are worth knowing about:
   signal is emitted from the worker thread, and the elapsed display keeps
   ticking even while the fit sits inside one long scikit-rf call that reports
   nothing.
+- **No garbage collection on the worker.**  Python collects on whichever thread
+  crosses its allocation threshold, so a fit could free the widgets the views
+  dropped, which Qt must delete on the GUI thread.  Automatic collection is
+  paused while any fit runs.  Between fits the GUI thread is the only one
+  running Python, and a fit that follows another starts after a collection
+  there.
 """
 from __future__ import annotations
+import contextlib
 import copy
+import gc
 from PySide6 import QtCore
 
 from snp2le.core import engine
 from snp2le.core.state import Results
 from snp2le.core.progress import ProgressReporter
+from snp2le.core.process_state import ProcessSetting
 
 # A worker that outlives shutdown is parked here so Python cannot collect the
 # QThread while it still runs (that aborts the process).  The interpreter is on
 # its way out when this is used, so the entries are never cleaned up.
 _ORPHANS = set()
+
+
+def _pause_collection():
+    """Automatic garbage collection off, or nothing to undo if the host has it off already."""
+    if not gc.isenabled():
+        return None
+    gc.disable()
+    return gc.enable
+
+
+# Shared by every window's runner: the first fit in pauses, the last one out resumes.
+_NO_COLLECTION = ProcessSetting(_pause_collection)
 
 
 class _FitThread(QtCore.QThread):
@@ -66,6 +87,7 @@ class FitRunner(QtCore.QObject):
         self._thread = None
         self._pending = None
         self._reporter = ProgressReporter()
+        self._pause = None                        # holds _NO_COLLECTION while a fit runs
 
     # ---- driving ---------------------------------------------------------
     def request(self, state, net):
@@ -96,6 +118,7 @@ class FitRunner(QtCore.QObject):
 
         A QThread destroyed while running aborts the process, so a worker that
         outlasts the wait is parked in `_ORPHANS` instead of being collected.
+        Collection stays paused for an orphan, which still runs, while this runner lives.
         """
         self._pending = None
         thread = self._thread
@@ -106,12 +129,17 @@ class FitRunner(QtCore.QObject):
         except (RuntimeError, TypeError):
             pass
         self._thread = None
-        if not thread.wait(msec):
+        if thread.wait(msec):
+            self._resume_collection()
+        else:
             _ORPHANS.add(thread)
 
     # ---- internals -------------------------------------------------------
     def _start(self, job):
         state, net = job
+        if self._pause is None:
+            self._pause = contextlib.ExitStack()
+            self._pause.enter_context(_NO_COLLECTION.held())
         self._reporter.start("starting")
         self._thread = _FitThread(state, net, self._reporter)
         self._thread.finished.connect(self._on_thread_finished)
@@ -128,4 +156,12 @@ class FitRunner(QtCore.QObject):
         self.finished.emit(result)
         if self._pending is not None:             # a newer request arrived mid-fit
             job, self._pending = self._pending, None
+            gc.collect()                          # still paused: free what this fit left behind here
             self._start(job)
+        elif self._thread is None:                # a slot of `finished` may have started one
+            self._resume_collection()
+
+    def _resume_collection(self):
+        pause, self._pause = self._pause, None
+        if pause is not None:
+            pause.close()

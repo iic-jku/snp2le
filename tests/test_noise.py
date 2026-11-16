@@ -205,6 +205,31 @@ def test_the_factor_matches_on_a_dense_grid():
     assert np.max(np.abs(V @ np.conj(np.transpose(V, (0, 2, 1))) - phi)) < 1e-10
 
 
+def _care_of_scipy_1_16_2(care):
+    """solve_continuous_are as SciPy 1.16.0 to 1.16.2 wrap it (scipy gh-23336): array arguments
+    given by keyword are appended to the positional ones in signature order, and an omitted
+    one leaves no gap, so an s given without e arrives as e."""
+    names = ("a", "b", "q", "r", "e", "s")
+
+    def wrapped(*args, **kwargs):
+        return care(*args, *[kwargs.pop(n) for n in names[len(args):] if n in kwargs], **kwargs)
+    return wrapped
+
+
+def test_the_factor_survives_the_argument_shift_of_scipy_1_16_2(monkeypatch):
+    """On SciPy 1.16.0 to 1.16.2 every thermal-noise conversion failed with "Matrix e should
+    be square." and was reported as a passivity problem (issue #44).  Under a stand-in for
+    their wrapper the generator comes out bit for bit as on a sound SciPy."""
+    sound = _convert("wpd_ihp-sg13g2.s3p")
+    care = _care_of_scipy_1_16_2(noise.la.solve_continuous_are)
+    with pytest.raises(ValueError):                 # the stand-in fails the old call
+        care(-np.eye(3), np.ones((3, 2)), np.eye(3), np.eye(2), s=np.zeros((3, 2)))
+    monkeypatch.setattr(noise.la, "solve_continuous_are", care)
+    res = _convert("wpd_ihp-sg13g2.s3p")
+    assert res.noise.ok, res.noise.message
+    assert (res.ngspice, res.vacask, res.xyce) == (sound.ngspice, sound.vacask, sound.xyce)
+
+
 def test_a_model_that_is_not_strictly_passive_is_refused():
     """No generator exists where sigma_max >= 1, so the model stays noiseless, the
     conversion itself still succeeds, and the reason names the fit's own sigma_max."""

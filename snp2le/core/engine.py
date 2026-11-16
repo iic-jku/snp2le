@@ -87,7 +87,25 @@ def _limit_blas():
     except ImportError:                       # a --no-deps install: slower, not wrong
         return None
     import scipy.linalg  # noqa: F401  scipy brings its own OpenBLAS, load it before limiting
-    return threadpool_limits(limits=1, user_api="blas").restore_original_limits
+    _release_blas_control()
+    limiter = threadpool_limits(limits=1, user_api="blas")
+
+    def undo():
+        _release_blas_control()
+        limiter.restore_original_limits()
+        _release_blas_control()               # no thread of ours keeps control afterwards
+    return undo
+
+
+def _release_blas_control():
+    """Let the calling thread set OpenBLAS.  Since threadpoolctl 3.8 only the thread that set it
+    first may set it again while that thread lives, and a finished QThread counts as alive, so
+    the GUI's second fit ran on every thread.  ProcessSetting serialises our own sets."""
+    import threadpoolctl
+    controller = getattr(threadpoolctl, "OpenBLASController", None)
+    clear = getattr(controller, "clear_controlling_thread", None)
+    if clear is not None:                     # threadpoolctl 3.8 and newer
+        clear(force=True)
 
 
 # Shared by overlapping conversions, so the last one out restores the count the process had.
