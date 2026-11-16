@@ -324,7 +324,7 @@ More details worth knowing:
 
 **Export** writes the conversion that finished, so it is disabled while one is running and never blocks the window to re-fit.
 
-A conversion runs its linear algebra on one thread of the BLAS library (through [threadpoolctl](https://github.com/joblib/threadpoolctl)). Its matrices are small, so a thread pool costs more than it saves: a 7-port receiver core at order 24 with thermal noise converts in 2.2 s instead of 15 minutes with the default 14 threads. Set `OPENBLAS_NUM_THREADS` or `MKL_NUM_THREADS` to choose the count yourself. A simulator started from snp2le keeps its own threads. A program that runs several conversions at once in threads gets its own thread count and its console back when the last one finishes.
+A conversion runs its linear algebra on one thread of the BLAS library (through [threadpoolctl](https://github.com/joblib/threadpoolctl)). Its matrices are small, so a thread pool costs more than it saves: a 7-port receiver core at order 24 with thermal noise converts in 2.2 s instead of 15 minutes with the default 14 threads. Set `OPENBLAS_NUM_THREADS` or `MKL_NUM_THREADS` to choose the count yourself. With the numpy and scipy wheels on macOS, threadpoolctl finds no BLAS library it can limit, so there the library keeps its own thread count. A simulator started from snp2le keeps its own threads. A program that runs several conversions at once in threads gets its own thread count and its console back when the last one finishes.
 
 ### Run a testbench (simulate)
 
@@ -387,7 +387,7 @@ Checked with Xyce 7.10 against Ngspice 47 at the data's own frequencies on 81 mo
 pytest               # from the repo root
 ```
 
-The GUI tests run offscreen. The [Tests](https://github.com/iic-jku/snp2le/actions/workflows/tests.yml) workflow runs the suite on every push and pull request to `main`, on Linux, Windows and macOS with Python 3.10 and 3.15. The tests that run `Xyce` or `xschem` skip where those are not on `PATH`, which includes the CI runners.
+The GUI tests run offscreen. The [Tests](https://github.com/iic-jku/snp2le/actions/workflows/tests.yml) workflow runs the suite on every push and pull request to `main`, on Linux, Windows and macOS with Python 3.10 and 3.15. The tests that run `Xyce` or `xschem` skip where those are not on `PATH`, which includes the CI runners, and the BLAS thread tests skip where threadpoolctl finds no BLAS library it can limit, as on the macOS runners.
 
 
 ## CLI Overview
