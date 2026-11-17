@@ -705,9 +705,35 @@ def _convex_candidate(vf, net, ceiling, max_states, report):
     if cand is None:
         return None, f"convex passive refit failed: {why}"
     if not _meets_ceiling(cand, None, ceiling):
-        return None, (f"convex passive refit missed the ceiling: sigma_max "
-                      f"{max_singular_value(cand)[0]:.6f}")
+        sigma = max_singular_value(cand)[0]
+        cand, k = _scaled_below(cand, ceiling)
+        if cand is None:
+            return None, f"convex passive refit missed the ceiling: sigma_max {sigma:.6f}"
+        return cand, (f"convex passive refit scaled by {k:.6f} to clear the ceiling, which the "
+                      f"solver's result missed")
     return cand, None
+
+
+def _scaled_below(vf, ceiling, tries=4):
+    """(model, factor): `vf` with its residues and constant term scaled until it meets `ceiling`,
+    or (None, factor).  S is linear in both, so the factor scales sigma_max exactly.  At a pole
+    damped at 1e-5 of the band edge, sigma near the pole is residue / |Re p|, and round-off that
+    differs between machines decides on which side of the ceiling the solver's peak lands."""
+    import copy
+    out, total = copy.deepcopy(vf), 1.0
+    for _ in range(tries):
+        sigma = max_singular_value(out)[0]
+        if not np.isfinite(sigma) or sigma <= 0.0:
+            return None, total
+        k = ceiling * (1.0 - _CONVEX_MARGIN) / sigma
+        if k >= 1.0:                    # the grid missed a peak the exact test sees
+            k = 1.0 - _CONVEX_MARGIN
+        out.residues = np.asarray(out.residues) * k
+        out.constant_coeff = np.asarray(out.constant_coeff) * k
+        total *= k
+        if _meets_ceiling(out, None, ceiling):
+            return out, total
+    return None, total
 
 
 def convex_refit_can_run(vf, n_ports, max_states) -> bool:

@@ -117,7 +117,7 @@ to the data that meets the ceiling:</p>
 perturbation gave 1.5e-3, and the 500&nbsp;pH coil and the balun at order 6, whose constant
 term sits above 1, come out strictly passive where they stayed near-passive. On
 <tt>tline_100um_ihp-sg13g2.s2p</tt> at order 13 the refit with the 0&nbsp;Hz point wins at
-7.5e-4. With <b>Thermal noise</b> ticked, a strictly passive candidate wins over one that
+7.5e-4 where it settles, which depends on the platform. With <b>Thermal noise</b> ticked, a strictly passive candidate wins over one that
 only meets a raised ceiling, since only it can carry the noise. When nothing reaches the
 ceiling, the accurate fit is kept rather than a wrecked one and the result reads
 <i>near-passive</i>. Whenever the constant term D is above the ceiling, the message line says
