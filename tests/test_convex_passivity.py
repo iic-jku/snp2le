@@ -183,21 +183,65 @@ def test_a_lightly_damped_pole_stays_passive():
     assert universal._is_passive(cand)
 
 
-def test_a_candidate_just_above_the_ceiling_is_scaled_below_it():
+def _pushed(vf, push):
+    out = copy.deepcopy(vf)
+    out.residues = np.asarray(out.residues) * push
+    out.constant_coeff = np.asarray(out.constant_coeff) * push
+    return out
+
+
+@pytest.mark.parametrize("name", ["wpd_ihp-sg13g2.s3p", "ind_500pH_ihp-sg13cmos5l.s2p"])
+def test_a_candidate_just_above_the_ceiling_is_scaled_below_it(name):
     """S is linear in the residues and D, so scaling both scales sigma_max by the same factor.
     A passive refit pushed 0.2 % over 1.00, and 1 % over a ceiling of 1.05, comes back inside
-    it, at a factor within 0.3 % and 1.2 % of 1."""
-    net = io.without_dc(_example("wpd_ihp-sg13g2.s3p"))
+    it, at a factor within 0.3 % and 1.2 % of 1.  The divider peaks at 0 Hz, the coil at
+    infinite frequency, where only D counts: scaling the residues alone gives up there."""
+    net = io.without_dc(_example(name))
     good, _ = passive_refit.refit(universal._auto_fit(net, 6), net, 0.9999)
     for ceiling, push in ((1.0, 1.002), (1.05, 1.06)):
-        over = copy.deepcopy(good)
-        over.residues = np.asarray(over.residues) * push
-        over.constant_coeff = np.asarray(over.constant_coeff) * push
+        over = _pushed(good, push)
         assert not universal._meets_ceiling(over, None, ceiling)
         out, k = universal._scaled_below(over, ceiling)
         assert out is not None and universal._meets_ceiling(out, None, ceiling)
         assert 1.0 - 1.2e-2 < k < 1.0
         assert universal.max_singular_value(out)[0] <= ceiling
+
+
+def test_a_candidate_the_solver_left_above_the_ceiling_still_competes(monkeypatch):
+    """A refit that lands just above the ceiling, as the solver's round-off makes it on some
+    platforms, is scaled below it and kept as a candidate, with a note that says so."""
+    net = io.without_dc(_example("wpd_ihp-sg13g2.s3p"))
+    vf = universal._auto_fit(net, 6)
+    over = _pushed(passive_refit.refit(vf, net, 0.9999)[0], 1.002)
+    monkeypatch.setattr(passive_refit, "refit", lambda *a, **k: (copy.deepcopy(over), None))
+    cand, note = universal._convex_candidate(vf, net, 1.0, 100, universal.null_progress)
+    assert cand is not None and universal._meets_ceiling(cand, None, 1.0)
+    assert note.startswith("convex passive refit scaled by 0.99")
+
+
+def test_the_refit_stays_off_inside_the_refit_with_the_0_hz_point():
+    """A limit of 0 gives the result from before the refit, also where enforcement refits with
+    the file's 0 Hz point and enforces that refit again: the line at order 13 ends perturbed,
+    where the refit there would have won as 'refit with the 0 Hz point, convex'."""
+    steps = []
+    res = engine.convert(ConverterState(mode="universal", max_order=13, convex_max_states=0),
+                         _example("tline_100um_ihp-sg13g2.s2p"),
+                         progress=lambda f, m: steps.append(m))
+    assert any("refitting with the 0 Hz point" in m for m in steps)
+    assert not any("convex passive refit" in m for m in steps)
+    assert [m for m in res.messages if "convex" in m] == [
+        "convex refit off (default limit 100 states)"]
+
+
+def test_a_usable_perturbation_still_ends_the_ladder():
+    """The convex candidate only adds a rank: a usable perturbation ends the ladder as before,
+    even when the convex candidate beats it, so no lower-order refit runs on top."""
+    steps = []
+    res = engine.convert(ConverterState(mode="universal", max_order=13),
+                         _example("bpf_ihp-sg13g2.s2p"), progress=lambda f, m: steps.append(m))
+    assert res.passivity_path == "convex"
+    assert any("enforcing passivity, 200 samples" in m for m in steps)
+    assert not any("refitting at a lower order" in m or "800 samples" in m for m in steps)
 
 
 def test_a_design_file_refuses_a_bad_limit():
