@@ -5,7 +5,8 @@
 A wideband model has no extraction frequency, so selecting one swaps f_ext and the option
 slot for its own page: 'Basic model', Segments (Center tap for the 3-port), 'Peak-Q weight'
 and 'Measured data'.  The page must not widen the control strip (it has to fit a 1920 px
-screen) and must keep every gap one _GAP, so its drop-down takes the spare width.  The
+screen) and at its natural width must keep every gap one _GAP, so its drop-down takes the
+spare width.  The
 Result panel names the top of the fitted band instead of f_ext, and a values table longer
 than 12 rows goes in two columns.  These tests drive the real MainWindow and TopBar
 offscreen (QT_QPA_PLATFORM=offscreen).  Run with: pytest -q

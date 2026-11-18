@@ -390,7 +390,7 @@ class TopBar(QtWidgets.QWidget):
                                              self.opt_box])
         sp.addStretch(1)
         # The drop-down takes whatever width the page has to spare, instead of a stretch at
-        # the end, so the gap to the fit range is one _GAP like every other gap in the strip.
+        # the end, so the gap to the fit range is the same as every other gap in the strip.
         # Segments for the 2-port, Center tap for the center-tapped model.
         self.wide_page = QtWidgets.QWidget()
         wp = QtWidgets.QHBoxLayout(self.wide_page); wp.setContentsMargins(0, 0, 0, 0)
