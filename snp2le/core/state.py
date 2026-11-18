@@ -120,9 +120,9 @@ class Results:
     sigma_max: float = float("nan")       # largest singular value of the model S-matrix
     sigma_max_freq: float = float("nan")  # where that peak sits [Hz]
     passivity_ceiling: float = 1.0        # the ceiling `passive` was judged against
-    # universal mode: off, not needed, perturbed, reduced order, dc refit (a refit that
-    # includes the file's 0 Hz point) or near-passive (enforcement ran and the free fit was
-    # kept).  Empty for a structure model.
+    # universal mode: off, not needed, convex, perturbed, reduced order, dc refit (a refit
+    # that includes the file's 0 Hz point) or near-passive (enforcement ran and the free fit
+    # was kept).  Empty for a structure model.
     passivity_path: str = ""
     dc: object = None                     # DCHealth: DC operating-point check (universal mode)
     noise: object = None                  # NoiseHealth when thermal noise was requested

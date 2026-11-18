@@ -321,12 +321,13 @@ class TopBar(QtWidgets.QWidget):
         self.passive.setObjectName("wrapCheck")      # indicator at the top, see style.py
         self.passive.setChecked(True)
         self.passive.setToolTip(
-            "Perturb the fit until its worst singular value is at or below the\n"
-            "Passivity ceiling. At 1.00 a transient run cannot draw energy out of it.\n"
+            "Bring the fit's worst singular value to or below the Passivity ceiling,\n"
+            "by the convex refit or by perturbation, whichever ends closer to the data.\n"
+            "At 1.00 a transient run cannot draw energy out of it.\n"
             "It costs fit accuracy. Untick to export the raw fit untouched, whatever it\n"
             "measures.")
 
-        # Passivity ceiling: the sigma_max the perturbation works towards.  It only means
+        # Passivity ceiling: the sigma_max the enforcement works towards.  It only means
         # something while enforcement is running, so the field is greyed and pinned to the
         # default when 'Enforce passivity' is off (see universal.effective_ceiling, which
         # is the single source of that rule).
@@ -337,7 +338,7 @@ class TopBar(QtWidgets.QWidget):
             f"{PASSIVITY_CEILING_MIN:.2f} is strict passivity: the model can never "
             "deliver more power than it absorbs.\n"
             "A higher ceiling leaves that much gain at the model's worst frequency and "
-            "buys back\naccuracy in exchange, since the perturbation has less to "
+            "buys back\naccuracy in exchange, since the enforcement has less to "
             "correct.\n"
             "A ceiling above what the fit already measures leaves it untouched.\n"
             f"Range {PASSIVITY_CEILING_MIN:.2f} to {PASSIVITY_CEILING_MAX:.2f}. A value "
