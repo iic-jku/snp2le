@@ -110,8 +110,12 @@ def _gap(t, a, b):
 def _gaps(t):
     """The gaps the tests compare."""
     return {"button": _gap(t, t.export, t.load_sch), "mode": _gap(t, t.mode, t.structure),
-            "page": _gap(t, t.order, t.passive),
+            "page": _gap(t, t.order, t.passive), "load": _gap(t, t.load, t.mode),
             "divider": (_gap(t, t.band_box, t.sep), _gap(t, t.sep, t.export))}
+
+
+def _ends(t):
+    return _span(t.reset, t)[1], _span(t.help, t)[1]
 
 
 def test_the_divider_has_the_same_gap_on_both_sides():
@@ -132,13 +136,48 @@ def test_the_divider_has_the_same_gap_on_both_sides():
 
 def test_the_spare_width_fills_every_gap():
     """A window wider than the bar needs gives every gap the same share, inside the mode
-    page too, so Reset ends under Help instead of leaving the spare width at the right."""
-    wide = _laid_out(400)
+    page too, and Load keeps its extra 6 px to Mode, so Reset ends under Help instead of
+    leaving the spare width at the right.  407 px do not split evenly, so the remainder has
+    to go somewhere too."""
+    wide = _laid_out(407)
     g = _gaps(wide)
-    reset_end, help_end = _span(wide.reset, wide)[1], _span(wide.help, wide)[1]
+    reset_end, help_end = _ends(wide)
     wide.close()
     assert g["button"] > _GAP and g["mode"] == g["page"] == g["button"]
+    assert g["load"] == g["button"] + 6
     assert reset_end == help_end
+
+
+def test_the_bar_refills_when_the_run_status_changes_width():
+    """The run status above 'Show output' changes the width of its column, and the bar takes
+    the difference out of its gaps, so Reset stays under Help."""
+    wide = _laid_out(407)
+    try:
+        for setter in (lambda: wide.set_sim_status("successful!", True),
+                       lambda: wide.set_sim_status("failed!", False),
+                       lambda: wide.set_sim_progress("running..."), wide.clear_sim_status):
+            setter()
+            _pump(wide)
+            assert _ends(wide)[0] == _ends(wide)[1]
+    finally:
+        wide.close()
+
+
+def test_the_fill_settles():
+    """Refilling invalidates the layout, which asks for a refill again: the round trip ends
+    when no filler changes, so an idle bar refills nothing."""
+    import time
+    wide = _laid_out(407)
+    calls = []
+    fill = wide._fill_gaps
+    wide._fill_gaps = lambda width: (calls.append(width), fill(width))
+    app = QtWidgets.QApplication.instance()
+    deadline = time.time() + 0.5
+    while time.time() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+    wide.close()
+    assert len(calls) < 5, len(calls)
 
 
 def test_the_other_mode_pages_fill_their_gaps_too():

@@ -123,8 +123,9 @@ ceiling, the accurate fit is kept rather than a wrecked one and the result reads
 <i>near-passive</i>. Whenever the constant term D is above the ceiling, the message line says
 so with its singular value.</p>
 <p>The convex refit's time and memory grow steeply with the model's states, ports x model
-order (about 74&nbsp;s and 2.3&nbsp;GB at 104 states on a laptop, twice that on a file with a
-0&nbsp;Hz point), so it runs only up to 100 states. A larger model goes to perturbation directly and the message line says so. The
+order (about 74&nbsp;s and 2.3&nbsp;GB at 104 states on a laptop), so it runs only up to 100
+states. On a file with a 0&nbsp;Hz point it can run twice, on the fit and again inside the
+refit that includes that point. A larger model goes to perturbation directly and the message line says so. The
 window has no control for the limit, the command line sets it with
 <tt>--convex-max-states</tt>, a saved design with <tt>convex_max_states</tt>.</p></li>
 <li><b>Thermal noise</b> (universal mode): a lossy passive at temperature T is a noise

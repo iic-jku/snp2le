@@ -522,10 +522,12 @@ def cmd_convert(args):
               "raw fit untouched", file=sys.stderr)
     p_ceiling = (universal.PASSIVITY_CEILING_DEFAULT if args.passivity_ceiling is None
                 else args.passivity_ceiling)
-    if args.convex_max_states is not None and (args.mode == "structure" or not args.passive):
-        print("[WARN] --convex-max-states is ignored "
-              + ("in structure mode" if args.mode == "structure" else "with --no-passive"),
-              file=sys.stderr)
+    if args.convex_max_states is not None and args.mode == "structure":
+        print("[WARN] --convex-max-states is ignored in structure mode", file=sys.stderr)
+    elif args.convex_max_states is not None and not args.passive:
+        # it still decides whether the note on a constant term above the ceiling names the refit
+        print("[WARN] --convex-max-states only changes the advice with --no-passive, which "
+              "exports the raw fit untouched", file=sys.stderr)
     given = _wideband_options_given(args)
     struct = get_structure(key) if args.mode == "structure" else None
     named_wideband = getattr(STRUCTURES.get(key), "wideband", False)
