@@ -278,3 +278,16 @@ def test_the_cli_takes_the_limit(tmp_path):
                           os.path.join(_EXAMPLES, "bpf_ihp-sg13g2.s2p"), "--convex-max-states",
                           "-3", "-o", str(out)], cwd=_ROOT, capture_output=True, text=True)
     assert bad.returncode != 0 and "--convex-max-states" in bad.stderr
+
+
+def test_the_cli_says_what_the_limit_does_without_enforcement(tmp_path):
+    """With --no-passive the limit enforces nothing, but it still decides whether the note on
+    a constant term above the ceiling names the refit, so the warning does not call it ignored."""
+    run = subprocess.run([sys.executable, "-m", "snp2le", "-b", "convert",
+                          os.path.join(_EXAMPLES, "ind_500pH_ihp-sg13cmos5l.s2p"), "--order", "6",
+                          "--no-passive", "--convex-max-states", "0",
+                          "-o", str(tmp_path / "coil.spice")],
+                         cwd=_ROOT, capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert "--convex-max-states only changes the advice with --no-passive" in run.stderr
+    assert "would have to refit at a lower order" in run.stdout + run.stderr
