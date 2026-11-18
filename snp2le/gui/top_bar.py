@@ -26,12 +26,20 @@ from .style import JKU_BLUE, JKU_GRAY, JKU_GREEN, JKU_RED, PANEL_BORDER, DISABLE
 from .widgets import FitComboBox, SegmentedSwitch
 
 _DISABLED_GREY = QtGui.QColor(DISABLED_FG)     # greyed-out dropdown items
-# Gap between neighbouring controls, the divider included.  The controls row is the widest
-# row in the window, so this decides whether the window fits a 1920 px screen.  Measured in
-# the IIC-OSIC-TOOLS container under WSLg (Sans Serif 9): 14 px needs 1929 px, too wide for a
-# maximized window there (Wayland aborts the app), 12 px needs 1903 px, and the window adds
-# 6 px, so 1914 px is the limit.
+# Smallest gap between neighbouring controls.  A wider window spreads its spare width over
+# every gap (TopBar._fill_gaps), so these set only the narrowest bar, which has to fit a
+# maximized window on a 1920 px screen: 1914 px under WSLg, where a wider bar makes Wayland
+# abort the app.  The bar needs 1744 px in the IIC-OSIC-TOOLS container (Sans Serif 9).
 _GAP = 12
+_DIVIDER_PAD = 8           # added to the gap on each side of the divider
+_DIVIDER_SHARE = 2         # the divider's gaps take this many shares of the spare width
+
+
+def _filler():
+    """A gap's share of the spare width.  Its minimum is 0 whatever width it is given, so a
+    wide window never raises the floor the window can shrink back to."""
+    return QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Preferred,
+                                 QtWidgets.QSizePolicy.Minimum)
 
 
 def _reset_icon(color=JKU_BLUE):
@@ -153,9 +161,77 @@ class TopBar(QtWidgets.QWidget):
         box.addWidget(lab); box.addWidget(widget); box.addStretch(1)
         return w
 
+    def _add_row(self, lay, page, items, lead=False):
+        """Add `items` to `lay` with a filler in each gap between them (and before the first
+        with `lead`), and return the fillers.  An item is a layout, a widget, or a list of
+        (widget, stretch) that share one gap.  A page's fillers are kept for _fill_gaps."""
+        fillers = []
+        for i, item in enumerate(items):
+            if i or lead:
+                fillers.append(_filler()); lay.addItem(fillers[-1])
+            if isinstance(item, QtWidgets.QLayout):
+                lay.addLayout(item)
+            elif isinstance(item, list):
+                for w, stretch in item:
+                    lay.addWidget(w, stretch)
+            else:
+                lay.addWidget(item)
+        if page is not None:
+            self._page_fillers[page] = fillers
+        return fillers
+
+    def eventFilter(self, obj, event):
+        # the controls row: refill on a new width, and when a control's width changed
+        if event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.LayoutRequest):
+            self._fill_gaps(obj.width() if event.type() == QtCore.QEvent.LayoutRequest
+                            else event.size().width())
+        return super().eventFilter(obj, event)
+
+    def _fill_gaps(self, width):
+        """Spread the spare width of the controls row over its gaps: one share per gap, the
+        gaps inside the mode page included, _DIVIDER_SHARE shares and the rounding remainder
+        at the divider.  Reset then ends under Help.
+
+        The bare widths are the current hints minus the current fillers, so a control that
+        changed width (the run status) counts.  The mode stack is as wide as its widest page,
+        so that page's gaps are the stack's shares, and no other page grows wider."""
+        lay = self._controls.layout()
+
+        def width_of(fillers):
+            return sum(f.sizeHint().width() for f in fillers)
+        bare = {p: p.layout().sizeHint().width() - width_of(fl)
+                for p, fl in self._page_fillers.items()}
+        widest = max(bare, key=bare.get)
+        stack_fill = (max(p.layout().sizeHint().width() for p in self._page_fillers)
+                      - bare[widest])
+        base = (lay.sizeHint().width() - width_of(self._fillers) - width_of(self._div_fillers)
+                - stack_fill)
+        shares = (len(self._fillers) + _DIVIDER_SHARE * len(self._div_fillers)
+                  + len(self._page_fillers[widest]))
+        share, rest = divmod(max(0, width - base), shares)
+
+        sizes = {f: share for f in self._fillers}
+        sizes[self._div_fillers[0]] = _DIVIDER_SHARE * share + rest // 2
+        sizes[self._div_fillers[1]] = _DIVIDER_SHARE * share + rest - rest // 2
+        room = bare[widest] + len(self._page_fillers[widest]) * share
+        for page, fl in self._page_fillers.items():
+            each = min(share, max(0, room - bare[page]) // len(fl)) if fl else 0
+            sizes.update((f, each) for f in fl)
+        changed = [f for f, w in sizes.items() if f.sizeHint().width() != w]
+        if not changed:                # also what ends the round trip through LayoutRequest
+            return
+        for f in changed:
+            f.changeSize(sizes[f], 0, QtWidgets.QSizePolicy.Preferred,
+                         QtWidgets.QSizePolicy.Minimum)
+        for page in self._page_fillers:
+            page.layout().invalidate(); page.updateGeometry()
+        self.mode_stack.updateGeometry()
+        lay.invalidate()
+
     # ---- controls --------------------------------------------------------
     def _build_controls(self):
         bar = QtWidgets.QWidget(); bar.setObjectName("topbar")
+        self._controls = bar
         lay = QtWidgets.QHBoxLayout(bar); lay.setContentsMargins(16, 8, 16, 10); lay.setSpacing(_GAP)
 
         self.load = QtWidgets.QPushButton("Load .sNp")
@@ -296,19 +372,23 @@ class TopBar(QtWidgets.QWidget):
         # shows max order + passivity, structure shows f_ext + the option, and a wideband
         # inductor its own four.  A stack holds the pages and reserves the widest, so the
         # bar width and the divider position never change with the mode either.
+        # Each page has a filler in every gap, see _fill_gaps.  A spacer adds no spacing of its
+        # own, so a gap is _GAP plus its filler.
+        self._page_fillers = {}
         self.uni_page = QtWidgets.QWidget()
         up = QtWidgets.QHBoxLayout(self.uni_page); up.setContentsMargins(0, 0, 0, 0)
         up.setSpacing(_GAP)
-        up.addLayout(self._labeled("Max order", self.order))
-        up.addLayout(self._labeled("", self.passive))
-        up.addLayout(self._labeled("Passivity ceiling", self.p_ceiling))
-        up.addLayout(self._labeled("", self.thermal_noise))
+        self._add_row(up, self.uni_page, [self._labeled("Max order", self.order),
+                                          self._labeled("", self.passive),
+                                          self._labeled("Passivity ceiling", self.p_ceiling),
+                                          self._labeled("", self.thermal_noise)])
         up.addStretch(1)
         self.struct_page = QtWidgets.QWidget()
         sp = QtWidgets.QHBoxLayout(self.struct_page); sp.setContentsMargins(0, 0, 0, 0)
         sp.setSpacing(_GAP)
-        sp.addLayout(self._labeled("<i>f</i><sub>ext</sub>", self.f_ext))
-        sp.addWidget(self.opt_box); sp.addStretch(1)
+        self._add_row(sp, self.struct_page, [self._labeled("<i>f</i><sub>ext</sub>", self.f_ext),
+                                             self.opt_box])
+        sp.addStretch(1)
         # The drop-down takes whatever width the page has to spare, instead of a stretch at
         # the end, so the gap to the fit range is one _GAP like every other gap in the strip.
         # Segments for the 2-port, Center tap for the center-tapped model.
@@ -317,11 +397,11 @@ class TopBar(QtWidgets.QWidget):
         wp.setSpacing(_GAP)
         self.segments_box = self._labeled_widget("Segments", self.coil_segments)
         self.ct_box = self._labeled_widget("Center tap", self.center_tap)
-        wp.addLayout(self._labeled("", self.basic))
-        wp.addWidget(self.segments_box, 1)
-        wp.addWidget(self.ct_box, 1)
-        wp.addLayout(self._labeled("", self.peak_q))
-        wp.addLayout(self._labeled("", self.measured))
+        # Segments and Center tap share one gap: only one of them is ever shown.
+        self._add_row(wp, self.wide_page, [self._labeled("", self.basic),
+                                           [(self.segments_box, 1), (self.ct_box, 1)],
+                                           self._labeled("", self.peak_q),
+                                           self._labeled("", self.measured)])
         self.mode_stack = QtWidgets.QStackedWidget()
         for page in (self.uni_page, self.struct_page, self.wide_page):
             self.mode_stack.addWidget(page)
@@ -348,7 +428,7 @@ class TopBar(QtWidgets.QWidget):
         to_lbl = QtWidgets.QLabel("to"); to_lbl.setProperty("class", "fieldLabel")
         bl.addWidget(self.f_min); bl.addWidget(to_lbl); bl.addWidget(self.f_max)
         # The DC pin tick box sits on the caption line, in width the two fields already take,
-        # since the bar has no width to spare (1903 px on a 1920 px screen in the container),
+        # since the narrowest bar has to fit a 1920 px screen (see _GAP),
         # and at the caption's own height, so the fields stay in line with the strip.
         self.dc_pin = QtWidgets.QCheckBox("DC pin")
         self.dc_pin.setObjectName("captionCheck")
@@ -438,17 +518,6 @@ class TopBar(QtWidgets.QWidget):
                               "launch file (or the bundled example),\nno testbench and no "
                               "simulation overlay.")
 
-        lay.addLayout(self._labeled("", self.load))
-        lay.addSpacing(6)
-        lay.addLayout(self._labeled("Mode", self.mode))
-        lay.addLayout(self._labeled("Structure", self.structure))
-        lay.addWidget(self.mode_stack)         # f_ext+option (structure) or order+passivity
-        lay.addWidget(self.band_box)           # fit range (both modes)
-        lay.addWidget(self.sep)                # fixed divider, one ordinary gap either side
-        lay.addLayout(self._labeled("", self.export))
-        lay.addLayout(self._labeled("", self.load_sch))
-        lay.addLayout(self._labeled("Simulator", self.simulator))
-        lay.addLayout(self._labeled("", self.run_sim))
         # 'Show output' is built exactly like 'Enforce passivity' (caption slot, then the
         # two-line box), which is what puts the two tick boxes on the same line.  The run
         # status takes the caption slot, empty otherwise: below the box it would have made
@@ -457,12 +526,26 @@ class TopBar(QtWidgets.QWidget):
         sim_box.addWidget(self.sim_status)
         sim_box.addWidget(self.sim_output)
         sim_box.addStretch(1)
-        lay.addLayout(sim_box)
-        lay.addLayout(self._labeled("", self.reset))
-        # spare width goes to the right edge.  Held between the divider and Export it
-        # would open a gap there that grows with the window, and the two sides of the
-        # divider are meant to look the same.
+
+        lay.addLayout(self._labeled("", self.load))
+        lay.addSpacing(6)
+        self._fillers = self._add_row(lay, None, [
+            self._labeled("Mode", self.mode),
+            self._labeled("Structure", self.structure),
+            self.mode_stack,                   # f_ext+option (structure) or order+passivity
+            self.band_box], lead=True)         # fit range (both modes)
+        # the divider: a wider gap on each side, which also takes a bigger share
+        self._div_fillers = [_filler(), _filler()]
+        lay.addSpacing(_DIVIDER_PAD); lay.addItem(self._div_fillers[0])
+        lay.addWidget(self.sep)
+        lay.addSpacing(_DIVIDER_PAD); lay.addItem(self._div_fillers[1])
+        self._fillers += self._add_row(lay, None, [
+            self._labeled("", self.export), self._labeled("", self.load_sch),
+            self._labeled("Simulator", self.simulator), self._labeled("", self.run_sim),
+            sim_box, self._labeled("", self.reset)])
+        # takes what the fillers leave over, nothing once they have settled
         lay.addStretch(1)
+        bar.installEventFilter(self)
 
         self.mode.currentIndexChanged.connect(self._on_change)
         self.structure.currentIndexChanged.connect(self._on_change)
