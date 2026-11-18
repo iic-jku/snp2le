@@ -38,6 +38,7 @@ dependencies = [
     "matplotlib>=3.7",
     "schemdraw>=0.18",
     "threadpoolctl>=3.5",
+    "clarabel>=0.11",
 ]
 
 [project.optional-dependencies]

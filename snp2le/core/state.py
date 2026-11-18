@@ -13,6 +13,7 @@ _TRUE, _FALSE = {"true", "yes", "on", "1"}, {"false", "no", "off", "0"}
 # Numbers the window has no control for, so a design file is their only way in there.  true
 # would read as 1, so a value that is no number refuses the design, as a bad tick box does.
 _NUMBER_FIELDS = ("dc_pin_fc", "dc_island_leak")
+_COUNT_FIELDS = ("convex_max_states",)
 
 
 def _as_bool(name, value):
@@ -52,6 +53,10 @@ class ConverterState:
     # works towards, so it only takes effect with enforce_passivity=True.  See
     # universal.PASSIVITY_CEILING_* for the allowed range.
     passivity_ceiling: float = 1.0
+    # Universal mode: passivity enforcement first tries the convex refit (passive_refit.py)
+    # while the realisation has at most this many states, ports x model order.  0 turns it off.
+    # Its time and memory grow steeply with the count, see universal.CONVEX_MAX_STATES_DEFAULT.
+    convex_max_states: int = 100
     # Universal mode: append a generator of the passive's thermal noise, kT(I - S S^H) at the
     # ports, computed from the fit (noise.py).  False keeps the model noiseless (ideal).
     # Structure models are unaffected, their resistors are real loss and always noisy.
@@ -87,6 +92,12 @@ class ConverterState:
                     continue
                 if isinstance(v, bool) or not isinstance(v, (int, float)):
                     raise ValueError(f"{k} must be a number, got {json.dumps(v)}")
+            elif k in _COUNT_FIELDS:
+                if v is None:
+                    continue
+                if isinstance(v, bool) or not isinstance(v, int) or v < 0:
+                    raise ValueError(f"{k} must be a whole number of 0 or more, "
+                                     f"got {json.dumps(v)}")
             values[k] = v
         return cls(**values)
 

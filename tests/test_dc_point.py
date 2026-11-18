@@ -52,6 +52,12 @@ def _convert(net, **kw):
     return engine.convert(ConverterState(mode="universal", **kw), net)
 
 
+# The ladder without the convex refit, whose 0 Hz refit these tests are about.  The convex
+# refit runs first and often wins (test_convex_passivity.py), and without it, above its state
+# limit, the refit below is what is left.
+_OLD = dict(convex_max_states=0)
+
+
 def _r_dc(s, z0=50.0):
     """Resistance between the two ports of a 2-port at DC, from its S-matrix."""
     y = (np.eye(2) - s) @ np.linalg.inv(np.eye(2) + s) / z0
@@ -62,14 +68,14 @@ _COIL = "ind_d20_w7_sp3_nw1_r10_ihp-sg13g2.s2p"             # starts at 0 Hz
 
 
 def test_a_refit_with_the_dc_point_rescues_a_runaway_constant_term():
-    """The 500 pH coil at order 6 stays near-passive: its constant term D sits at 2.18,
-    residue perturbation cannot move it, and the lower-order refit misses too.  Given a
-    0 Hz point, enforcement also tries a refit that includes it, which lands on another
-    model, and that one comes out strictly passive."""
+    """Without the convex refit, the 500 pH coil at order 6 stays near-passive: its constant
+    term D sits at 2.18, residue perturbation cannot move it, and the lower-order refit misses
+    too.  Given a 0 Hz point, enforcement also tries a refit that includes it, which lands on
+    another model, and that one comes out strictly passive."""
     net = _example("ind_500pH_ihp-sg13cmos5l.s2p")
-    plain = _convert(net, max_order=6)
+    plain = _convert(net, max_order=6, **_OLD)
     assert plain.passivity_path == "near-passive" and not plain.passive
-    res = _convert(_with_dc_point(net), max_order=6)
+    res = _convert(_with_dc_point(net), max_order=6, **_OLD)
     assert res.ok and res.passive and res.passivity_path == "dc refit"
     assert res.sigma_max <= 1.0
     assert any("refit with the 0 Hz point" in m for m in res.messages)
@@ -80,11 +86,11 @@ def test_the_refit_with_the_dc_point_only_runs_where_it_can_help():
     """A file whose fit perturbs to passivity never sees it, so its result is the one it
     always had, and a fit range that starts above 0 Hz leaves no DC point to refit with."""
     net = _with_dc_point(_example("wpd_ihp-sg13g2.s3p"))
-    res = _convert(net, max_order=6)
+    res = _convert(net, max_order=6, **_OLD)
     assert res.passivity_path == "perturbed"
-    assert res.ngspice == _convert(io.without_dc(net), max_order=6).ngspice
+    assert res.ngspice == _convert(io.without_dc(net), max_order=6, **_OLD).ngspice
     coil = _with_dc_point(_example("ind_500pH_ihp-sg13cmos5l.s2p"))
-    above = _convert(coil, max_order=6, f_min=1e9)
+    above = _convert(coil, max_order=6, f_min=1e9, **_OLD)
     assert above.passivity_path == "near-passive"
 
 
@@ -113,9 +119,9 @@ def test_a_dc_point_that_is_not_finite_is_ignored():
     bad.s[0] = np.nan
     same, nan = io.passive_dc(bad)
     assert same is bad and nan != nan
-    res = _convert(bad, max_order=6)
+    res = _convert(bad, max_order=6, **_OLD)
     assert res.ok and res.passivity_path == "near-passive"
-    assert res.ngspice == _convert(net, max_order=6).ngspice
+    assert res.ngspice == _convert(net, max_order=6, **_OLD).ngspice
 
 
 def test_the_refit_stays_strictly_passive_so_it_can_carry_noise():
@@ -123,7 +129,7 @@ def test_the_refit_stays_strictly_passive_so_it_can_carry_noise():
     refit that met it would be passive but not strictly, with no thermal noise, so the refit
     gets the point 1e-6 below it."""
     coil = _with_series_dc(_example("ind_500pH_ihp-sg13cmos5l.s2p"), 0.5)
-    res = _convert(coil, max_order=6, thermal_noise=True)
+    res = _convert(coil, max_order=6, thermal_noise=True, **_OLD)
     assert res.passivity_path == "dc refit" and res.passive
     assert res.noise.ok, res.noise.message
 
@@ -343,7 +349,7 @@ def test_with_thermal_noise_a_strictly_passive_candidate_wins(monkeypatch):
     monkeypatch.setattr(universal, "_rms_error", lambda vf, n: 1e-4 if with_dc(vf) else 1e-3)
     for strict, path in ((False, "dc refit"), (True, "reduced order")):
         got = universal._enforce_passivity_path(vf0, band, 1.05, dc_net=dc_net, max_order=10,
-                                                prefer_strict=strict)
+                                                prefer_strict=strict, convex_max_states=0)
         assert got[3] == path
 
 
@@ -354,7 +360,7 @@ def test_the_refit_needs_no_max_order():
     band = io.without_dc(net)
     vf0 = universal._auto_fit(band, 6)
     got = universal._enforce_passivity_path(vf0, band, dc_net=io.passive_dc(
-        net, ceiling=dcpin.DC_SIGMA)[0])
+        net, ceiling=dcpin.DC_SIGMA)[0], convex_max_states=0)
     assert got[3] == "dc refit"
 
 
@@ -362,8 +368,9 @@ def test_the_refit_runs_when_the_fit_range_starts_at_the_first_sample():
     """A fit range from the file's first sample above 0 Hz fits the same band, so it keeps
     the refit.  One that starts higher leaves no 0 Hz point next to its band."""
     coil = _with_dc_point(_example("ind_500pH_ihp-sg13cmos5l.s2p"))
-    assert _convert(coil, max_order=6, f_min=float(coil.f[1])).passivity_path == "dc refit"
-    assert _convert(coil, max_order=6, f_min=float(coil.f[2])).passivity_path == "near-passive"
+    assert _convert(coil, max_order=6, f_min=float(coil.f[1]), **_OLD).passivity_path == "dc refit"
+    assert (_convert(coil, max_order=6, f_min=float(coil.f[2]), **_OLD).passivity_path
+            == "near-passive")
 
 
 def test_the_refit_reports_its_progress():
